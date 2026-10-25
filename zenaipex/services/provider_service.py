@@ -12,6 +12,7 @@ from core.security import encrypt_secret, decrypt_secret
 from core.config import settings
 from models.provider import AIProvider
 import aiohttp
+import asyncio
 import time
 import os
 
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 # Simple in-memory cache for provider balances to prevent rate-limits and latency
 _balance_cache = {}
 _cache_ttl = 300  # 5 minutes
+_bootstrap_checked_at = 0.0
 
 async def bootstrap_providers():
     """Reconcile the provider registry with supported environment keys.
@@ -28,6 +30,10 @@ async def bootstrap_providers():
     overwritten by an environment value. Newly added environment providers are
     registered so the admin usage dashboard has one authoritative inventory.
     """
+    global _bootstrap_checked_at
+    now_monotonic = time.time()
+    if now_monotonic - _bootstrap_checked_at < _cache_ttl:
+        return
     now = datetime.now(timezone.utc)
     default_providers = [
         {
@@ -103,6 +109,7 @@ async def bootstrap_providers():
             updated += 1
     if inserted or updated:
         logger.info("Provider registry reconciled: %s added, %s completed from environment", inserted, updated)
+    _bootstrap_checked_at = now_monotonic
 
 
 async def get_all_providers() -> List[AIProvider]:
@@ -275,12 +282,10 @@ async def get_all_provider_balances(force_refresh: bool = False) -> list:
             return _balance_cache["data"]
 
     providers = await get_all_providers()
-    balances = []
-    
-    for p in providers:
+
+    async def fetch_balance(p: AIProvider) -> dict:
         prov_name = p.provider.lower()
         api_key = p.api_key
-        
         balance_data = {
             "provider": prov_name,
             "purchased_amount": None,
@@ -308,8 +313,12 @@ async def get_all_provider_balances(force_refresh: bool = False) -> list:
                 balance_data["last_synced"] = datetime.now(timezone.utc).isoformat()
             except Exception as e:
                 logger.error(f"Failed to fetch balance for {prov_name}: {e}")
-                
-        balances.append(balance_data)
+
+        return balance_data
+
+    # Provider balance APIs are independent network calls. Fetch them in
+    # parallel so one slow provider does not serialize the whole admin page.
+    balances = await asyncio.gather(*(fetch_balance(provider) for provider in providers))
 
     _balance_cache["data"] = balances
     _balance_cache["timestamp"] = now

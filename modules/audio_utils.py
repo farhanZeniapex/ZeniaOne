@@ -527,8 +527,8 @@ def sarvam_to_exotel_pcm(pcm_data: bytes, input_rate: int = 24000) -> bytes:
 class ExotelAudioChunker:
     """
     Accumulates audio bytes and emits chunks that satisfy Exotel Voicebot requirements.
-    Chunks are buffered to target_chunk_size (default 3200 bytes) and always emitted
-    as a multiple of 320 bytes.
+    Full frames use target_chunk_size (default 3200 bytes); flush preserves the
+    final partial frame so callers do not receive synthetic audio bytes.
     """
     def __init__(self, target_chunk_size: int = 3200):
         # Ensure the target chunk size itself is a multiple of 320
@@ -544,16 +544,11 @@ class ExotelAudioChunker:
         return chunks
 
     def flush(self):
-        chunks = []
-        if len(self.buffer) > 0:
-            remainder = len(self.buffer) % 320
-            final_data = self.buffer
-            if remainder != 0:
-                # Pad with silence (zeros for PCM) to ensure multiple of 320
-                final_data += b"\x00" * (320 - remainder)
-            chunks.append(final_data)
-            self.buffer = b""
-        return chunks
+        if not self.buffer:
+            return []
+        final_data = self.buffer
+        self.buffer = b""
+        return [final_data]
 
 def apply_audio_tuning(raw_audio_bytes: bytes, spd: float = 1.0, vol: float = 1.0, output_format: str = "mp3", **kwargs) -> bytes:
     """
