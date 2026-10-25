@@ -91,6 +91,13 @@ async def lifespan(app: FastAPI):
             await bootstrap_providers()
         except Exception as exc:
             logger.error(f"Failed to bootstrap AI providers: {exc}")
+
+        # Provision the optional production platform-admin account before the
+        # admin workspace membership bootstrap runs.
+        try:
+            await _ensure_platform_admin()
+        except Exception as exc:
+            logger.warning(f"Platform admin provisioning failed: {exc}")
             
         # Always ensure admin_workspace exists (idempotent)
         try:
@@ -228,6 +235,46 @@ async def _ensure_admin_workspace():
             "updated_at": now,
         })
         logger.info("✅ Created default ZeniaAI Assistant agent for admin_workspace")
+
+
+async def _ensure_platform_admin():
+    """Create the configured platform admin once during production bootstrap."""
+    admin_email = os.getenv("PLATFORM_ADMIN_EMAIL", "").strip().lower()
+    admin_password = os.getenv("PLATFORM_ADMIN_PASSWORD", "")
+    if not admin_email or not admin_password:
+        return
+
+    from datetime import datetime, timezone
+    from core.database import col_users
+    from core.security import hash_password
+
+    users = col_users()
+    existing = await users.find_one({"email": admin_email})
+    if existing:
+        updates = {}
+        if not existing.get("is_platform_admin"):
+            updates["is_platform_admin"] = True
+        if not existing.get("is_verified"):
+            updates["is_verified"] = True
+        if updates:
+            updates["updated_at"] = datetime.now(timezone.utc)
+            await users.update_one({"_id": existing["_id"]}, {"$set": updates})
+            logger.info("✅ Promoted configured platform admin: %s", admin_email)
+        return
+
+    now = datetime.now(timezone.utc)
+    await users.insert_one({
+        "email": admin_email,
+        "password_hash": hash_password(admin_password),
+        "name": "ZeniaOne Admin",
+        "avatar_url": None,
+        "is_verified": True,
+        "is_platform_admin": True,
+        "created_at": now,
+        "updated_at": now,
+        "last_login_at": None,
+    })
+    logger.info("✅ Created configured platform admin: %s", admin_email)
     else:
         # Ensure existing agent has the KB attached
         await col_agents().update_many(
