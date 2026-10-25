@@ -13,6 +13,7 @@ motor==3.7.1          # Async MongoDB driver
 
 # Auth & Security
 python-jose[cryptography]==3.5.0   # JWT tokens
+pyotp==2.9.0                       # TOTP two-factor authentication
 bcrypt==3.2.2
 passlib[bcrypt]==1.7.4             # Password hashing
 cryptography==50.0.1               # Encryption for stored secrets

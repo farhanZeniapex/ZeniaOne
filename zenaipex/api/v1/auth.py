@@ -20,6 +20,7 @@ from core.config import settings
 from models.user import (
     UserCreate, UserLogin, UserUpdate, UserPasswordChange,
     UserPasswordReset, RefreshTokenRequest, TokenResponse,
+    TwoFactorCode, TwoFactorLogin, TwoFactorDisable,
 )
 from services import auth_service
 
@@ -79,6 +80,11 @@ async def login(body: UserLogin):
         email=body.email,
         password=body.password,
     )
+    if result.get("two_factor_required"):
+        return {
+            "two_factor_required": True,
+            "challenge_token": result["two_factor_token"],
+        }
     return {
         "access_token": result["access_token"],
         "refresh_token": result["refresh_token"],
@@ -86,6 +92,35 @@ async def login(body: UserLogin):
         "expires_in": settings.jwt_access_token_expire_minutes * 60,
         "user": _format_user(result["user"]),
     }
+
+
+@router.post("/2fa/verify", summary="Complete a two-factor login")
+async def verify_two_factor(body: TwoFactorLogin):
+    result = await auth_service.verify_two_factor_login(body.challenge_token, body.code)
+    return {
+        "access_token": result["access_token"],
+        "refresh_token": result["refresh_token"],
+        "token_type": "bearer",
+        "expires_in": settings.jwt_access_token_expire_minutes * 60,
+        "user": _format_user(result["user"]),
+    }
+
+
+@router.post("/2fa/setup", summary="Create an authenticator setup")
+async def setup_two_factor(user: dict = Depends(get_current_user)):
+    return await auth_service.setup_two_factor(str(user["_id"]))
+
+
+@router.post("/2fa/confirm", summary="Enable two-factor authentication")
+async def confirm_two_factor(body: TwoFactorCode, user: dict = Depends(get_current_user)):
+    await auth_service.confirm_two_factor(str(user["_id"]), body.code)
+    return {"enabled": True}
+
+
+@router.post("/2fa/disable", summary="Disable two-factor authentication")
+async def disable_two_factor(body: TwoFactorDisable, user: dict = Depends(get_current_user)):
+    await auth_service.disable_two_factor(str(user["_id"]), body.password, body.code)
+    return {"enabled": False}
 
 
 @router.post("/refresh", summary="Refresh access token")

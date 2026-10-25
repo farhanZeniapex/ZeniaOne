@@ -76,3 +76,17 @@ class TokenResponse(BaseModel):
 
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
+
+
+class TwoFactorCode(BaseModel):
+    code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class TwoFactorLogin(BaseModel):
+    challenge_token: str = Field(..., min_length=20)
+    code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")
+
+
+class TwoFactorDisable(BaseModel):
+    password: str
+    code: str = Field(..., min_length=6, max_length=6, pattern=r"^\d{6}$")

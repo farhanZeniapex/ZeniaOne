@@ -26,6 +26,7 @@ from core.exceptions import (
 from models.subscription import PLAN_LIMITS
 from slugify import slugify
 from services.email_service import send_verification_email, send_password_reset_email
+from core.security import encrypt_secret, decrypt_secret
 
 logger = logging.getLogger(__name__)
 
@@ -226,6 +227,15 @@ async def login_user(email: str, password: str) -> Dict[str, Any]:
     access_token = create_access_token({"sub": user_id})
     refresh_token = create_refresh_token(user_id)
 
+    if user.get("two_factor_enabled"):
+        from core.security import create_2fa_challenge_token
+        return {
+            "user_id": user_id,
+            "user": user,
+            "two_factor_required": True,
+            "two_factor_token": create_2fa_challenge_token(user_id),
+        }
+
     logger.info(f"✅ Login: {email}")
 
     return {
@@ -233,6 +243,67 @@ async def login_user(email: str, password: str) -> Dict[str, Any]:
         "user": user,
         "access_token": access_token,
         "refresh_token": refresh_token,
+    }
+
+
+async def setup_two_factor(user_id: str) -> Dict[str, str]:
+    """Create an encrypted TOTP secret; it is not active until confirmed."""
+    import pyotp
+
+    user = await col_users().find_one({"_id": ObjectId(user_id)})
+    if not user:
+        raise NotFoundError("User not found")
+    secret = pyotp.random_base32()
+    encrypted = encrypt_secret(secret)
+    await col_users().update_one(
+        {"_id": user["_id"]},
+        {"$set": {"two_factor_secret": encrypted, "two_factor_enabled": False, "updated_at": datetime.now(timezone.utc)}},
+    )
+    uri = pyotp.TOTP(secret).provisioning_uri(name=user["email"], issuer_name="ZeniaOne")
+    return {"secret": secret, "otpauth_uri": uri}
+
+
+async def confirm_two_factor(user_id: str, code: str) -> bool:
+    """Verify the setup code and activate TOTP for the user."""
+    import pyotp
+
+    user = await col_users().find_one({"_id": ObjectId(user_id)})
+    secret = decrypt_secret((user or {}).get("two_factor_secret", ""))
+    if not user or not secret or not pyotp.TOTP(secret).verify(code, valid_window=1):
+        raise ValidationError("Invalid authenticator code")
+    await col_users().update_one({"_id": user["_id"]}, {"$set": {"two_factor_enabled": True, "updated_at": datetime.now(timezone.utc)}})
+    return True
+
+
+async def disable_two_factor(user_id: str, password: str, code: str) -> bool:
+    """Disable TOTP only after password and current authenticator code checks."""
+    import pyotp
+
+    user = await col_users().find_one({"_id": ObjectId(user_id)})
+    secret = decrypt_secret((user or {}).get("two_factor_secret", ""))
+    if not user or not verify_password(password, user.get("password_hash", "")):
+        raise InvalidCredentialsError()
+    if not secret or not pyotp.TOTP(secret).verify(code, valid_window=1):
+        raise ValidationError("Invalid authenticator code")
+    await col_users().update_one({"_id": user["_id"]}, {"$set": {"two_factor_enabled": False, "updated_at": datetime.now(timezone.utc)}})
+    return True
+
+
+async def verify_two_factor_login(challenge_token: str, code: str) -> Dict[str, Any]:
+    """Complete a password-authenticated login with a valid TOTP code."""
+    import pyotp
+    from core.security import decode_2fa_challenge_token
+    from core.exceptions import NotAuthenticatedError
+
+    user_id = decode_2fa_challenge_token(challenge_token)
+    user = await col_users().find_one({"_id": ObjectId(user_id)}) if user_id else None
+    secret = decrypt_secret((user or {}).get("two_factor_secret", ""))
+    if not user or not user.get("two_factor_enabled") or not secret or not pyotp.TOTP(secret).verify(code, valid_window=1):
+        raise NotAuthenticatedError("Invalid authenticator code")
+    return {
+        "user": user,
+        "access_token": create_access_token({"sub": str(user["_id"])}),
+        "refresh_token": create_refresh_token(str(user["_id"])),
     }
 
 

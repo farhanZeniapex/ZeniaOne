@@ -41,6 +41,9 @@ export default function LoginPage() {
   const [emailErr, setEmailErr] = useState("");
   const [passwordErr, setPasswordErr] = useState("");
   const [formErr, setFormErr] = useState("");
+  const [twoFactorChallenge, setTwoFactorChallenge] = useState("");
+  const [twoFactorCode, setTwoFactorCode] = useState("");
+  const [twoFactorErr, setTwoFactorErr] = useState("");
   const [isResetOpen, setIsResetOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
   const [resetStatus, setResetStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -79,10 +82,17 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetchApi<{ access_token: string; user: { is_platform_admin?: boolean } }>("/auth/login", {
+      const res = await fetchApi<{ access_token?: string; user?: { is_platform_admin?: boolean }; two_factor_required?: boolean; challenge_token?: string }>("/auth/login", {
         method: "POST",
         body: JSON.stringify({ email: email.trim().toLowerCase(), password }),
       });
+
+      if (res.two_factor_required && res.challenge_token) {
+        setTwoFactorChallenge(res.challenge_token);
+        setTwoFactorCode("");
+        setTwoFactorErr("");
+        return;
+      }
 
       if (res.access_token) {
         localStorage.setItem("zenaipex_token", res.access_token);
@@ -107,6 +117,27 @@ export default function LoginPage() {
     }
   }
 
+  async function verifyTwoFactor() {
+    if (!/^\d{6}$/.test(twoFactorCode)) {
+      setTwoFactorErr("Enter the 6-digit code from your authenticator app.");
+      return;
+    }
+    setTwoFactorErr("");
+    setIsLoading(true);
+    try {
+      const res = await fetchApi<{ access_token: string; user: { is_platform_admin?: boolean } }>("/auth/2fa/verify", {
+        method: "POST",
+        body: JSON.stringify({ challenge_token: twoFactorChallenge, code: twoFactorCode }),
+      });
+      localStorage.setItem("zenaipex_token", res.access_token);
+      router.push(res.user?.is_platform_admin ? "/admin" : "/dashboard");
+    } catch {
+      setTwoFactorErr("Invalid or expired authenticator code. Please sign in again.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   async function requestPasswordReset() {
     const normalizedEmail = resetEmail.trim().toLowerCase();
     if (!isValidEmail(normalizedEmail)) {
@@ -125,12 +156,36 @@ export default function LoginPage() {
   return (
     <Card className={styles.card}>
       <CardHeader className={styles.header}>
-        <span className={styles.kicker}><i className={styles.kickerDot} /> SIGN IN TO ZENIAONE</span>
-        <CardTitle className={styles.title}>Good to have you back.</CardTitle>
-        <CardDescription className={styles.description}>Pick up where your conversations left off.</CardDescription>
+        <span className={styles.kicker}><i className={styles.kickerDot} /> {twoFactorChallenge ? "VERIFY YOUR IDENTITY" : "SIGN IN TO ZENIAONE"}</span>
+        <CardTitle className={styles.title}>{twoFactorChallenge ? "One more security step." : "Good to have you back."}</CardTitle>
+        <CardDescription className={styles.description}>{twoFactorChallenge ? "Enter the code from your authenticator app to continue." : "Pick up where your conversations left off."}</CardDescription>
       </CardHeader>
 
       <CardContent className={styles.content}>
+        {twoFactorChallenge ? (
+          <div className={styles.form}>
+            <div className={styles.field}>
+              <Label htmlFor="twoFactorCode" className={styles.fieldLabel}>Authenticator code</Label>
+              <Input
+                id="twoFactorCode"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="000000"
+                maxLength={6}
+                value={twoFactorCode}
+                onChange={(e) => { setTwoFactorCode(e.target.value.replace(/\D/g, "").slice(0, 6)); if (twoFactorErr) setTwoFactorErr(""); }}
+                disabled={isLoading}
+                aria-invalid={!!twoFactorErr}
+                className={`${styles.input} tracking-[0.35em] text-center`}
+              />
+              <FieldError msg={twoFactorErr} />
+            </div>
+            <Button type="button" className={styles.submit} disabled={isLoading} onClick={verifyTwoFactor}>
+              {isLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Verifying…</> : <>Verify and continue <ArrowRight size={17} /></>}
+            </Button>
+            <button type="button" className="text-sm text-slate-500 underline underline-offset-2" onClick={() => { setTwoFactorChallenge(""); setTwoFactorCode(""); setTwoFactorErr(""); }}>Back to sign in</button>
+          </div>
+        ) : (
         <form onSubmit={onSubmit} className={styles.form} noValidate>
           {/* Email */}
           <div className={styles.field}>
@@ -218,6 +273,7 @@ export default function LoginPage() {
             )}
           </Button>
         </form>
+        )}
       </CardContent>
 
       <CardFooter className={styles.footer}>

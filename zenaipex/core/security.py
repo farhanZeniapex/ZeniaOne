@@ -115,6 +115,21 @@ def decode_refresh_token(token: str) -> Optional[str]:
     return payload.get("sub")
 
 
+def create_2fa_challenge_token(user_id: str) -> str:
+    """Create a short-lived token used only while completing a 2FA login."""
+    expire = datetime.now(timezone.utc) + timedelta(minutes=5)
+    payload = {"sub": user_id, "exp": expire, "type": "2fa_challenge"}
+    return jwt.encode(payload, settings.app_secret_key, algorithm=settings.jwt_algorithm)
+
+
+def decode_2fa_challenge_token(token: str) -> Optional[str]:
+    """Return the user ID from a valid 2FA challenge token."""
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "2fa_challenge":
+        return None
+    return payload.get("sub")
+
+
 # ── Field-Level Encryption ────────────────────────────────────────────────────
 # Used to store tenant Twilio credentials and API keys in MongoDB securely.
 
