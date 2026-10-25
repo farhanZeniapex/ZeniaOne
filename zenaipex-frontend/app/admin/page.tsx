@@ -96,8 +96,15 @@ export default function AdminDashboardPage() {
         setError("");
         setIsRefetching(true);
 
-        const [m, comps, logs, h, t, b, k] = await Promise.all([
-          fetchApi<Metrics>(`/admin/metrics?days=${days}`),
+        const m = await fetchApi<Metrics>(`/admin/metrics?days=${days}`);
+        if (!cancelled) {
+          setMetrics(m);
+          // Render the KPI cards as soon as the primary request finishes.
+          // The remaining dashboard panels hydrate in the background.
+          setIsLoading(false);
+        }
+
+        const [comps, logs, h, t, b, k] = await Promise.all([
           fetchApi<{ companies?: Company[] }>("/admin/companies?limit=5"),
           fetchApi<{ logs?: AdminLog[] }>("/admin/logs?limit=5"),
           fetch(`${API_BASE_URL.replace("/api/v1", "")}/health`)
@@ -112,7 +119,6 @@ export default function AdminDashboardPage() {
           fetchApi<KnowledgeInsight>("/admin/knowledge-insights").catch(() => null),
         ]);
         if (!cancelled) {
-          setMetrics(m);
           setRecentCompanies(comps.companies?.slice(0, 5) || []);
           setRecentLogs(logs.logs?.slice(0, 5) || []);
           setHealth(h);
