@@ -42,6 +42,7 @@ audioop-lts==0.2.2; python_version>='3.13'
 
 # Background jobs
 apscheduler==3.11.2
+sentry-sdk[fastapi]==2.45.0       # Optional production error tracking
 
 # Utilities
 httpx==0.28.1

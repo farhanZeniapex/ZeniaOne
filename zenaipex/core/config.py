@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     app_base_url: str = Field(default="http://localhost:8000")
     frontend_url: str = Field(default="http://localhost:3000")
     app_secret_key: str = Field(default_factory=lambda: secrets.token_urlsafe(64))
+    sentry_dsn: str = Field(default="")
+    sentry_traces_sample_rate: float = Field(default=0.1, ge=0.0, le=1.0)
 
     # ── MongoDB ────────────────────────────────────────────────────────────────
     mongodb_uri: str = Field(default="")

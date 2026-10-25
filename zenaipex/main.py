@@ -52,6 +52,21 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+if settings.sentry_dsn:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+        sentry_sdk.init(
+            dsn=settings.sentry_dsn,
+            integrations=[FastApiIntegration()],
+            traces_sample_rate=settings.sentry_traces_sample_rate,
+            send_default_pii=False,
+            environment=settings.app_env,
+        )
+        logger.info("Sentry error tracking enabled")
+    except Exception as exc:
+        logger.warning("Sentry initialization skipped: %s", exc)
+
 class NoisyEndpointFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         msg = record.getMessage()
