@@ -108,7 +108,9 @@ export const knowledgeApi = {
 
   downloadDocument: async (companyId: string, kbId: string, docId: string) => {
     const token = localStorage.getItem("zenaipex_token");
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8002/api/v1";
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || (process.env.NODE_ENV === "production"
+      ? "https://zeniaone-backend.onrender.com/api/v1"
+      : "http://127.0.0.1:8002/api/v1");
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);

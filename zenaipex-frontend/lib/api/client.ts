@@ -1,6 +1,10 @@
 // Local development keeps the existing default. Hosted environments provide
 // NEXT_PUBLIC_API_URL so browser requests never point at a visitor's localhost.
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8002/api/v1";
+const DEFAULT_API_URL = process.env.NODE_ENV === "production"
+  ? "https://zeniaone-backend.onrender.com/api/v1"
+  : "http://127.0.0.1:8002/api/v1";
+
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL;
 
 export function getCompanyLogoUrl(companyId: string, logoUrlReference?: string): string | undefined {
   if (!companyId || !logoUrlReference) return undefined;
