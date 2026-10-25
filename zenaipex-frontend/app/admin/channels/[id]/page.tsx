@@ -830,7 +830,7 @@ export default function AdminChannelDetailPage({
 
   const companyName = companiesMap[channel.company_id] || "ZeniaOne";
   const agentName = channel.agent_id
-    ? agentsMap[channel.agent_id] || "ZeniaAI Assistant"
+    ? agentsMap[channel.agent_id] || "ZeniaOne Assistant"
     : "Unassigned";
 
   const recordings = conversations.filter((c) => c.recording_url);

@@ -268,10 +268,10 @@ async def get_public_settings():
     """Public endpoint to fetch basic branding settings for login/sidebar."""
     doc = await col_platform_settings().find_one({"type": "global"})
     if not doc:
-        return {"platform_name": "ZeniaAI", "has_logo": False}
+        return {"platform_name": "ZeniaOne", "has_logo": False}
         
     has_logo = bool(doc.get("platform", {}).get("logo_path"))
-    platform_name = doc.get("platform", {}).get("platform_name", "ZeniaAI")
+    platform_name = doc.get("platform", {}).get("platform_name", "ZeniaOne")
     
     return {
         "platform_name": platform_name,

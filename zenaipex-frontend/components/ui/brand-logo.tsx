@@ -17,7 +17,7 @@ interface BrandLogoProps {
 }
 
 /**
- * ZeniaAI brand logo using the final SVG assets.
+ * ZeniaOne brand logo using the final logo assets.
  */
 export function BrandLogo({
   className,
