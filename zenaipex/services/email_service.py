@@ -48,12 +48,12 @@ async def send_verification_email(email: str, token: str):
     # Assuming frontend route is /verify-email?token=...
     verify_url = f"{settings.frontend_url}/verify-email?token={token}"
     
-    subject = "Verify your Zenaipex AI account"
-    body_text = f"Welcome to Zenaipex AI!\n\nPlease verify your email by clicking this link:\n{verify_url}"
+    subject = "Verify your ZeniaOne account"
+    body_text = f"Welcome to ZeniaOne!\n\nPlease verify your email by clicking this link:\n{verify_url}"
     body_html = f"""
     <html>
       <body>
-        <p>Welcome to Zenaipex AI!</p>
+        <p>Welcome to ZeniaOne!</p>
         <p>Please verify your email by clicking the link below:</p>
         <p><a href="{verify_url}">Verify Email</a></p>
         <p>Or paste this link into your browser: <br>{verify_url}</p>
@@ -72,7 +72,7 @@ async def send_verification_email(email: str, token: str):
 async def send_password_reset_email(email: str, token: str):
     """Send a short-lived password reset link without exposing the token to the API."""
     reset_url = f"{settings.frontend_url}/reset-password?token={token}"
-    subject = "Reset your Zenaipex AI password"
+    subject = "Reset your ZeniaOne password"
     body_text = f"Reset your password using this link (expires in 1 hour):\n{reset_url}"
     body_html = f'<p>Reset your password using the link below. It expires in 1 hour.</p><p><a href="{reset_url}">Reset password</a></p>'
     if not settings.smtp_host:

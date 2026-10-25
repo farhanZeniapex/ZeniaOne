@@ -292,7 +292,7 @@ async def _ensure_platform_admin():
 app = FastAPI(
     title=settings.app_name,
     description=(
-        "Zenaipex AI — Multi-tenant SaaS platform for AI voice agents. "
+        "ZeniaOne — Multi-tenant SaaS platform for AI voice agents. "
         "Powered by Sarvam AI (STT, TTS, LLM) with Pinecone RAG and Twilio."
     ),
     version="2.0.0",

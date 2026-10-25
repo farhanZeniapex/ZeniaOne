@@ -58,7 +58,7 @@ def get_default_settings() -> Dict[str, Any]:
     return {
         "type": "global",
         "platform": {
-            "platform_name": "Zenaipex AI",
+            "platform_name": "ZeniaOne",
             "default_language": "en",
             "default_timezone": "UTC",
             "logo_path": None,
