@@ -106,6 +106,7 @@ def col_ai_providers():    return get_db()["ai_providers"]
 def col_platform_settings(): return get_db()["platform_settings"]
 def col_llm_requests():    return get_db()["llm_requests"]
 def col_custom_voices():   return get_db()["custom_voices"]
+def col_background_jobs():  return get_db()["background_jobs"]
 
 # ── Index Initialization ──────────────────────────────────────────────────────
 
@@ -245,6 +246,13 @@ async def create_all_indexes():
     await db["custom_voices"].create_indexes([
         IndexModel([("company_id", ASCENDING), ("created_at", DESCENDING)]),
         IndexModel([("company_id", ASCENDING), ("voice_id", ASCENDING)]),
+    ])
+
+    # durable background work queue
+    await db["background_jobs"].create_indexes([
+        IndexModel([("status", ASCENDING), ("created_at", ASCENDING)]),
+        IndexModel([("lease_until", ASCENDING)], sparse=True),
+        IndexModel([("company_id", ASCENDING), ("created_at", DESCENDING)]),
     ])
 
     # ai_providers

@@ -23,7 +23,7 @@ from services.tenant_service import enforce_plan_limit, get_subscription
 from ai.vector_store import NamespacedVectorStore
 from services.document_extractor import extract_text
 from services.storage_service import delete_file
-import asyncio
+from services.job_queue import enqueue_document_processing
 
 logger = logging.getLogger(__name__)
 
@@ -252,8 +252,12 @@ async def ingest_document(
         doc_id = str(doc_result.inserted_id)
         doc_record["_id"] = doc_result.inserted_id
 
-    # Kick off background task with target version
-    asyncio.create_task(_process_document_task(company_id, kb_id, doc_id, storage_path, filename, content_type, target_version))
+    # Persist the job before returning so a process restart cannot lose it.
+    await enqueue_document_processing(
+        company_id=company_id, kb_id=kb_id, doc_id=doc_id,
+        storage_path=storage_path, filename=filename,
+        content_type=content_type, target_version=target_version,
+    )
 
     await col_activity_logs().insert_one({
         "actor_name": "System",
@@ -626,8 +630,8 @@ async def reprocess_document(company_id: str, doc_id: str) -> Dict[str, Any]:
     from ai.config import invalidate_document_cache
     invalidate_document_cache(doc_id)
 
-    # Kick off background task
-    asyncio.create_task(_process_document_task(
+    # Persist the background job; the worker resumes it after restarts.
+    await enqueue_document_processing(
         company_id=company_id,
         kb_id=doc["knowledge_base_id"],
         doc_id=doc_id,
@@ -635,7 +639,7 @@ async def reprocess_document(company_id: str, doc_id: str) -> Dict[str, Any]:
         filename=doc["filename"],
         content_type=doc.get("content_type", "text/plain"),
         target_version=target_version,
-    ))
+    )
     
     doc["status"] = "processing"
     return doc
@@ -666,7 +670,7 @@ async def restore_document_version(company_id: str, doc_id: str, version: int) -
             "updated_at": now,
         }},
     )
-    asyncio.create_task(_process_document_task(
+    await enqueue_document_processing(
         company_id=company_id,
         kb_id=current["knowledge_base_id"],
         doc_id=doc_id,
@@ -674,7 +678,7 @@ async def restore_document_version(company_id: str, doc_id: str, version: int) -
         filename=current.get("filename", version_doc.get("filename", "document")),
         content_type=current.get("content_type", version_doc.get("content_type", "text/plain")),
         target_version=current.get("version", 1) + 1,
-    ))
+    )
     return {**current, "status": "processing", "updated_at": now}
 
 

@@ -30,7 +30,7 @@ from core.database import (
     col_companies, col_subscriptions, col_team_members, col_agents,
     col_documents, col_knowledge_bases, col_conversations, col_messages,
     col_channels, col_usage_records, col_scheduled_calls, col_timing_metrics,
-    col_custom_voices, col_activity_logs,
+    col_custom_voices, col_activity_logs, col_background_jobs,
 )
 from core.exceptions import NotFoundError
 from services.storage_service import save_upload, delete_file
@@ -595,6 +595,7 @@ async def delete_company_data(
         col_knowledge_bases(), col_documents(), col_channels(),
         col_messages(), col_conversations(), col_usage_records(),
         col_scheduled_calls(), col_timing_metrics(), col_custom_voices(),
+        col_background_jobs(),
     )
     filter_query = {"company_id": company_id}
     deleted_counts = {}

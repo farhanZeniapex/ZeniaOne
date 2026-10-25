@@ -134,6 +134,12 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             logger.error(f"Failed to start background scheduler: {exc}")
 
+        try:
+            from services.job_queue import start_worker
+            start_worker()
+        except Exception as exc:
+            logger.error(f"Failed to start durable background worker: {exc}")
+
     yield
 
     # Shutdown
@@ -142,6 +148,12 @@ async def lifespan(app: FastAPI):
         stop_scheduler()
     except Exception as exc:
         pass
+
+    try:
+        from services.job_queue import stop_worker
+        await stop_worker()
+    except Exception as exc:
+        logger.debug("Background worker shutdown skipped: %s", exc)
 
     try:
         from core.cache import close as close_shared_cache
