@@ -44,3 +44,12 @@
 2. **Step 2:** Execute the 10 proposed staging test calls upon explicit authorization.
 3. **Step 3:** Review live telemetry logs, real audio recordings, and actual billing counters.
 4. **Step 4:** Re-evaluate Gates E, J, K, and P for final production promotion.
+
+---
+
+### 4. Post-release verification update (2026-10-25)
+
+- **Gate E scheduler durability:** The outbound test-call scheduler now persists jobs in MongoDB, claims them with a lease, recovers expired leases after worker restarts, retries failures with bounded backoff, and marks terminal failures after three attempts. Offline tests cover persistence and execution; the legacy APScheduler path is retained only for cancellation compatibility with pre-migration jobs.
+- **Automated verification:** 148 tests pass locally; GitHub CI and production smoke pass for commit `a662241`.
+- **Live verification:** `/health` reports `healthy` with `database: connected`; `/ready` reports `ready` with `database: connected`.
+- **Still unverified:** live carrier audio, Exotel-originated callback authentication behavior, real billing-provider settlement, and a separately provisioned staging Render service.
