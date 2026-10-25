@@ -3,7 +3,9 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 import os
 from datetime import datetime, timezone
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from bson.binary import Binary
+from io import BytesIO
 
 from core.dependencies import get_platform_admin
 from core.database import col_platform_settings, col_activity_logs
@@ -208,7 +210,13 @@ async def upload_logo(
     
     await col_platform_settings().update_one(
         {"type": "global"},
-        {"$set": {"platform.logo_path": storage_path, "updated_at": datetime.now(timezone.utc)}}
+        {"$set": {
+            "platform.logo_path": "mongo://platform/logo",
+            "platform.logo_data": Binary(content_bytes),
+            "platform.logo_content_type": content_type,
+            "platform.logo_filename": filename,
+            "updated_at": datetime.now(timezone.utc),
+        }}
     )
     
     if old_logo:
@@ -235,7 +243,13 @@ async def remove_logo(user: dict = Depends(get_platform_admin)):
         await delete_file(old_logo)
         await col_platform_settings().update_one(
             {"type": "global"},
-            {"$set": {"platform.logo_path": None, "updated_at": datetime.now(timezone.utc)}}
+            {"$set": {
+                "platform.logo_path": None,
+                "platform.logo_data": None,
+                "platform.logo_content_type": None,
+                "platform.logo_filename": None,
+                "updated_at": datetime.now(timezone.utc),
+            }}
         )
         
         await col_activity_logs().insert_one({
@@ -275,7 +289,15 @@ async def get_logo():
     if not doc:
         raise HTTPException(status_code=404, detail="No settings found")
         
-    logo_path = doc.get("platform", {}).get("logo_path")
+    platform = doc.get("platform", {})
+    logo_data = platform.get("logo_data")
+    if logo_data:
+        return StreamingResponse(
+            BytesIO(bytes(logo_data)),
+            media_type=platform.get("logo_content_type") or "image/png",
+        )
+
+    logo_path = platform.get("logo_path")
     if not logo_path or not os.path.exists(logo_path):
         raise HTTPException(status_code=404, detail="Logo not found")
         

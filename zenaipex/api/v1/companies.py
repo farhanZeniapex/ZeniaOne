@@ -313,7 +313,9 @@ async def generate_greeting_suggestion(
         greeting = "Hello, thank you for calling. How may I help you today?" if direction == "inbound" else f"Hello, this is {company.get('name', 'our team')}. Is this a good time to speak?"
     return {"greeting": greeting[:280], "direction": direction}
 
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from bson.binary import Binary
+from io import BytesIO
 import os
 
 @router.get("/{company_id}/logo", summary="Get company logo")
@@ -323,7 +325,15 @@ async def get_company_logo(company_id: str = Path(...)):
     if not company:
         raise NotFoundError("Company")
         
-    logo_path = company.get("settings", {}).get("logo_url")
+    company_settings = company.get("settings", {})
+    logo_data = company_settings.get("logo_data")
+    if logo_data:
+        return StreamingResponse(
+            BytesIO(bytes(logo_data)),
+            media_type=company_settings.get("logo_content_type") or "image/png",
+        )
+
+    logo_path = company_settings.get("logo_url")
     if not logo_path or not os.path.exists(logo_path):
         raise HTTPException(status_code=404, detail="Logo not found")
         
@@ -363,7 +373,10 @@ async def upload_company_logo(
 
     # Update DB
     db_settings = company.get("settings", {})
-    db_settings["logo_url"] = storage_path
+    db_settings["logo_url"] = f"mongo://company/{company_id}/logo"
+    db_settings["logo_data"] = Binary(content)
+    db_settings["logo_content_type"] = file.content_type
+    db_settings["logo_filename"] = filename
     db_settings["logo_size"] = size
     db_settings["logo_uploaded_at"] = datetime.now(timezone.utc).isoformat()
     
@@ -388,6 +401,9 @@ async def remove_company_logo(
         await delete_file(old_logo)
         db_settings = company.get("settings", {})
         db_settings["logo_url"] = None
+        db_settings["logo_data"] = None
+        db_settings["logo_content_type"] = None
+        db_settings["logo_filename"] = None
         
         await col_companies().update_one(
             {"_id": ObjectId(company_id)},
