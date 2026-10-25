@@ -27,6 +27,26 @@ SARVAM_SAMPLE_RATE = 16000
 SARVAM_SAMPLE_WIDTH = 2  # 16-bit PCM
 
 
+class PcmRateConverter:
+    """Stateful mono PCM16 resampler for real-time telephony streams."""
+
+    def __init__(self, input_rate: int, output_rate: int):
+        self.input_rate = int(input_rate)
+        self.output_rate = int(output_rate)
+        self._state = None
+
+    def convert(self, pcm_bytes: bytes) -> bytes:
+        if not pcm_bytes:
+            return b""
+        converted, self._state = audioop.ratecv(
+            pcm_bytes, 2, 1, self.input_rate, self.output_rate, self._state
+        )
+        return converted
+
+    def reset(self) -> None:
+        self._state = None
+
+
 def mp3_to_pcm(mp3_data: bytes) -> bytes:
     try:
         audio = AudioSegment.from_mp3(io.BytesIO(mp3_data))
@@ -549,6 +569,10 @@ class ExotelAudioChunker:
         final_data = self.buffer
         self.buffer = b""
         return [final_data]
+
+    def reset(self) -> None:
+        """Discard buffered audio when a caller barges in."""
+        self.buffer = b""
 
 def apply_audio_tuning(raw_audio_bytes: bytes, spd: float = 1.0, vol: float = 1.0, output_format: str = "mp3", **kwargs) -> bytes:
     """

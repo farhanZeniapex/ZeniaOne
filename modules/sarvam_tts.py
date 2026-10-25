@@ -426,6 +426,61 @@ PERSONA_TO_EDGE_VOICE = {
     "aditya": {"voice": "en-US-ChristopherNeural", "rate": "+0%", "pitch": "-6Hz"},
 }
 
+
+async def resolve_speaker(speaker: str) -> str:
+    """Resolve a saved custom-voice document id to its provider voice id."""
+    if not speaker or len(speaker) != 24:
+        return speaker
+    try:
+        from core.database import col_custom_voices
+        from bson import ObjectId
+        voice = await col_custom_voices().find_one({"_id": ObjectId(speaker)})
+        if voice and voice.get("voice_id"):
+            return voice["voice_id"]
+    except Exception:
+        pass
+    return speaker
+
+
+async def cloned_voice_tts_stream(
+    text: str,
+    voice_id: str,
+    language: str = "hi-IN",
+    sample_rate: int = 8000,
+    pace: float = 1.0,
+):
+    """Stream LINEAR16 audio from Sarvam's saved cloned voice endpoint."""
+    import aiohttp
+    resolved_voice = await resolve_speaker(voice_id)
+    if not resolved_voice or not resolved_voice.startswith("svc-"):
+        raise ValueError("A saved Sarvam cloned voice ID is required")
+    try:
+        from core.config import settings
+    except ImportError:
+        from zenaipex.core.config import settings
+    api_key = getattr(settings, "sarvam_api_key", "")
+    if not api_key:
+        raise RuntimeError("Sarvam API key is not configured")
+    form = aiohttp.FormData()
+    form.add_field("voice_id", resolved_voice)
+    form.add_field("text", text[:1000])
+    form.add_field("language_code", language)
+    form.add_field("pace", str(max(0.5, min(2.0, pace))))
+    form.add_field("output_audio_codec", "linear16")
+    form.add_field("speech_sample_rate", str(sample_rate))
+    timeout = aiohttp.ClientTimeout(total=20, connect=5, sock_read=15)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.post(
+            "https://api.sarvam.ai/voices/clone/stream",
+            headers={"api-subscription-key": api_key},
+            data=form,
+        ) as response:
+            if response.status != 200:
+                raise RuntimeError(f"Sarvam clone stream failed ({response.status})")
+            async for chunk in response.content.iter_chunked(4096):
+                if chunk:
+                    yield bytes(chunk)
+
 async def fallback_neural_tts(text: str, speaker: str = "ritu") -> bytes:
     """Fallback neural synthesis for each persona using high-fidelity edge_tts."""
     import logging
@@ -502,6 +557,17 @@ async def realtime_tts_stream(
     """Synthesize speech - yields raw audio chunks (linear16 24kHz) with connection pooling."""
     import logging
     logger = logging.getLogger(__name__)
+    resolved_speaker = await resolve_speaker(speaker)
+    if resolved_speaker and resolved_speaker.startswith("svc-"):
+        clone_kwargs = {
+            "text": text,
+            "voice_id": resolved_speaker,
+            "language": language,
+            "sample_rate": 24000,
+        }
+        async for chunk in cloned_voice_tts_stream(**clone_kwargs):
+            yield chunk
+        return
     pool_key = f"{language}_{speaker}"
     
     if not is_sarvam_available():
