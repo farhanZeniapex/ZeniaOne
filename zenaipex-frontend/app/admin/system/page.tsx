@@ -5,24 +5,38 @@ import { Activity, Bot, CheckCircle2, CircleAlert, Database, Loader2, Mic2, Phon
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ProviderRouting, RuntimeProvider, providersApi } from "@/lib/api/providers";
-import { API_BASE_URL } from "@/lib/api/client";
+import { API_BASE_URL, fetchApi } from "@/lib/api/client";
 import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton";
 
 const flowIcons: Record<string, typeof Phone> = { phone_voice: Phone, browser_voice: Mic2, text_chat: Bot };
 const flowNames: Record<string, string> = { phone_voice: "Phone Calls", browser_voice: "Voice Chat AI", text_chat: "Website & Chat" };
 
+type MonitoringSummary = {
+  database?: { status?: string; persistent?: boolean };
+  background_jobs?: { pending?: number; running?: number; failed?: number };
+  scheduled_calls?: { pending?: number; running?: number; failed?: number };
+  ai_failures_last_24h?: number;
+  alerts?: Array<{ code: string; severity: string; count?: number; provider?: string }>;
+};
+
 export default function AdminSystemPage() {
   const [providers, setProviders] = useState<RuntimeProvider[]>([]);
   const [routing, setRouting] = useState<ProviderRouting>({});
   const [health, setHealth] = useState<any>(null);
+  const [monitoring, setMonitoring] = useState<MonitoringSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = async () => {
     setLoading(true);
     const apiOrigin = API_BASE_URL.replace(/\/api\/v1\/?$/, "");
-    const [runtime, apiHealth] = await Promise.allSettled([providersApi.getRuntime(), fetch(`${apiOrigin}/health`).then(response => response.json())]);
+    const [runtime, apiHealth, monitoringResult] = await Promise.allSettled([
+      providersApi.getRuntime(),
+      fetch(`${apiOrigin}/health`).then(response => response.json()),
+      fetchApi<MonitoringSummary>("/admin/monitoring-summary"),
+    ]);
     if (runtime.status === "fulfilled") { setProviders(runtime.value.providers); setRouting(runtime.value.routing); }
     if (apiHealth.status === "fulfilled") setHealth(apiHealth.value);
+    if (monitoringResult.status === "fulfilled") setMonitoring(monitoringResult.value);
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
@@ -39,9 +53,10 @@ export default function AdminSystemPage() {
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric icon={Activity} label="Backend API" value={health?.status === "healthy" ? "Healthy" : "Unavailable"} good={health?.status === "healthy"}/><Metric icon={Database} label="Database" value={health?.database === "connected" ? "Connected" : "Disconnected"} good={health?.database === "connected"}/><Metric icon={ShieldCheck} label="Provider setup" value={`${configured} / ${providers.length}`} good={allConfigured}/><Metric icon={Bot} label="Active stages" value={`${activeStages} routed`} good={activeStages > 0}/></section>
 
     <section className="grid gap-6 xl:grid-cols-[1.25fr_.75fr]"><Card className="border-[#D9E7DD] shadow-sm"><CardContent className="p-6"><div className="flex items-start justify-between"><div><h2 className="text-lg font-bold text-[#19372B]">Active experience flows</h2><p className="mt-1 text-sm text-slate-500">Primary provider pehle run hota hai; next provider failover hai.</p></div><Button variant="outline" onClick={load} className="border-[#CFE1D4] text-[#286044]"><RefreshCw className="mr-2 h-4 w-4"/>Refresh</Button></div><div className="mt-6 space-y-4">{Object.entries(routing).map(([surface, stages]) => { const Icon = flowIcons[surface] || Activity; return <div key={surface} className="rounded-2xl border border-[#E1EAE3] bg-[#FBFDFC] p-4"><div className="flex items-center gap-3"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#E4F5E9] text-[#087F5B]"><Icon size={18}/></span><div><p className="font-bold text-[#244235]">{flowNames[surface] || surface}</p><p className="text-xs text-slate-500">Next session uses this flow</p></div></div><div className="mt-4 grid gap-3 md:grid-cols-3">{Object.entries(stages).map(([stage, chain]) => <div key={stage} className="rounded-xl border border-[#E2EDE4] bg-white p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-[#6A8B76]">{stage}</p><div className="mt-2 flex flex-wrap items-center gap-1.5">{chain.map((id, index) => <span key={id} className={`rounded-md px-2 py-1 text-[11px] font-semibold ${index === 0 ? "bg-[#DCF7E4] text-[#177445]" : "bg-slate-100 text-slate-600"}`}>{index > 0 && "→ "}{providerName(id)}</span>)}</div></div>)}</div></div>})}</div></CardContent></Card>
-      <Card className="border-[#D9E7DD] shadow-sm"><CardContent className="p-6"><h2 className="text-lg font-bold text-[#19372B]">Configuration alerts</h2><p className="mt-1 text-sm text-slate-500">Safe checks only. No provider key is exposed.</p><div className="mt-5 space-y-3">{providers.filter(p => !p.configured).length === 0 ? <Alert good title="All listed services configured" text="Provider routing can use the configured services."/> : providers.filter(p => !p.configured).map(p => <Alert key={p.id} title={`${p.name} needs configuration`} text={`${p.category} cannot become active until its server key is added.`}/>)}</div><a href="/admin/system/ai-providers" className="mt-6 flex items-center justify-center rounded-xl bg-[#0C4A31] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#0A3D29]">Open provider routing</a></CardContent></Card></section>
+      <div className="space-y-6"><Card className="border-[#D9E7DD] shadow-sm"><CardContent className="p-6"><div className="flex items-start justify-between"><div><h2 className="text-lg font-bold text-[#19372B]">Operational telemetry</h2><p className="mt-1 text-sm text-slate-500">Live queue and AI failure signals from the backend.</p></div><Activity className="text-[#087F5B]" size={20}/></div><div className="mt-5 grid grid-cols-3 gap-2 text-center"><Telemetry label="Jobs pending" value={monitoring?.background_jobs?.pending ?? "—"}/><Telemetry label="Calls queued" value={monitoring?.scheduled_calls?.pending ?? "—"}/><Telemetry label="AI failures" value={monitoring?.ai_failures_last_24h ?? "—"}/></div><div className="mt-4 space-y-2">{monitoring?.alerts?.length ? monitoring.alerts.map((alert) => <Alert key={`${alert.code}-${alert.provider || ""}`} title={alert.code.replaceAll("_", " ")} text={`${alert.severity}${alert.provider ? ` · ${alert.provider}` : ""}${alert.count !== undefined ? ` · ${alert.count}` : ""}`}/>) : <Alert good title="No active runtime alerts" text="Queues and provider circuits are within the current thresholds."/>}</div></CardContent></Card><Card className="border-[#D9E7DD] shadow-sm"><CardContent className="p-6"><h2 className="text-lg font-bold text-[#19372B]">Configuration alerts</h2><p className="mt-1 text-sm text-slate-500">Safe checks only. No provider key is exposed.</p><div className="mt-5 space-y-3">{providers.filter(p => !p.configured).length === 0 ? <Alert good title="All listed services configured" text="Provider routing can use the configured services."/> : providers.filter(p => !p.configured).map(p => <Alert key={p.id} title={`${p.name} needs configuration`} text={`${p.category} cannot become active until its server key is added.`}/>)}</div><a href="/admin/system/ai-providers" className="mt-6 flex items-center justify-center rounded-xl bg-[#0C4A31] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#0A3D29]">Open provider routing</a></CardContent></Card></div></section>
   </div>;
 }
 
 function Metric({ icon: Icon, label, value, good }: { icon: typeof Activity; label: string; value: string; good: boolean }) { return <Card className="border-[#D9E7DD] shadow-sm"><CardContent className="p-5"><div className="flex items-center justify-between"><span className="grid h-9 w-9 place-items-center rounded-xl bg-[#E6F6EB] text-[#087F5B]"><Icon size={18}/></span><span className={`h-2.5 w-2.5 rounded-full ${good ? "bg-[#19B965] shadow-[0_0_0_4px_#DCF7E4]" : "bg-amber-500 shadow-[0_0_0_4px_#FEF3C7]"}`}/></div><p className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-500">{label}</p><p className="mt-1 text-lg font-bold text-[#1C3A2D]">{value}</p></CardContent></Card>; }
+function Telemetry({ label, value }: { label: string; value: number | string }) { return <div className="rounded-xl border border-[#E2EDE4] bg-[#FBFDFC] px-2 py-3"><p className="text-[10px] font-bold uppercase tracking-wider text-[#6A8B76]">{label}</p><p className="mt-1 text-xl font-bold text-[#1C3A2D]">{value}</p></div>; }
 function Alert({ title, text, good = false }: { title: string; text: string; good?: boolean }) { const Icon = good ? CheckCircle2 : CircleAlert; return <div className={`flex gap-3 rounded-xl border p-3 ${good ? "border-[#C7E9D0] bg-[#F1FBF4]" : "border-amber-200 bg-amber-50"}`}><Icon className={`mt-0.5 h-4 w-4 shrink-0 ${good ? "text-[#159653]" : "text-amber-600"}`}/><div><p className="text-sm font-bold text-[#315342]">{title}</p><p className="mt-0.5 text-xs leading-5 text-slate-500">{text}</p></div></div>; }
