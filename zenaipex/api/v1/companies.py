@@ -33,6 +33,7 @@ from core.database import (
     col_documents, col_knowledge_bases, col_conversations, col_messages,
     col_channels, col_usage_records, col_scheduled_calls, col_timing_metrics,
     col_custom_voices, col_activity_logs, col_background_jobs,
+    col_llm_requests, col_platform_settings,
 )
 from core.exceptions import NotFoundError
 from services.storage_service import save_upload, delete_file
@@ -513,6 +514,30 @@ async def get_subscription(
     }
 
 
+def _calculate_provider_cost_inr(rows: list[dict], pricing_conf: dict) -> Optional[float]:
+    """Calculate recorded LLM provider cost using the configured price book."""
+    if not pricing_conf:
+        return None
+    exchange_rate = float(pricing_conf.get("usd_to_inr_rate", 86.50) or 86.50)
+    total = 0.0
+    priced_rows = 0
+    for row in rows:
+        provider = str(row.get("provider", "")).strip().lower()
+        model = row.get("model")
+        provider_rates = pricing_conf.get(provider) or pricing_conf.get("default")
+        if not isinstance(provider_rates, dict):
+            continue
+        rates = provider_rates.get(model) or provider_rates.get("default")
+        if not isinstance(rates, dict):
+            continue
+        input_tokens = int(row.get("input_tokens", 0) or 0)
+        output_tokens = int(row.get("output_tokens", 0) or 0)
+        total += ((input_tokens / 1_000_000) * float(rates.get("input_1m", 0) or 0))
+        total += ((output_tokens / 1_000_000) * float(rates.get("output_1m", 0) or 0))
+        priced_rows += 1
+    return total * exchange_rate if priced_rows else None
+
+
 @router.get("/{company_id}/billing/invoice", summary="Get a transparent billing invoice preview")
 async def get_billing_invoice(
     company_id: str = Path(...),
@@ -530,12 +555,30 @@ async def get_billing_invoice(
     plan = (subscription or {}).get("plan", "free_trial")
     configured_amount = (subscription or {}).get("monthly_price_inr")
 
+    month_start = datetime.strptime(billing_month, "%Y-%m").replace(tzinfo=timezone.utc)
+    next_month = month_start.replace(
+        year=month_start.year + (1 if month_start.month == 12 else 0),
+        month=1 if month_start.month == 12 else month_start.month + 1,
+    )
+    llm_rows = await col_llm_requests().find({
+        "company_id": company_id,
+        "timestamp": {"$gte": month_start, "$lt": next_month},
+    }, {"provider": 1, "model": 1, "input_tokens": 1, "output_tokens": 1}).to_list(length=100_000)
+    pricing_doc = await col_platform_settings().find_one({"type": "global"}) or {}
+    provider_cost_inr = _calculate_provider_cost_inr(llm_rows, pricing_doc.get("pricing") or {})
+
     line_items = [
         {"name": "Voice minutes", "quantity": round(float(usage.get("call_minutes_used", 0) or 0), 2), "unit": "minute"},
         {"name": "AI requests", "quantity": int(usage.get("llm_api_calls", 0) or 0), "unit": "request"},
         {"name": "STT API calls", "quantity": int(usage.get("stt_api_calls", 0) or 0), "unit": "request"},
         {"name": "TTS API calls", "quantity": int(usage.get("tts_api_calls", 0) or 0), "unit": "request"},
     ]
+    if provider_cost_inr is not None:
+        line_items.append({"name": "Provider usage cost", "quantity": round(provider_cost_inr, 4), "unit": "INR"})
+    base_amount = float(configured_amount) if configured_amount is not None else None
+    amount_due = (base_amount + provider_cost_inr) if base_amount is not None and provider_cost_inr is not None else base_amount
+    if amount_due is None and provider_cost_inr is not None:
+        amount_due = provider_cost_inr
     return {
         "invoice_id": f"{company_id[:8]}-{billing_month}",
         "status": "preview",
@@ -543,9 +586,10 @@ async def get_billing_invoice(
         "company": {"id": company_id, "name": (company or {}).get("name", "")},
         "plan": plan,
         "line_items": line_items,
-        "amount_due_inr": configured_amount,
-        "amount_status": "configured" if configured_amount is not None else "not_configured",
-        "message": "Invoice amount is shown only when a subscription price is configured; usage quantities are live recorded data.",
+        "amount_due_inr": round(amount_due, 4) if amount_due is not None else None,
+        "amount_status": "configured" if base_amount is not None else ("usage_only" if provider_cost_inr is not None else "not_configured"),
+        "provider_cost_inr": round(provider_cost_inr, 4) if provider_cost_inr is not None else None,
+        "message": "Amount combines configured subscription price and recorded provider usage cost when pricing is configured.",
     }
 
 
