@@ -107,6 +107,7 @@ def col_platform_settings(): return get_db()["platform_settings"]
 def col_llm_requests():    return get_db()["llm_requests"]
 def col_custom_voices():   return get_db()["custom_voices"]
 def col_background_jobs():  return get_db()["background_jobs"]
+def col_billing_events():   return get_db()["billing_events"]
 
 # ── Index Initialization ──────────────────────────────────────────────────────
 
@@ -253,6 +254,12 @@ async def create_all_indexes():
         IndexModel([("status", ASCENDING), ("created_at", ASCENDING)]),
         IndexModel([("lease_until", ASCENDING)], sparse=True),
         IndexModel([("company_id", ASCENDING), ("created_at", DESCENDING)]),
+    ])
+
+    # idempotent payment-provider webhook events
+    await db["billing_events"].create_indexes([
+        IndexModel([("event_id", ASCENDING)], unique=True),
+        IndexModel([("company_id", ASCENDING), ("received_at", DESCENDING)]),
     ])
 
     # ai_providers

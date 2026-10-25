@@ -42,7 +42,7 @@ from core.dependencies import get_platform_admin
 from core.database import connect_db, disconnect_db, create_all_indexes
 
 # API Routers
-from api.v1 import auth, companies, agents, knowledge, conversations, channels_twilio, channels_enablex, channels_vobiz, channels_vapi, channels, widget, sales, voice_advanced, voices
+from api.v1 import auth, companies, billing, agents, knowledge, conversations, channels_twilio, channels_enablex, channels_vobiz, channels_vapi, channels, widget, sales, voice_advanced, voices
 from api.v1.admin import router as admin_router
 
 logging.basicConfig(
@@ -453,6 +453,7 @@ API_PREFIX = "/api/v1"
 
 app.include_router(auth.router, prefix=API_PREFIX)
 app.include_router(companies.router, prefix=API_PREFIX)
+app.include_router(billing.router, prefix=API_PREFIX)
 app.include_router(agents.router, prefix=API_PREFIX)
 app.include_router(knowledge.router, prefix=API_PREFIX)
 app.include_router(conversations.router, prefix=API_PREFIX)

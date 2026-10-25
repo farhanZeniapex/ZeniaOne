@@ -43,6 +43,7 @@ jobs:
               "/api/v1/companies/{company_id}/data-export",
               "/api/v1/companies/{company_id}/data",
               "/api/v1/admin/monitoring-summary",
+              "/api/v1/billing/webhook",
           }
           missing = sorted(required.difference(paths))
           assert not missing, f"Missing production routes: {missing}"

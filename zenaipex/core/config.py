@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = Field(default=True)
     rate_limit_general_per_minute: int = Field(default=120, ge=1, le=10000)
     rate_limit_auth_per_minute: int = Field(default=20, ge=1, le=1000)
+    billing_webhook_secret: str = Field(default="", description="HMAC secret for payment provider webhooks")
 
     # ── Pinecone ───────────────────────────────────────────────────────────────
     pinecone_api_key: str = Field(default="")
