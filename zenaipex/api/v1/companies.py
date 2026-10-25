@@ -26,7 +26,11 @@ from core.dependencies import (
     get_verified_user, get_current_user, get_auth_context, require_admin, require_owner,
     require_onboarding_admin, get_unverified_auth_context, AuthContext,
 )
-from core.database import col_companies, col_subscriptions, col_team_members
+from core.database import (
+    col_companies, col_subscriptions, col_team_members, col_agents,
+    col_documents, col_knowledge_bases, col_conversations, col_messages,
+    col_channels, col_usage_records,
+)
 from core.exceptions import NotFoundError
 from services.storage_service import save_upload, delete_file
 from models.company import CompanyCreate, CompanyUpdate, TeamMemberCreate
@@ -64,6 +68,27 @@ def _fmt_company(doc: dict) -> dict:
         "created_at": doc.get("created_at"),
         "updated_at": doc.get("updated_at"),
     }
+
+
+_EXPORT_SECRET_FIELDS = {
+    "password_hash", "two_factor_secret", "logo_data", "api_key", "api_token",
+    "auth_token", "access_token", "refresh_token", "client_secret", "webhook_secret",
+}
+
+
+def _export_safe(value):
+    """Convert Mongo values to JSON while excluding credential material."""
+    if isinstance(value, dict):
+        return {
+            str(key): _export_safe(item)
+            for key, item in value.items()
+            if str(key).lower() not in _EXPORT_SECRET_FIELDS
+        }
+    if isinstance(value, list):
+        return [_export_safe(item) for item in value]
+    if isinstance(value, (datetime, ObjectId)):
+        return str(value)
+    return value
 
 
 @router.get("", summary="List my companies")
@@ -513,6 +538,37 @@ async def get_billing_invoice(
         "amount_due_inr": configured_amount,
         "amount_status": "configured" if configured_amount is not None else "not_configured",
         "message": "Invoice amount is shown only when a subscription price is configured; usage quantities are live recorded data.",
+    }
+
+
+@router.get("/{company_id}/data-export", summary="Export tenant data safely")
+async def export_company_data(
+    company_id: str = Path(...),
+    ctx: AuthContext = Depends(require_owner),
+):
+    """Export tenant-owned records for privacy/access requests."""
+    company = await col_companies().find_one({"_id": ObjectId(company_id)})
+    collections = {
+        "team_members": col_team_members(),
+        "agents": col_agents(),
+        "documents": col_documents(),
+        "knowledge_bases": col_knowledge_bases(),
+        "conversations": col_conversations(),
+        "messages": col_messages(),
+        "channels": col_channels(),
+        "usage_records": col_usage_records(),
+    }
+    exported = {}
+    for name, collection in collections.items():
+        rows = await collection.find({"company_id": company_id}).to_list(length=20_000)
+        exported[name] = [_export_safe(row) for row in rows]
+
+    return {
+        "export_type": "tenant_data_export",
+        "exported_at": datetime.now(timezone.utc),
+        "company": _export_safe(company or {}),
+        "data": exported,
+        "redacted_fields": sorted(_EXPORT_SECRET_FIELDS),
     }
 
 
