@@ -2,7 +2,10 @@ import logging
 import secrets
 import time
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from datetime import datetime, timedelta, timezone
 from core.dependencies import get_platform_admin
+from core.config import settings
+from core.database import col_background_jobs, col_llm_requests, get_db_mode
 
 from services.live_monitoring import monitoring_manager
 
@@ -10,6 +13,47 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Live Monitoring"])
 _monitoring_tickets: dict[str, float] = {}
+
+
+@router.get("/monitoring-summary")
+async def monitoring_summary(_: dict = Depends(get_platform_admin)):
+    """Return live operational signals for alerting and admin diagnostics."""
+    now = datetime.now(timezone.utc)
+    recent_since = now - timedelta(hours=24)
+    queue_counts = {
+        status: await col_background_jobs().count_documents({"status": status})
+        for status in ("pending", "running", "failed")
+    }
+    recent_failures = await col_llm_requests().count_documents({
+        "success": False,
+        "timestamp": {"$gte": recent_since},
+    })
+    from ai.llm import _provider_health
+    providers = {
+        name: {
+            "state": details.get("circuit_state", "HEALTHY"),
+            "consecutive_failures": details.get("consecutive_failures", 0),
+            "avg_latency": round(float(details.get("avg_latency", 0) or 0), 2),
+            "last_failure_reason": details.get("last_failure_reason"),
+        }
+        for name, details in _provider_health.items()
+    }
+    db_mode = get_db_mode()
+    return {
+        "generated_at": now,
+        "database": {
+            "mode": db_mode["db_mode"],
+            "persistent": db_mode["persistent"],
+            "status": "healthy" if db_mode["persistent"] else "attention_required",
+        },
+        "background_jobs": queue_counts,
+        "ai_failures_last_24h": recent_failures,
+        "providers": providers,
+        "integrations": {
+            "sentry_configured": bool(settings.sentry_dsn),
+            "redis_configured": bool(settings.redis_url),
+        },
+    }
 
 
 @router.get("/live-monitoring-ticket")
