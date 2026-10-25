@@ -4,16 +4,20 @@ from zenaipex.main import app
 
 
 def test_request_id_is_generated_and_returned():
-    with TestClient(app) as client:
-        response = client.get("/", headers={"X-Request-ID": "trace-test-01"})
+    # Do not enter the lifespan here: this middleware test does not need a
+    # database connection and must remain runnable in a dependency-free CI job.
+    client = TestClient(app)
+    response = client.get("/", headers={"X-Request-ID": "trace-test-01"})
+    client.close()
 
     assert response.status_code == 200
     assert response.headers["X-Request-ID"] == "trace-test-01"
 
 
 def test_unsafe_request_id_is_replaced():
-    with TestClient(app) as client:
-        response = client.get("/", headers={"X-Request-ID": "bad id\nvalue"})
+    client = TestClient(app)
+    response = client.get("/", headers={"X-Request-ID": "bad id\nvalue"})
+    client.close()
 
     request_id = response.headers["X-Request-ID"]
     assert response.status_code == 200
