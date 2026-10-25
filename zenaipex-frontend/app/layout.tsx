@@ -12,6 +12,15 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "ZeniaOne - Enterprise AI Voice & Chat Agents",
   description: "Deploy intelligent, zero-latency conversational AI voice and chat agents powered by your company knowledge base.",
+  icons: {
+    icon: [
+      {
+        url: "/ZeniaAI_Z_Logo.png",
+        type: "image/png",
+      },
+    ],
+    apple: "/ZeniaAI_Z_Logo.png",
+  },
 };
 
 export default function RootLayout({
