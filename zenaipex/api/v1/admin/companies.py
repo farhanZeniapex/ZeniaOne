@@ -78,6 +78,12 @@ def _setup_readiness(company: dict, *, agents: int, documents: int, channels: in
     }
 
 def _fmt_company(doc: dict, owner: dict = None, stats: dict = None) -> dict:
+    public_settings = dict(doc.get("settings") or {})
+    # Logo bytes are served by /companies/{id}/logo and must not be serialized
+    # into admin JSON responses.
+    public_settings.pop("logo_data", None)
+    public_settings.pop("logo_content_type", None)
+    public_settings.pop("logo_filename", None)
     result = {
         "id": str(doc["_id"]),
         "name": doc["name"],
@@ -251,7 +257,11 @@ async def get_company(company_id: str):
     }
     fmt["stats"].update(_setup_readiness(company, agents=agents_count, documents=documents_count, channels=channels_count))
     fmt["team"] = team
-    fmt["settings"] = company.get("settings", {})
+    fmt_settings = dict(company.get("settings", {}) or {})
+    fmt_settings.pop("logo_data", None)
+    fmt_settings.pop("logo_content_type", None)
+    fmt_settings.pop("logo_filename", None)
+    fmt["settings"] = fmt_settings
     fmt["timezone"] = company.get("timezone", "Asia/Kolkata")
     return fmt
 

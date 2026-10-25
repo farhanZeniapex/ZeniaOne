@@ -42,6 +42,12 @@ class GreetingSuggestionRequest(BaseModel):
 
 
 def _fmt_company(doc: dict) -> dict:
+    public_settings = dict(doc.get("settings", {}) or {})
+    # Logo bytes are served by the dedicated logo endpoint. Never put BSON
+    # Binary data into the JSON company response.
+    public_settings.pop("logo_data", None)
+    public_settings.pop("logo_content_type", None)
+    public_settings.pop("logo_filename", None)
     return {
         "id": str(doc["_id"]),
         "name": doc["name"],
@@ -52,8 +58,8 @@ def _fmt_company(doc: dict) -> dict:
         "plan": doc.get("plan", "free_trial"),
         "is_active": doc.get("is_active", True),
         "user_role": doc.get("user_role"),
-        "settings": doc.get("settings", {}),
-        "onboarding_completed": doc.get("settings", {}).get("onboarding_completed", True),
+        "settings": public_settings,
+        "onboarding_completed": public_settings.get("onboarding_completed", True),
         "created_at": doc.get("created_at"),
         "updated_at": doc.get("updated_at"),
     }
