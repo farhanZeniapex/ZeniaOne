@@ -456,8 +456,8 @@ export default function AdminLayout({
         className={cn(
           "fixed inset-y-0 left-0 z-50 flex flex-col border-r border-[#D9E2DC] bg-[radial-gradient(circle_at_5%_0%,#F8FFF8_0%,#EEF2EA_44%,#E8EEE8_100%)] shadow-[12px_0_40px_rgba(25,55,43,0.05)] transition-all duration-300 ease-in-out",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full",
-          "w-[280px] lg:translate-x-0",
-          isSidebarOpen ? "lg:w-[280px]" : "lg:w-[80px]",
+          "w-[260px] lg:translate-x-0",
+          isSidebarOpen ? "lg:w-[260px]" : "lg:w-[80px]",
         )}
       >
         <button
@@ -473,16 +473,16 @@ export default function AdminLayout({
             <PanelLeftOpen className="h-4 w-4" />
           )}
         </button>
-        <div className="flex h-[72px] shrink-0 items-center justify-between border-b border-[#DCE7DF]/80 px-5">
+        <div className="flex h-[60px] shrink-0 items-center justify-between border-b border-[#DCE7DF]/80 px-4">
           <Link
             href="/admin"
             className="flex flex-col justify-center transition-opacity hover:opacity-80 overflow-hidden"
           >
             <div className={cn(!isSidebarOpen && "lg:hidden")}>
-              <BrandLogo iconSize={36} textSize="text-xl" />
+              <BrandLogo iconSize={32} textSize="text-lg" />
             </div>
             {!isSidebarOpen && (
-              <BrandLogo iconSize={36} iconOnly className="hidden lg:flex" />
+              <BrandLogo iconSize={32} iconOnly className="hidden lg:flex" />
             )}
           </Link>
           <div className="flex lg:hidden">
@@ -497,19 +497,19 @@ export default function AdminLayout({
           </div>
         </div>
 
-        <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden px-3 py-5 scrollbar-none">
+        <div className="flex flex-1 flex-col overflow-y-auto overflow-x-hidden px-2.5 py-3 scrollbar-none">
           {navGroups.map((group, index) => (
             <div
               key={group.title}
               className={cn(
-                "mb-5",
+                "mb-3",
                 index === navGroups.length - 1 ? "mb-0" : "",
               )}
             >
               <button
                 onClick={() => toggleGroup(group.title)}
                 className={cn(
-                  "group mb-1.5 flex w-full items-center justify-between rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500 transition-all duration-150 hover:bg-white/60 hover:text-[#285A42]",
+                  "group mb-1 flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 transition-all duration-150 hover:bg-white/60 hover:text-[#285A42]",
                   !isSidebarOpen && "lg:opacity-0 lg:w-0 lg:hidden",
                 )}
               >
@@ -549,7 +549,7 @@ export default function AdminLayout({
                             onClick={() => toggleItem(item.name)}
                             title={!isSidebarOpen ? item.name : undefined}
                             className={cn(
-                              "flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition-all duration-150",
+                              "flex w-full items-center gap-3 rounded-xl px-2.5 py-2.5 text-left text-sm font-semibold transition-all duration-150",
                               childActive
                                 ? "bg-[#E4F0E8] text-[#174D34]"
                                 : "text-[#43584F] hover:bg-[#E8F0EC]",
@@ -590,7 +590,7 @@ export default function AdminLayout({
                                     key={child.name}
                                     href={child.href}
                                     className={cn(
-                                      "flex items-center gap-2 rounded-lg px-2.5 py-2.5 text-xs font-semibold transition-colors",
+                                      "flex items-center gap-2 rounded-lg px-2.5 py-2 text-xs font-semibold transition-colors",
                                       isChildActive
                                         ? "bg-[#DCEEE2] text-[#17613C]"
                                         : "text-[#60796C] hover:bg-[#ECF4EE] hover:text-[#285A42]",
@@ -612,7 +612,7 @@ export default function AdminLayout({
                         href={item.href}
                         title={!isSidebarOpen ? item.name : undefined}
                         className={cn(
-                          "relative flex items-center gap-3 rounded-xl px-3 py-3 text-sm font-medium whitespace-nowrap transition-all duration-150 group-link",
+                          "relative flex items-center gap-3 rounded-xl px-2.5 py-2.5 text-sm font-medium whitespace-nowrap transition-all duration-150 group-link",
                           isActive
                             ? "bg-[#DCE8E2] text-sage-800 rounded-r-md rounded-l-none"
                             : "text-[#43584F] hover:bg-white/70",
@@ -664,10 +664,10 @@ export default function AdminLayout({
           ))}
         </div>
 
-        <div className="mt-auto border-t border-[#D9E2DC] bg-[#FAFAFA]/70 p-3">
+        <div className="mt-auto border-t border-[#D9E2DC] bg-[#FAFAFA]/70 p-2">
           <div
             className={cn(
-              "rounded-2xl border border-[#DCE9E0] bg-white/80 p-2.5 shadow-[0_4px_16px_rgba(25,55,43,0.06)]",
+              "rounded-xl border border-[#DCE9E0] bg-white/80 p-2 shadow-[0_4px_16px_rgba(25,55,43,0.06)]",
               !isSidebarOpen &&
                 "lg:flex lg:flex-col lg:items-center lg:gap-2 lg:p-2",
             )}
@@ -718,7 +718,7 @@ export default function AdminLayout({
               title="Choose customer dashboard"
               aria-label="Choose customer dashboard"
               className={cn(
-                "mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-[#CBE0D1] bg-[#F4FBF5] px-2 py-1.5 text-[11px] font-bold text-[#286044] transition hover:border-[#78B88D] hover:bg-white",
+                "mt-1.5 flex w-full items-center justify-center gap-2 rounded-xl border border-[#CBE0D1] bg-[#F4FBF5] px-2 py-1 text-[11px] font-bold text-[#286044] transition hover:border-[#78B88D] hover:bg-white",
                 !isSidebarOpen &&
                   "lg:mt-0 lg:h-8 lg:w-8 lg:border-[#D6E5DA] lg:bg-[#F4FBF5] lg:p-0",
               )}
@@ -739,7 +739,7 @@ export default function AdminLayout({
           isFocusChat
             ? "h-screen min-h-0 overflow-hidden"
             : "min-h-screen",
-          isSidebarOpen ? "lg:pl-[280px]" : "lg:pl-[80px]",
+          isSidebarOpen ? "lg:pl-[260px]" : "lg:pl-[80px]",
         )}
       >
         {(!isFocusChat || isFocusHeaderOpen) && <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-border bg-background/80 px-4 sm:px-8 backdrop-blur-md">
