@@ -15,6 +15,10 @@ Every push to `main` runs backend tests and the frontend build. The production s
 
 The same workflow can be dispatched manually with a staging API base URL using the `api_base_url` input. This verifies a staging service against the identical production contract before promotion.
 
+### Isolated staging blueprint
+
+`render.staging.yaml` defines separate backend and frontend services. Create the Blueprint in Render with this file selected explicitly, provide a separate MongoDB Atlas database/URI for `zenaipex_staging`, and fill the `sync: false` secrets in the staging environment only. After the services become healthy, dispatch **ZeniaOne Production Smoke** manually with `api_base_url=https://zeniaone-backend-staging.onrender.com`. Do not point staging at the production database.
+
 Scheduled outbound calls are persisted in MongoDB (`scheduled_calls`) and processed by a leased worker. A worker restart recovers expired leases; failed calls retry with bounded backoff and become terminal after three attempts. The legacy in-memory scheduler is retained only to cancel jobs created by older releases.
 
 ## Rollback procedure

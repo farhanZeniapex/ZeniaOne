@@ -1,0 +1,57 @@
+# Render Blueprint for an isolated staging environment.
+# Use this file explicitly from Render's Blueprint path selector; it is not the
+# production service definition and never changes existing production services.
+services:
+  - type: web
+    name: zeniaone-backend-staging
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /ready
+    envVars:
+      - key: APP_NAME
+        value: ZeniaOne
+      - key: APP_ENV
+        value: staging
+      - key: APP_BASE_URL
+        value: https://zeniaone-backend-staging.onrender.com
+      - key: FRONTEND_URL
+        value: https://zeniaone-web-staging.onrender.com
+      - key: PLATFORM_WEBHOOK_BASE_URL
+        value: https://zeniaone-backend-staging.onrender.com
+      - key: MONGODB_DB_NAME
+        value: zenaipex_staging
+      - key: APP_SECRET_KEY
+        generateValue: true
+      - key: MONGODB_URI
+        sync: false
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: BILLING_WEBHOOK_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: PINECONE_API_KEY
+        sync: false
+
+  - type: web
+    name: zeniaone-web-staging
+    runtime: docker
+    dockerfilePath: ./zenaipex-frontend/Dockerfile
+    dockerContext: .
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        value: https://zeniaone-backend-staging.onrender.com/api/v1
