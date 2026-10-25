@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from core.database import col_users
 from bson import ObjectId
 
@@ -16,13 +16,14 @@ def _fmt_user(doc: dict) -> dict:
     }
 
 @router.get("")
-async def list_users():
-    """List all platform users."""
-    cursor = col_users().find({}).sort("created_at", -1)
+async def list_users(skip: int = Query(default=0, ge=0), limit: int = Query(default=100, ge=1, le=200)):
+    """List platform users with bounded pagination."""
+    total = await col_users().count_documents({})
+    cursor = col_users().find({}).sort("created_at", -1).skip(skip).limit(limit)
     users = []
     async for doc in cursor:
         users.append(_fmt_user(doc))
-    return {"users": users}
+    return {"users": users, "pagination": {"skip": skip, "limit": limit, "total": total}}
 
 @router.patch("/{user_id}/status")
 async def update_user_status(user_id: str, payload: dict):

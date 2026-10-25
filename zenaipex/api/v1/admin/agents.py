@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from core.database import col_agents, col_companies, col_knowledge_bases
 from bson import ObjectId
 from pydantic import BaseModel, Field
@@ -40,9 +40,13 @@ def _fmt_agent(doc: dict, company_name: str = "Unknown Company", company_logo_ur
     }
 
 @router.get("")
-async def list_agents():
-    """List all agents across all companies with company details."""
-    comp_cursor = col_companies().find({})
+async def list_agents(skip: int = Query(default=0, ge=0), limit: int = Query(default=100, ge=1, le=200)):
+    """List agents across companies with bounded pagination."""
+    total = await col_agents().count_documents({})
+    cursor = col_agents().find({}).sort("created_at", -1).skip(skip).limit(limit)
+    docs = await cursor.to_list(length=limit)
+    company_ids = {str(doc.get("company_id", "")) for doc in docs if ObjectId.is_valid(str(doc.get("company_id", "")))}
+    comp_cursor = col_companies().find({"_id": {"$in": [ObjectId(cid) for cid in company_ids]}})
     comp_map = {}
     async for c in comp_cursor:
         comp_map[str(c["_id"])] = {
@@ -50,13 +54,12 @@ async def list_agents():
             "logo_url": (c.get("settings") or {}).get("logo_url"),
         }
 
-    cursor = col_agents().find({}).sort("created_at", -1)
     agents = []
-    async for doc in cursor:
+    for doc in docs:
         c_id = str(doc.get("company_id", ""))
         company = comp_map.get(c_id, {"name": "Unknown Company", "logo_url": None})
         agents.append(_fmt_agent(doc, company["name"], company["logo_url"]))
-    return {"agents": agents}
+    return {"agents": agents, "pagination": {"skip": skip, "limit": limit, "total": total}}
 
 @router.patch("/{agent_id}/voice")
 async def admin_update_agent_voice(agent_id: str, body: AdminVoiceUpdateRequest):

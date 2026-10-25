@@ -1,13 +1,14 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from core.database import col_subscriptions, col_companies
 from bson import ObjectId
 
 router = APIRouter(prefix="/subscriptions")
 
 @router.get("")
-async def list_subscriptions():
-    """List all subscriptions across all companies."""
-    cursor = col_subscriptions().find({}).sort("created_at", -1)
+async def list_subscriptions(skip: int = Query(default=0, ge=0), limit: int = Query(default=100, ge=1, le=200)):
+    """List subscriptions with bounded pagination."""
+    total = await col_subscriptions().count_documents({})
+    cursor = col_subscriptions().find({}).sort("created_at", -1).skip(skip).limit(limit)
     subscriptions = []
     async for doc in cursor:
         sub = {
@@ -34,4 +35,4 @@ async def list_subscriptions():
             
         subscriptions.append(sub)
         
-    return {"subscriptions": subscriptions}
+    return {"subscriptions": subscriptions, "pagination": {"skip": skip, "limit": limit, "total": total}}

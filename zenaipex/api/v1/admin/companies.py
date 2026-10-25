@@ -119,6 +119,7 @@ async def list_companies(
     limit: int = Query(default=100, ge=1, le=100),
 ):
     """List all companies with owner and resource stats."""
+    total = await col_companies().count_documents({})
     cursor = col_companies().find({}).sort("created_at", -1).skip(skip).limit(limit)
     docs = await cursor.to_list(length=limit)
 
@@ -147,7 +148,7 @@ async def list_companies(
         return _fmt_company(doc, owner=owner, stats=stats)
 
     companies = await asyncio.gather(*(format_company(doc) for doc in docs))
-    return {"companies": companies}
+    return {"companies": companies, "pagination": {"skip": skip, "limit": limit, "total": total}}
 
 
 @router.post("", status_code=201)

@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from core.database import col_usage_records, col_companies
 from bson import ObjectId
 from datetime import datetime, timezone
@@ -6,12 +6,14 @@ from datetime import datetime, timezone
 router = APIRouter(prefix="/usage")
 
 @router.get("")
-async def list_usage():
-    """List all usage records for the current month."""
+async def list_usage(skip: int = Query(default=0, ge=0), limit: int = Query(default=100, ge=1, le=200)):
+    """List current-month usage records with bounded pagination."""
     current_month = datetime.now(timezone.utc).strftime("%Y-%m")
     
     # We will fetch all usage records, but only return the current month by default
-    cursor = col_usage_records().find({"month": current_month}).sort("updated_at", -1)
+    query = {"month": current_month}
+    total = await col_usage_records().count_documents(query)
+    cursor = col_usage_records().find(query).sort("updated_at", -1).skip(skip).limit(limit)
     
     records = []
     async for doc in cursor:
@@ -37,4 +39,4 @@ async def list_usage():
             
         records.append(record)
         
-    return {"usage_records": records, "month": current_month}
+    return {"usage_records": records, "month": current_month, "pagination": {"skip": skip, "limit": limit, "total": total}}
