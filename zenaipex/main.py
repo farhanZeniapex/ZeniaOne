@@ -440,9 +440,10 @@ async def patch_limits(_: dict = Depends(get_platform_admin)):
 @app.get("/health", tags=["System"])
 async def health():
     from core.database import _db
+    database = "connected" if _db is not None else "disconnected"
     return {
-        "status": "healthy",
-        "database": "connected" if _db is not None else "disconnected",
+        "status": "healthy" if database == "connected" else "degraded",
+        "database": database,
         "service": settings.app_name,
     }
 
@@ -480,13 +481,14 @@ async def api_health():
     """
     from core.database import get_db_mode, _db
     mode_info = get_db_mode()
+    database = "connected" if _db is not None else "disconnected"
     return {
-        "status": "ok",
+        "status": "healthy" if database == "connected" else "degraded",
         "service": settings.app_name,
         "db_mode": mode_info["db_mode"],
         "persistent": mode_info["persistent"],
         "db_name": mode_info["db_name"],
-        "database": "connected" if _db is not None else "disconnected",
+        "database": database,
     }
 
 

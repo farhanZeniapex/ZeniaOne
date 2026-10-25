@@ -81,22 +81,32 @@ async def sync_auto_documents():
 
 # Global scheduler instance
 _scheduler = AsyncIOScheduler()
+_scheduler_started = False
 
 def start_scheduler():
     """Starts the background scheduler for daily tasks."""
+    global _scheduler_started
+    if _scheduler_started or _scheduler.running:
+        logger.info("Background task scheduler already running; startup skipped.")
+        return
     # Schedule to run every day at 2:00 AM
     _scheduler.add_job(
         sync_auto_documents,
         CronTrigger(hour=2, minute=0),
         id="daily_kb_sync",
         replace_existing=True,
-        misfire_grace_time=3600
+        misfire_grace_time=3600,
+        coalesce=True,
+        max_instances=1,
     )
     _scheduler.start()
+    _scheduler_started = True
     logger.info("🚀 Background task scheduler started. Daily KB sync scheduled at 2:00 AM.")
 
 def stop_scheduler():
     """Stops the scheduler on app shutdown."""
+    global _scheduler_started
     if _scheduler.running:
         _scheduler.shutdown()
+        _scheduler_started = False
         logger.info("Background task scheduler stopped.")
