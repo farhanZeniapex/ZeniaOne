@@ -353,7 +353,7 @@ async def generate_greeting_suggestion(
         greeting = "Hello, thank you for calling. How may I help you today?" if direction == "inbound" else f"Hello, this is {company.get('name', 'our team')}. Is this a good time to speak?"
     return {"greeting": greeting[:280], "direction": direction}
 
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response
 from bson.binary import Binary
 from io import BytesIO
 import os
@@ -568,6 +568,42 @@ def _build_usage_csv(company_name: str, company_id: str, month: str, usage: dict
     return output.getvalue()
 
 
+def _build_usage_pdf(company_name: str, company_id: str, month: str, usage: dict) -> bytes:
+    """Build a compact audit-friendly usage PDF without raw secrets/logs."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+
+    buffer = io.BytesIO()
+    document = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm)
+    styles = getSampleStyleSheet()
+    story = [
+        Paragraph("ZeniaOne Monthly Usage Report", styles["Title"]),
+        Paragraph(f"Company: {company_name} ({company_id})<br/>Billing month: {month}", styles["Normal"]),
+        Spacer(1, 8 * mm),
+    ]
+    rows = [["Metric", "Value", "Unit"]]
+    csv_lines = _build_usage_csv(company_name, company_id, month, usage).splitlines()[1:]
+    for line in csv_lines:
+        _company_id, _company_name, _month, metric, value, unit = next(csv.reader([line]))
+        rows.append([metric.replace("_", " ").title(), value, unit])
+    table = Table(rows, colWidths=[80 * mm, 35 * mm, 35 * mm])
+    table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0b5d42")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#cbd5d1")),
+        ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#f5faf7")),
+        ("PADDING", (0, 0), (-1, -1), 7),
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 8 * mm))
+    story.append(Paragraph("This report contains recorded usage quantities only. Credentials, API keys and raw conversation logs are excluded.", styles["Normal"]))
+    document.build(story)
+    return buffer.getvalue()
+
+
 @router.get("/{company_id}/billing/usage.csv", summary="Download monthly usage CSV")
 async def download_usage_csv(
     company_id: str = Path(...),
@@ -585,6 +621,27 @@ async def download_usage_csv(
     return StreamingResponse(
         iter([csv_content]),
         media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{company_id}/billing/usage.pdf", summary="Download monthly usage PDF")
+async def download_usage_pdf(
+    company_id: str = Path(...),
+    month: Optional[str] = None,
+    ctx: AuthContext = Depends(require_admin),
+):
+    """Download owner/admin-scoped billing usage as a PDF report."""
+    billing_month = month or datetime.now(timezone.utc).strftime("%Y-%m")
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", billing_month):
+        raise HTTPException(status_code=422, detail="month must use YYYY-MM format")
+    company = await col_companies().find_one({"_id": ObjectId(company_id)})
+    usage = await get_usage_record(company_id, billing_month) or {}
+    pdf_content = _build_usage_pdf((company or {}).get("name", "Company"), company_id, billing_month, usage)
+    filename = f"zeniaone-usage-{company_id[:8]}-{billing_month}.pdf"
+    return Response(
+        content=pdf_content,
+        media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
