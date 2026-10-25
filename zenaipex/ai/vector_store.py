@@ -155,7 +155,7 @@ class NamespacedVectorStore:
             self._index = _get_pinecone_index()
         return self._index
 
-    def _get_model(self) -> SentenceTransformer:
+    def _get_model(self) -> Any:
         if self._model is None:
             self._model = _get_embedding_model()
         return self._model
