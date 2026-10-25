@@ -15,6 +15,18 @@ router = APIRouter(tags=["Live Monitoring"])
 _monitoring_tickets: dict[str, float] = {}
 
 
+def _build_monitoring_alerts(queue_counts: dict, recent_failures: int, providers: dict) -> list[dict]:
+    alerts = []
+    if queue_counts.get("failed", 0):
+        alerts.append({"code": "background_jobs_failed", "severity": "warning", "count": queue_counts["failed"]})
+    if recent_failures >= 10:
+        alerts.append({"code": "ai_failures_elevated", "severity": "warning", "count": recent_failures})
+    for name, details in providers.items():
+        if details.get("state") == "OPEN":
+            alerts.append({"code": "provider_circuit_open", "severity": "critical", "provider": name})
+    return alerts
+
+
 @router.get("/monitoring-summary")
 async def monitoring_summary(_: dict = Depends(get_platform_admin)):
     """Return live operational signals for alerting and admin diagnostics."""
@@ -39,6 +51,7 @@ async def monitoring_summary(_: dict = Depends(get_platform_admin)):
         for name, details in _provider_health.items()
     }
     db_mode = get_db_mode()
+    alerts = _build_monitoring_alerts(queue_counts, recent_failures, providers)
     return {
         "generated_at": now,
         "database": {
@@ -49,6 +62,7 @@ async def monitoring_summary(_: dict = Depends(get_platform_admin)):
         "background_jobs": queue_counts,
         "ai_failures_last_24h": recent_failures,
         "providers": providers,
+        "alerts": alerts,
         "integrations": {
             "sentry_configured": bool(settings.sentry_dsn),
             "redis_configured": bool(settings.redis_url),
