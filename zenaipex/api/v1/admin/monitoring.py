@@ -5,7 +5,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from datetime import datetime, timedelta, timezone
 from core.dependencies import get_platform_admin
 from core.config import settings
-from core.database import col_background_jobs, col_llm_requests, get_db_mode
+from core.database import col_background_jobs, col_scheduled_calls, col_llm_requests, get_db_mode
 
 from services.live_monitoring import monitoring_manager
 
@@ -15,10 +15,17 @@ router = APIRouter(tags=["Live Monitoring"])
 _monitoring_tickets: dict[str, float] = {}
 
 
-def _build_monitoring_alerts(queue_counts: dict, recent_failures: int, providers: dict) -> list[dict]:
+def _build_monitoring_alerts(
+    queue_counts: dict,
+    recent_failures: int,
+    providers: dict,
+    scheduled_counts: dict | None = None,
+) -> list[dict]:
     alerts = []
     if queue_counts.get("failed", 0):
         alerts.append({"code": "background_jobs_failed", "severity": "warning", "count": queue_counts["failed"]})
+    if (scheduled_counts or {}).get("failed", 0):
+        alerts.append({"code": "scheduled_calls_failed", "severity": "warning", "count": scheduled_counts["failed"]})
     if recent_failures >= 10:
         alerts.append({"code": "ai_failures_elevated", "severity": "warning", "count": recent_failures})
     for name, details in providers.items():
@@ -36,6 +43,10 @@ async def monitoring_summary(_: dict = Depends(get_platform_admin)):
         status: await col_background_jobs().count_documents({"status": status})
         for status in ("pending", "running", "failed")
     }
+    scheduled_counts = {
+        status: await col_scheduled_calls().count_documents({"status": status})
+        for status in ("pending", "running", "failed")
+    }
     recent_failures = await col_llm_requests().count_documents({
         "success": False,
         "timestamp": {"$gte": recent_since},
@@ -51,7 +62,7 @@ async def monitoring_summary(_: dict = Depends(get_platform_admin)):
         for name, details in _provider_health.items()
     }
     db_mode = get_db_mode()
-    alerts = _build_monitoring_alerts(queue_counts, recent_failures, providers)
+    alerts = _build_monitoring_alerts(queue_counts, recent_failures, providers, scheduled_counts)
     return {
         "generated_at": now,
         "database": {
@@ -60,6 +71,7 @@ async def monitoring_summary(_: dict = Depends(get_platform_admin)):
             "status": "healthy" if db_mode["persistent"] else "attention_required",
         },
         "background_jobs": queue_counts,
+        "scheduled_calls": scheduled_counts,
         "ai_failures_last_24h": recent_failures,
         "providers": providers,
         "alerts": alerts,

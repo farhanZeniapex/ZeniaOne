@@ -14,3 +14,13 @@ def test_monitoring_alerts_surface_failed_jobs_and_open_provider_circuits():
     )
     codes = {alert["code"] for alert in alerts}
     assert codes == {"background_jobs_failed", "ai_failures_elevated", "provider_circuit_open"}
+
+
+def test_monitoring_alerts_surface_failed_scheduled_calls():
+    alerts = _build_monitoring_alerts(
+        {"pending": 0, "running": 0, "failed": 0},
+        0,
+        {},
+        {"pending": 1, "running": 0, "failed": 3},
+    )
+    assert alerts == [{"code": "scheduled_calls_failed", "severity": "warning", "count": 3}]
