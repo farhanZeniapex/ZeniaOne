@@ -8,7 +8,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, model_validator
 from typing import Optional
 import os
-import secrets
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -24,10 +23,12 @@ class Settings(BaseSettings):
 
     # ── Platform Identity ──────────────────────────────────────────────────────
     app_name: str = Field(default="ZeniaOne")
-    app_env: str = Field(default="production")
+    # Fail-safe default: a local process must opt into production explicitly.
+    # Render supplies APP_ENV=production in the deployed service.
+    app_env: str = Field(default="development")
     app_base_url: str = Field(default="http://localhost:8000")
     frontend_url: str = Field(default="http://localhost:3000")
-    app_secret_key: str = Field(default_factory=lambda: secrets.token_urlsafe(64))
+    app_secret_key: str = Field(default="")
     sentry_dsn: str = Field(default="")
     sentry_traces_sample_rate: float = Field(default=0.1, ge=0.0, le=1.0)
 
@@ -150,12 +151,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_security(self):
-        if self.app_env == "production":
-            if len(self.app_secret_key) < 64:
-                raise ValueError("APP_SECRET_KEY must be at least 64 characters in production")
+        if self.app_env in {"staging", "production"}:
+            if not self.app_secret_key or len(self.app_secret_key) < 64:
+                raise ValueError("APP_SECRET_KEY must be explicitly configured with at least 64 characters in staging/production")
             if not self.mongodb_uri:
-                raise ValueError("MONGODB_URI is required in production")
-            if not self.platform_webhook_base_url.startswith("https://"):
+                raise ValueError("MONGODB_URI is required in staging/production")
+            if self.app_env == "production" and not self.platform_webhook_base_url.startswith("https://"):
                 raise ValueError("PLATFORM_WEBHOOK_BASE_URL must be an HTTPS URL in production")
         return self
 
