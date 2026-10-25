@@ -55,7 +55,7 @@ def create_access_token(
     return jwt.encode(to_encode, settings.app_secret_key, algorithm=settings.jwt_algorithm)
 
 
-def create_refresh_token(user_id: str) -> str:
+def create_refresh_token(user_id: str, session_version: int = 0) -> str:
     """
     Create a long-lived JWT refresh token.
 
@@ -66,7 +66,7 @@ def create_refresh_token(user_id: str) -> str:
         Signed JWT refresh token
     """
     expire = datetime.now(timezone.utc) + timedelta(days=settings.jwt_refresh_token_expire_days)
-    payload = {"sub": user_id, "exp": expire, "type": "refresh"}
+    payload = {"sub": user_id, "sv": session_version, "exp": expire, "type": "refresh"}
     return jwt.encode(payload, settings.app_secret_key, algorithm=settings.jwt_algorithm)
 
 
@@ -109,10 +109,18 @@ def decode_refresh_token(token: str) -> Optional[str]:
     Returns:
         user_id string, or None if invalid/expired/wrong type.
     """
-    payload = decode_token(token)
-    if not payload or payload.get("type") != "refresh":
+    payload = decode_refresh_claims(token)
+    if not payload:
         return None
     return payload.get("sub")
+
+
+def decode_refresh_claims(token: str) -> Optional[Dict[str, Any]]:
+    """Decode refresh claims while preserving the session version."""
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "refresh" or not payload.get("sub"):
+        return None
+    return payload
 
 
 def create_2fa_challenge_token(user_id: str) -> str:

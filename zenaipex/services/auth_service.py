@@ -134,7 +134,7 @@ async def register_user(
 
     # Generate tokens
     access_token = create_access_token({"sub": user_id})
-    refresh_token = create_refresh_token(user_id)
+    refresh_token = create_refresh_token(user_id, int(user.get("session_version") or 0))
 
     # Generate email verification token
     verify_token = create_email_verification_token(email.lower())
@@ -225,7 +225,7 @@ async def login_user(email: str, password: str) -> Dict[str, Any]:
     user["last_login_at"] = now
 
     access_token = create_access_token({"sub": user_id})
-    refresh_token = create_refresh_token(user_id)
+    refresh_token = create_refresh_token(user_id, int(user.get("session_version") or 0))
 
     if user.get("two_factor_enabled"):
         from core.security import create_2fa_challenge_token
@@ -303,7 +303,7 @@ async def verify_two_factor_login(challenge_token: str, code: str) -> Dict[str, 
     return {
         "user": user,
         "access_token": create_access_token({"sub": str(user["_id"])}),
-        "refresh_token": create_refresh_token(str(user["_id"])),
+        "refresh_token": create_refresh_token(str(user["_id"]), int(user.get("session_version") or 0)),
     }
 
 
@@ -317,10 +317,11 @@ async def refresh_access_token(refresh_token: str) -> Dict[str, str]:
     Raises:
         NotAuthenticatedError if token is invalid/expired
     """
-    from core.security import decode_refresh_token
+    from core.security import decode_refresh_claims
     from core.exceptions import NotAuthenticatedError
 
-    user_id = decode_refresh_token(refresh_token)
+    claims = decode_refresh_claims(refresh_token)
+    user_id = claims.get("sub") if claims else None
     if not user_id:
         raise NotAuthenticatedError("Invalid or expired refresh token")
 
@@ -328,6 +329,8 @@ async def refresh_access_token(refresh_token: str) -> Dict[str, str]:
     user = await col_users().find_one({"_id": ObjectId(user_id)})
     if not user:
         raise NotAuthenticatedError("User not found")
+    if int((claims or {}).get("sv", 0)) != int(user.get("session_version") or 0):
+        raise NotAuthenticatedError("Refresh session has been revoked")
 
     new_access_token = create_access_token({"sub": user_id})
     return {"access_token": new_access_token}
@@ -412,6 +415,7 @@ async def reset_password(token: str, new_password: str) -> bool:
         {"_id": ObjectId(user_id), "password_reset_token_hash": token_hash,
          "password_reset_expires_at": {"$gt": datetime.now(timezone.utc)}},
         {"$set": {"password_hash": new_hash, "updated_at": datetime.now(timezone.utc)},
+         "$inc": {"session_version": 1},
          "$unset": {"password_reset_token_hash": "", "password_reset_expires_at": ""}}
     )
     return result.modified_count > 0
@@ -429,6 +433,6 @@ async def change_password(user_id: str, current_password: str, new_password: str
     new_hash = hash_password(new_password)
     await col_users().update_one(
         {"_id": ObjectId(user_id)},
-        {"$set": {"password_hash": new_hash, "updated_at": datetime.now(timezone.utc)}}
+        {"$set": {"password_hash": new_hash, "updated_at": datetime.now(timezone.utc)}, "$inc": {"session_version": 1}}
     )
     return True
