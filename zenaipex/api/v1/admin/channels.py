@@ -11,7 +11,7 @@ import time
 logger = logging.getLogger(__name__)
 from core.config import settings
 from services import channel_service
-from core.database import col_channels, col_conversations, col_messages, col_subscriptions, col_usage_records
+from core.database import col_channels, col_conversations, col_messages, col_subscriptions, col_usage_records, col_scheduled_calls
 from core.exceptions import NotFoundError
 from bson import ObjectId
 from services.voice_channel_mapping import channel_conversation_query
@@ -415,8 +415,7 @@ class ScheduledCallRequest(BaseModel):
     system_prompt: Optional[str] = None
     scheduled_at: str
 
-from tasks.daily_sync import _scheduler
-from datetime import datetime
+from datetime import datetime, timezone
 import dateutil.parser
 
 @router.post("/channels/{channel_id}/schedule-call", summary="Schedule an outbound test call")
@@ -430,6 +429,10 @@ async def schedule_test_call(channel_id: str, body: ScheduledCallRequest):
     except Exception:
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Invalid datetime format for scheduled_at. Use ISO 8601.")
+    if run_date.tzinfo is None:
+        run_date = run_date.replace(tzinfo=timezone.utc)
+    else:
+        run_date = run_date.astimezone(timezone.utc)
 
     req = TestCallRequest(
         contact_name=body.contact_name,
@@ -438,14 +441,18 @@ async def schedule_test_call(channel_id: str, body: ScheduledCallRequest):
         system_prompt=body.system_prompt
     )
     
-    job = _scheduler.add_job(
-        trigger_test_call,
-        "date",
-        run_date=run_date,
-        args=[channel_id, req]
+    from services.job_queue import enqueue_scheduled_call
+    job_id = await enqueue_scheduled_call(
+        channel_id=channel_id,
+        company_id=channel["company_id"],
+        scheduled_at=run_date,
+        payload={
+            "channel_id": channel_id,
+            "request": req.model_dump(),
+        },
     )
-    
-    return {"success": True, "job_id": job.id, "message": f"Call scheduled for {run_date}"}
+
+    return {"success": True, "job_id": job_id, "message": f"Call scheduled for {run_date}"}
 
 @router.post("/channels/{channel_id}/test-call", summary="Trigger outbound test call")
 async def trigger_test_call(channel_id: str, body: TestCallRequest):
@@ -806,30 +813,43 @@ async def get_channel_analytics(channel_id: str):
 
 @router.get("/channels/{channel_id}/scheduled-calls", summary="List scheduled calls for a channel")
 async def list_scheduled_calls(channel_id: str):
-    from tasks.daily_sync import _scheduler
-    jobs = _scheduler.get_jobs()
+    cursor = col_scheduled_calls().find({"channel_id": channel_id, "status": {"$in": ["pending", "running"]}}).sort("scheduled_at", 1)
     channel_jobs = []
-    for job in jobs:
-        if job.args and len(job.args) >= 2 and job.args[0] == channel_id:
-            req = job.args[1]
-            channel_jobs.append({
-                "id": job.id,
-                "scheduled_at": job.next_run_time.isoformat() if job.next_run_time else None,
-                "contact_name": getattr(req, 'contact_name', ''),
-                "phone_number": getattr(req, 'phone_number', ''),
-                "topic": getattr(req, 'topic', '')
-            })
+    async for job in cursor:
+        req = (job.get("payload") or {}).get("request") or {}
+        channel_jobs.append({
+            "id": str(job["_id"]),
+            "scheduled_at": job.get("scheduled_at").isoformat() if job.get("scheduled_at") else None,
+            "status": job.get("status"),
+            "contact_name": req.get("contact_name", ""),
+            "phone_number": req.get("phone_number", ""),
+            "topic": req.get("topic", ""),
+        })
     return {"success": True, "jobs": channel_jobs}
 
 @router.delete("/channels/{channel_id}/scheduled-calls/{job_id}", summary="Cancel a scheduled call")
 async def cancel_scheduled_call(channel_id: str, job_id: str):
-    from tasks.daily_sync import _scheduler
     try:
-        job = _scheduler.get_job(job_id)
-        if not job:
+        if ObjectId.is_valid(job_id):
+            result = await col_scheduled_calls().update_one(
+                {"_id": ObjectId(job_id), "channel_id": channel_id, "status": {"$in": ["pending", "running"]}},
+                {"$set": {"status": "cancelled", "updated_at": datetime.now(timezone.utc)}},
+            )
+            if result.matched_count:
+                return {"success": True, "message": "Call cancelled successfully."}
+            exists = await col_scheduled_calls().find_one({"_id": ObjectId(job_id)})
+            if exists:
+                if exists.get("channel_id") != channel_id:
+                    return {"success": False, "error": "Unauthorized: Job does not belong to this channel"}
+                return {"success": False, "error": "Scheduled job not found"}
+
+        # Compatibility for jobs created by releases before the durable queue
+        # migration. New jobs never use this in-memory path.
+        from tasks.daily_sync import _scheduler
+        legacy_job = _scheduler.get_job(job_id)
+        if not legacy_job:
             return {"success": False, "error": "Scheduled job not found"}
-        # Security: verify channel ownership
-        if not (job.args and len(job.args) >= 1 and str(job.args[0]) == str(channel_id)):
+        if not (legacy_job.args and len(legacy_job.args) >= 1 and str(legacy_job.args[0]) == str(channel_id)):
             return {"success": False, "error": "Unauthorized: Job does not belong to this channel"}
         _scheduler.remove_job(job_id)
         return {"success": True, "message": "Call cancelled successfully."}

@@ -213,6 +213,7 @@ async def create_all_indexes():
     # scheduled_calls (MIGRATED FROM LEGACY — added company_id)
     await db["scheduled_calls"].create_indexes([
         IndexModel([("company_id", ASCENDING), ("status", ASCENDING)]),
+        IndexModel([("channel_id", ASCENDING), ("status", ASCENDING), ("scheduled_at", ASCENDING)]),
         IndexModel([("company_id", ASCENDING), ("scheduled_at", ASCENDING)]),
         IndexModel([("status", ASCENDING), ("scheduled_at", ASCENDING)]),
         IndexModel([("next_retry_at", ASCENDING)], sparse=True),

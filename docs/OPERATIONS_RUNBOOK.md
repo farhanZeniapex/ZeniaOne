@@ -15,6 +15,8 @@ Every push to `main` runs backend tests and the frontend build. The production s
 
 The same workflow can be dispatched manually with a staging API base URL using the `api_base_url` input. This verifies a staging service against the identical production contract before promotion.
 
+Scheduled outbound calls are persisted in MongoDB (`scheduled_calls`) and processed by a leased worker. A worker restart recovers expired leases; failed calls retry with bounded backoff and become terminal after three attempts. The legacy in-memory scheduler is retained only to cancel jobs created by older releases.
+
 ## Rollback procedure
 
 1. Stop promotion if CI or production smoke fails.
