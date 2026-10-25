@@ -21,6 +21,8 @@ import sys
 import os
 import asyncio
 import time
+import re
+import uuid
 
 if sys.platform == "win32":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -313,6 +315,20 @@ app.add_middleware(
 )
 
 
+_REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,96}$")
+
+
+@app.middleware("http")
+async def request_correlation(request: Request, call_next):
+    """Attach a safe correlation ID to every request and response."""
+    incoming_id = request.headers.get("X-Request-ID", "")
+    request_id = incoming_id if _REQUEST_ID_RE.fullmatch(incoming_id) else uuid.uuid4().hex
+    request.state.request_id = request_id
+    response = await call_next(request)
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     """Add safe browser defaults to every API response."""
@@ -358,10 +374,19 @@ async def maintenance_mode_guard(request: Request, call_next):
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """Catch-all — log and return 500 for unexpected errors."""
-    logger.error(f"Unhandled error on {request.method} {request.url}: {exc}", exc_info=True)
+    request_id = getattr(request.state, "request_id", "unknown")
+    logger.error(
+        "Unhandled error request_id=%s on %s %s: %s",
+        request_id,
+        request.method,
+        request.url,
+        exc,
+        exc_info=True,
+    )
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error. Please try again."},
+        content={"detail": "Internal server error. Please try again.", "request_id": request_id},
+        headers={"X-Request-ID": request_id},
     )
 
 
@@ -420,6 +445,30 @@ async def health():
         "database": "connected" if _db is not None else "disconnected",
         "service": settings.app_name,
     }
+
+
+@app.get("/ready", tags=["System"], summary="Readiness check for deployment monitoring")
+async def readiness():
+    """Confirm that the API process and its MongoDB dependency are ready."""
+    from core.database import _client, _db
+
+    database = "disconnected"
+    if _client is not None and _db is not None:
+        try:
+            await _client.admin.command("ping")
+            database = "connected"
+        except Exception as exc:
+            logger.warning("Readiness database ping failed: %s", exc)
+
+    ready = database == "connected"
+    payload = {
+        "status": "ready" if ready else "not_ready",
+        "service": settings.app_name,
+        "database": database,
+    }
+    if not ready:
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 @app.get("/api/v1/health", tags=["System"], summary="DB mode and persistence status")
