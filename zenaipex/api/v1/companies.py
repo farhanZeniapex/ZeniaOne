@@ -363,13 +363,13 @@ async def upload_company_logo(
     if size > MAX_SIZE:
         raise HTTPException(status_code=400, detail="Logo too large. Maximum size is 2MB.")
         
-    allowed_types = ["image/jpeg", "image/png", "image/svg+xml"]
-    if file.content_type not in allowed_types:
-        raise HTTPException(status_code=400, detail="Invalid file type. Must be JPG, PNG, or SVG.")
+    content_type = file.content_type or ""
+    content = await file.read(MAX_SIZE + 1)
+    from services.upload_validation import validate_image_upload
+    validate_image_upload(content, content_type, max_bytes=MAX_SIZE)
 
     # Save new file
     filename = file.filename or "logo.png"
-    content = await file.read()
     storage_path = await save_upload(company_id=company_id, filename=filename, content=content)
     
     # Delete old logo if exists
@@ -382,7 +382,7 @@ async def upload_company_logo(
     db_settings = company.get("settings", {})
     db_settings["logo_url"] = f"mongo://company/{company_id}/logo"
     db_settings["logo_data"] = Binary(content)
-    db_settings["logo_content_type"] = file.content_type
+    db_settings["logo_content_type"] = content_type
     db_settings["logo_filename"] = filename
     db_settings["logo_size"] = size
     db_settings["logo_uploaded_at"] = datetime.now(timezone.utc).isoformat()

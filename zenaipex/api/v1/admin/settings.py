@@ -193,14 +193,11 @@ async def upload_logo(
     user: dict = Depends(get_platform_admin)
 ):
     """Upload a platform logo."""
-    content_bytes = await file.read()
-    
-    if len(content_bytes) > 2 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Logo too large. Maximum size is 2MB.")
-
+    max_bytes = 2 * 1024 * 1024
+    content_bytes = await file.read(max_bytes + 1)
     content_type = file.content_type or "image/png"
-    if not content_type.startswith("image/"):
-        raise HTTPException(status_code=400, detail="Unsupported file type. Must be an image.")
+    from services.upload_validation import validate_image_upload
+    validate_image_upload(content_bytes, content_type, max_bytes=max_bytes)
 
     filename = file.filename or "logo.png"
     storage_path = await save_upload("platform", filename, content_bytes)
