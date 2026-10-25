@@ -337,13 +337,14 @@ async def get_company_logo(company_id: str = Path(...)):
         return StreamingResponse(
             BytesIO(bytes(logo_data)),
             media_type=company_settings.get("logo_content_type") or "image/png",
+            headers={"Cache-Control": "public, max-age=86400"},
         )
 
     logo_path = company_settings.get("logo_url")
     if not logo_path or not os.path.exists(logo_path):
         raise HTTPException(status_code=404, detail="Logo not found")
         
-    return FileResponse(logo_path)
+    return FileResponse(logo_path, headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.post("/{company_id}/logo", summary="Upload company logo")
