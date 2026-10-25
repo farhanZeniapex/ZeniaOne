@@ -29,6 +29,9 @@ from services.email_service import send_verification_email, send_password_reset_
 
 logger = logging.getLogger(__name__)
 
+MAX_FAILED_LOGINS = 5
+LOGIN_LOCK_MINUTES = 15
+
 
 async def register_user(
     email: str,
@@ -167,10 +170,37 @@ async def login_user(email: str, password: str) -> Dict[str, Any]:
     if not user:
         raise InvalidCredentialsError()
 
+    now = datetime.now(timezone.utc)
+    lock_until = user.get("login_locked_until")
+    if lock_until:
+        if lock_until.tzinfo is None:
+            lock_until = lock_until.replace(tzinfo=timezone.utc)
+        if now < lock_until:
+            raise InvalidCredentialsError()
+
     if not verify_password(password, user.get("password_hash", "")):
+        failed_count = int(user.get("failed_login_count") or 0) + 1
+        update = {
+            "$inc": {"failed_login_count": 1},
+            "$set": {"last_failed_login_at": now},
+        }
+        if failed_count >= MAX_FAILED_LOGINS:
+            update["$set"]["login_locked_until"] = now + timedelta(minutes=LOGIN_LOCK_MINUTES)
+            update["$set"]["failed_login_count"] = 0
+        await col_users().update_one({"_id": user["_id"]}, update)
         raise InvalidCredentialsError()
 
     user_id = str(user["_id"])
+
+    # A successful login clears any previous failed-attempt state.
+    await col_users().update_one(
+        {"_id": user["_id"]},
+        {"$set": {
+            "failed_login_count": 0,
+            "login_locked_until": None,
+            "last_login_at": now,
+        }},
+    )
 
     # Enforce Company Suspension Check
     if not user.get("is_platform_admin", False):
