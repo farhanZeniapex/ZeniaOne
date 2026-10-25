@@ -25,6 +25,20 @@ def _current_month() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m")
 
 
+def _month_keys_in_range(start: datetime, end: datetime) -> list[str]:
+    """Return monthly usage buckets touched by an analytics date range."""
+    cursor = start.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    last = end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    months: list[str] = []
+    while cursor <= last:
+        months.append(cursor.strftime("%Y-%m"))
+        if cursor.month == 12:
+            cursor = cursor.replace(year=cursor.year + 1, month=1)
+        else:
+            cursor = cursor.replace(month=cursor.month + 1)
+    return months
+
+
 # 1 LLM call = 1 AI Credit. Easily configurable later.
 CREDITS_PER_LLM_CALL = 1.0
 
@@ -300,7 +314,11 @@ async def get_canonical_analytics(company_id: str, days: int = 30) -> Dict[str, 
     legacy_output_tokens = 0
     legacy_total_tokens = 0
     
-    async for record in col_usage_records().find(_c({})):
+    # Usage records are monthly rollups. Restrict them to months touched by
+    # the selected range so a 30-day dashboard cannot accidentally include
+    # historical usage from every month in the database.
+    usage_months = _month_keys_in_range(start_date, now)
+    async for record in col_usage_records().find(_c({"month": {"$in": usage_months}})):
         total_call_minutes += record.get("call_minutes_used", 0)
         total_stt_calls += record.get("stt_api_calls", 0)
         total_tts_calls += record.get("tts_api_calls", 0)
