@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
+import asyncio
 from core.database import (
     col_companies, col_users, col_agents, col_conversations, col_team_members, col_documents,
     col_subscriptions, col_knowledge_bases, col_channels, col_messages, col_usage_records,
@@ -107,26 +108,23 @@ def _fmt_company(doc: dict, owner: dict = None, stats: dict = None) -> dict:
 async def list_companies():
     """List all companies with owner and resource stats."""
     cursor = col_companies().find({}).sort("created_at", -1)
-    companies = []
-    async for doc in cursor:
+    docs = await cursor.to_list(length=100)
+
+    async def format_company(doc: dict) -> dict:
         company_id = str(doc["_id"])
-        
-        # Find the owner from team_members
-        owner_membership = await col_team_members().find_one(
-            {"company_id": company_id, "role": "owner"}
-        )
+        owner_membership = await col_team_members().find_one({"company_id": company_id, "role": "owner"})
         owner = None
         if owner_membership:
             try:
                 owner = await col_users().find_one({"_id": ObjectId(owner_membership["user_id"])})
             except Exception:
-                pass
-        
-        agents_count = await col_agents().count_documents({"company_id": company_id})
-        conversations_count = await col_conversations().count_documents({"company_id": company_id})
-        documents_count = await col_documents().count_documents({"company_id": company_id})
-        channels_count = await col_channels().count_documents({"company_id": company_id})
-        
+                owner = None
+        agents_count, conversations_count, documents_count, channels_count = await asyncio.gather(
+            col_agents().count_documents({"company_id": company_id}),
+            col_conversations().count_documents({"company_id": company_id}),
+            col_documents().count_documents({"company_id": company_id}),
+            col_channels().count_documents({"company_id": company_id}),
+        )
         stats = {
             "agents_count": agents_count,
             "conversations_count": conversations_count,
@@ -134,7 +132,9 @@ async def list_companies():
             "channels_count": channels_count,
         }
         stats.update(_setup_readiness(doc, agents=agents_count, documents=documents_count, channels=channels_count))
-        companies.append(_fmt_company(doc, owner=owner, stats=stats))
+        return _fmt_company(doc, owner=owner, stats=stats)
+
+    companies = await asyncio.gather(*(format_company(doc) for doc in docs))
     return {"companies": companies}
 
 

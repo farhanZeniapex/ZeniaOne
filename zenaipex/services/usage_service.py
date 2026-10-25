@@ -310,6 +310,30 @@ async def get_canonical_analytics(company_id: str, days: int = 30) -> Dict[str, 
         legacy_output_tokens += record.get("output_tokens", 0)
         legacy_total_tokens += record.get("total_tokens", 0)
 
+    # Older/imported call records may not have a monthly usage_records row.
+    # In that case derive voice minutes from the actual completed phone-call
+    # conversations instead of displaying a misleading zero.
+    if total_call_minutes <= 0:
+        call_filter = _c({
+            "started_at": {"$gte": start_date},
+            "status": {"$nin": ["deleted", "demo", "test"]},
+            "call_sid": {"$exists": True},
+        })
+        async for call in col_conversations().find(
+            call_filter,
+            {"duration_seconds": 1, "billed_duration_seconds": 1, "call_duration_seconds": 1},
+        ):
+            duration_seconds = (
+                call.get("billed_duration_seconds")
+                or call.get("duration_seconds")
+                or call.get("call_duration_seconds")
+                or 0
+            )
+            try:
+                total_call_minutes += float(duration_seconds) / 60.0
+            except (TypeError, ValueError):
+                continue
+
     # Detailed LLM requests
     llm_match: Dict[str, Any] = {"timestamp": {"$gte": start_date}}
     if company_id and company_id != "all":
