@@ -295,10 +295,11 @@ async def get_logo():
         return StreamingResponse(
             BytesIO(bytes(logo_data)),
             media_type=platform.get("logo_content_type") or "image/png",
+            headers={"Cache-Control": "public, max-age=86400"},
         )
 
     logo_path = platform.get("logo_path")
     if not logo_path or not os.path.exists(logo_path):
         raise HTTPException(status_code=404, detail="Logo not found")
         
-    return FileResponse(path=logo_path)
+    return FileResponse(path=logo_path, headers={"Cache-Control": "public, max-age=86400"})
