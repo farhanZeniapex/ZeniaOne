@@ -19,6 +19,8 @@ from datetime import datetime, timezone
 import os
 import logging
 import asyncio
+import csv
+import io
 
 logger = logging.getLogger(__name__)
 
@@ -545,6 +547,46 @@ async def get_billing_invoice(
         "amount_status": "configured" if configured_amount is not None else "not_configured",
         "message": "Invoice amount is shown only when a subscription price is configured; usage quantities are live recorded data.",
     }
+
+
+def _build_usage_csv(company_name: str, company_id: str, month: str, usage: dict) -> str:
+    """Build a safe, deterministic monthly usage report without secrets."""
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(["company_id", "company_name", "month", "metric", "value", "unit"])
+    metrics = (
+        ("voice_minutes", round(float(usage.get("call_minutes_used", 0) or 0), 2), "minutes"),
+        ("calls", int(usage.get("call_count", 0) or 0), "calls"),
+        ("ai_requests", int(usage.get("llm_api_calls", 0) or 0), "requests"),
+        ("stt_api_calls", int(usage.get("stt_api_calls", 0) or 0), "requests"),
+        ("tts_api_calls", int(usage.get("tts_api_calls", 0) or 0), "requests"),
+        ("rag_queries", int(usage.get("rag_queries", 0) or 0), "queries"),
+        ("total_tokens", int(usage.get("total_tokens", 0) or 0), "tokens"),
+    )
+    for metric, value, unit in metrics:
+        writer.writerow([company_id, company_name, month, metric, value, unit])
+    return output.getvalue()
+
+
+@router.get("/{company_id}/billing/usage.csv", summary="Download monthly usage CSV")
+async def download_usage_csv(
+    company_id: str = Path(...),
+    month: Optional[str] = None,
+    ctx: AuthContext = Depends(require_admin),
+):
+    """Download owner/admin-scoped billing usage without credentials or raw logs."""
+    billing_month = month or datetime.now(timezone.utc).strftime("%Y-%m")
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", billing_month):
+        raise HTTPException(status_code=422, detail="month must use YYYY-MM format")
+    company = await col_companies().find_one({"_id": ObjectId(company_id)})
+    usage = await get_usage_record(company_id, billing_month) or {}
+    csv_content = _build_usage_csv((company or {}).get("name", "Company"), company_id, billing_month, usage)
+    filename = f"zeniaone-usage-{company_id[:8]}-{billing_month}.csv"
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{company_id}/data-export", summary="Export tenant data safely")
