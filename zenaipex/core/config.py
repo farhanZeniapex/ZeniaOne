@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     )
 
     # ── Platform Identity ──────────────────────────────────────────────────────
-    app_name: str = Field(default="Zenaipex AI")
+    app_name: str = Field(default="ZeniaOne")
     app_env: str = Field(default="production")
     app_base_url: str = Field(default="http://localhost:8000")
     frontend_url: str = Field(default="http://localhost:3000")
