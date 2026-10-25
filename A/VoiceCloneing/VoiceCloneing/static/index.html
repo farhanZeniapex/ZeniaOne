@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EchoSelf — Your voice, answering back</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="glow one"></div><div class="glow two"></div>
+  <main>
+    <header>
+      <a class="brand" href="#"><span class="brand-mark">E</span> EchoSelf</a>
+      <span class="privacy"><i></i> Local-first & private</span>
+    </header>
+
+    <section class="hero">
+      <div class="eyebrow">YOUR PERSONAL VOICE ASSISTANT</div>
+      <h1>Ask anything.<br><em>Hear yourself answer.</em></h1>
+      <p>Record a short voice sample, then speak or type a question. Your private AI replies in a voice that sounds like you.</p>
+    </section>
+
+    <section class="workspace">
+      <aside class="steps">
+        <button class="step active" data-step="1"><span>1</span><div><b>Create your voice</b><small>Record or upload a sample</small></div></button>
+        <div class="rail"></div>
+        <button class="step" data-step="2"><span>2</span><div><b>Ask a question</b><small>Speak or type naturally</small></div></button>
+        <div class="rail"></div>
+        <button class="step" data-step="3"><span>3</span><div><b>Hear the answer</b><small>Played back in your voice</small></div></button>
+      </aside>
+
+      <div class="card">
+        <section class="panel active" id="panel-1">
+          <span class="pill">STEP 1 OF 3</span>
+          <h2>Let’s learn your voice</h2>
+          <p class="muted">For the best result, record 10–15 seconds in a quiet room. Longer uploads are automatically trimmed. Speak naturally and clearly.</p>
+          <div class="recorder">
+            <canvas id="voice-wave"></canvas>
+            <button class="record" id="voice-record" aria-label="Record voice"><span></span></button>
+            <strong id="voice-timer">Tap to record</strong>
+            <small>Try saying: “The quick brown fox jumps over the lazy dog. Today feels like a great day to build something new.”</small>
+          </div>
+          <div class="divider"><span>or</span></div>
+          <label class="upload">Upload an audio sample <input id="voice-file" type="file" accept="audio/*"></label>
+          <label class="voice-language">Sample language
+            <select id="voice-language"><option value="en">English</option><option value="hi">हिन्दी</option><option value="gu">ગુજરાતી</option></select>
+          </label>
+          <label class="consent"><input id="consent" type="checkbox"><span>I confirm this is my voice, or I have explicit permission to use it.</span></label>
+          <button class="primary" id="save-voice" disabled>Save voice & continue <span>→</span></button>
+        </section>
+
+        <section class="panel" id="panel-2">
+          <span class="pill">STEP 2 OF 3</span>
+          <h2>What’s on your mind?</h2>
+          <p class="muted">Record your question or type it below.</p>
+          <label class="language">Answer language
+            <select id="language"><option value="auto">Auto detect</option><option value="en">English</option><option value="hi">हिन्दी</option><option value="gu">ગુજરાતી</option></select>
+          </label>
+          <div class="ask-orb"><button class="record large" id="question-record"><span></span></button><b id="question-label">Tap to ask</b><small id="question-timer">Your microphone is ready</small></div>
+          <div class="divider"><span>or type</span></div>
+          <form id="text-form"><textarea id="question-text" placeholder="What would you like to know?" maxlength="500"></textarea><button class="primary" type="submit">Ask EchoSelf <span>→</span></button></form>
+        </section>
+
+        <section class="panel" id="panel-3">
+          <span class="pill success">ANSWER READY</span>
+          <h2>Here’s what I found</h2>
+          <div class="transcript"><small>YOU ASKED</small><p id="asked"></p></div>
+          <div class="answer"><div class="answer-top"><span class="avatar">E</span><b>EchoSelf</b></div><p id="answered"></p><audio id="reply-audio" controls></audio></div>
+          <button class="secondary" id="ask-again">← Ask another question</button>
+        </section>
+
+        <div class="loading" id="loading"><div class="spinner"></div><b>Thinking in your voice…</b><span>This can take a minute on the first run.</span></div>
+        <div class="toast" id="toast"></div>
+      </div>
+    </section>
+    <footer>Your recordings stay on this computer. Only clone voices you own or have permission to use.</footer>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>

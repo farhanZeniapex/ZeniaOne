@@ -1,0 +1,4 @@
+-r requirements.txt
+faster-whisper==1.1.1
+chatterbox-tts
+numpy<2

@@ -1,0 +1,19 @@
+.section { position: relative; overflow: hidden; scroll-margin-top: 82px; padding: 115px 0 125px; background: radial-gradient(ellipse at 10% 25%, #174d36, #08251b 48%, #041910 100%); }
+.section::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .45; background-image: linear-gradient(#d0f7d508 1px, transparent 1px), linear-gradient(90deg, #d0f7d508 1px, transparent 1px); background-size: 57px 57px; }
+.section::after { content: ""; position: absolute; width: 520px; height: 520px; left: -200px; top: -260px; border-radius: 50%; background: #3aab7542; filter: blur(100px); pointer-events: none; }
+.container { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, .85fr) minmax(0, 1.15fr); align-items: center; gap: clamp(35px, 6vw, 100px); width: min(calc(100% - 80px), 1190px); margin: 0 auto; }
+.copy { max-width: 520px; }
+.kicker { color: #a5e7b4; font-size: 11px; font-weight: 760; letter-spacing: .18em; }
+.copy h2 { margin: 21px 0 19px; color: #f5fff3; font-size: clamp(2.9rem, 4.2vw, 4.8rem); line-height: 1.08; font-weight: 740; letter-spacing: -.06em; text-wrap: balance; }
+.copy h2 em { color: #88e0a3; font-style: normal; }
+.copy p { max-width: 455px; color: #b7d2bd; font-size: 16px; line-height: 1.68; }
+.channels { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 31px; color: #d3efda; font-size: 11px; font-weight: 680; }
+.channels span { padding: 7px 11px; border: 1px solid #99e8b448; border-radius: 99px; background: #a5e7b411; }
+.channels i { width: 3px; height: 3px; border-radius: 50%; background: #98cba7; }
+.formCard { padding: clamp(24px, 3vw, 38px); border: 1px solid #c1d9c2; border-radius: 28px; background: #f9fcf7; box-shadow: 0 35px 80px #00150b70, inset 0 1px #fff; }
+.formIntro { margin-bottom: 28px; padding-bottom: 20px; border-bottom: 1px solid #dce9dc; }
+.formIntro span { color: #478463; font-size: 9px; font-weight: 780; letter-spacing: .16em; }
+.formIntro h3 { margin: 8px 0 4px; color: #1b3525; font-size: 27px; font-weight: 740; letter-spacing: -.045em; }
+.formIntro p { color: #708173; font-size: 12px; }
+@media (max-width: 900px) { .container { width: min(calc(100% - 48px), 760px); grid-template-columns: 1fr; gap: 40px; }.copy { max-width: 680px; } }
+@media (max-width: 640px) { .section { padding: 77px 0 85px; }.container { width: calc(100% - 36px); gap: 32px; }.copy h2 { font-size: clamp(2.65rem, 11vw, 3.7rem); }.copy p { font-size: 14px; }.formCard { padding: 20px; border-radius: 23px; }.formIntro h3 { font-size: 24px; } }
