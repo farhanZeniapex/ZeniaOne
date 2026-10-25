@@ -225,9 +225,26 @@ async def create_all_indexes():
 
     # activity_logs
     await db["activity_logs"].create_indexes([
+        IndexModel([("company_id", ASCENDING), ("created_at", DESCENDING)]),
         IndexModel([("created_at", DESCENDING)]),
         IndexModel([("actor_email", ASCENDING)]),
         IndexModel([("action", ASCENDING)]),
+    ])
+
+    # sales and voice assets
+    await db["leads"].create_indexes([
+        IndexModel([("company_id", ASCENDING), ("created_at", DESCENDING)]),
+        IndexModel([("company_id", ASCENDING), ("status", ASCENDING)]),
+        IndexModel([("company_id", ASCENDING), ("email", ASCENDING)]),
+    ])
+    await db["sales_calls"].create_indexes([
+        IndexModel([("company_id", ASCENDING), ("created_at", DESCENDING)]),
+        IndexModel([("company_id", ASCENDING), ("status", ASCENDING)]),
+        IndexModel([("provider_call_id", ASCENDING)], sparse=True),
+    ])
+    await db["custom_voices"].create_indexes([
+        IndexModel([("company_id", ASCENDING), ("created_at", DESCENDING)]),
+        IndexModel([("company_id", ASCENDING), ("voice_id", ASCENDING)]),
     ])
 
     # ai_providers
