@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 import { API_BASE_URL } from "@/lib/api/client";
@@ -25,10 +25,15 @@ export function BrandLogo({
   iconSize = 32,
 }: BrandLogoProps) {
   const { platformName, hasLogo, timestamp } = useBranding();
+  const [remoteLogoFailed, setRemoteLogoFailed] = useState(false);
+
+  useEffect(() => {
+    setRemoteLogoFailed(false);
+  }, [hasLogo, timestamp]);
 
   const brandDisplayName = platformName && platformName !== "ZeniaAI" ? platformName : "ZeniaOne";
 
-  if (hasLogo) {
+  if (hasLogo && !remoteLogoFailed) {
     const src = `${API_BASE_URL}/admin/settings/logo?t=${timestamp}`;
     return (
       <div className={cn("flex items-center gap-2.5", className)}>
@@ -37,6 +42,7 @@ export function BrandLogo({
           style={{ height: iconSize, width: iconOnly ? iconSize : 'auto' }} 
           alt={brandDisplayName} 
           className="object-contain" 
+          onError={() => setRemoteLogoFailed(true)}
         />
         {!iconOnly && (
           <span className="font-bold tracking-tight text-[#191614] whitespace-nowrap" style={{ fontSize: iconSize * 0.58 }}>
