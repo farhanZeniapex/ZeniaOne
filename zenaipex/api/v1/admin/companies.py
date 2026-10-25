@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 import asyncio
 from core.database import (
     col_companies, col_users, col_agents, col_conversations, col_team_members, col_documents,
@@ -114,10 +114,13 @@ def _fmt_company(doc: dict, owner: dict = None, stats: dict = None) -> dict:
     return result
 
 @router.get("")
-async def list_companies():
+async def list_companies(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=100),
+):
     """List all companies with owner and resource stats."""
-    cursor = col_companies().find({}).sort("created_at", -1)
-    docs = await cursor.to_list(length=100)
+    cursor = col_companies().find({}).sort("created_at", -1).skip(skip).limit(limit)
+    docs = await cursor.to_list(length=limit)
 
     async def format_company(doc: dict) -> dict:
         company_id = str(doc["_id"])
