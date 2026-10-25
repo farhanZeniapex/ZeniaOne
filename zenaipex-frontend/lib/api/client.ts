@@ -22,7 +22,18 @@ export class ApiError extends Error {
   }
 }
 
-export async function fetchApi<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+type CachedResponse = { value: unknown; expiresAt: number };
+const GET_CACHE_TTL_MS = 15_000;
+const getCache = new Map<string, CachedResponse>();
+const inFlightGets = new Map<string, Promise<unknown>>();
+
+function getCacheKey(endpoint: string, token: string | null): string {
+  // The suffix prevents one browser session's tenant data from being reused
+  // after a different account signs in, without persisting the token itself.
+  return `${endpoint}::${token ? token.slice(-20) : "anonymous"}`;
+}
+
+async function fetchApiUncached<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   let token: string | null = null;
   
   if (typeof window !== "undefined") {
@@ -44,14 +55,17 @@ export async function fetchApi<T = any>(endpoint: string, options: RequestInit =
 
   const method = String(options.method || "GET").toUpperCase();
   const canRetry = method === "GET" || method === "HEAD" || method === "OPTIONS";
-  const retryDelays = canRetry ? [0, 700, 1500, 3000, 6000] : [0];
+  const retryDelays = canRetry ? [0, 500, 1500] : [0];
   let response: Response | undefined;
   let lastError: any = null;
 
   for (const delay of retryDelays) {
     if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 180000);
+    // A cold Render instance can take a while, but a three-minute timeout on
+    // every panel makes navigation appear frozen. Mutations retain the longer
+    // window; read requests fail fast enough for the page to show retry UI.
+    const timeoutId = setTimeout(() => controller.abort(), canRetry ? 45000 : 180000);
     try {
       response = await fetch(`${API_BASE_URL}${endpoint}`, {
         ...options,
@@ -124,4 +138,37 @@ export async function fetchApi<T = any>(endpoint: string, options: RequestInit =
   }
 
   return data;
+}
+
+export async function fetchApi<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const method = String(options.method || "GET").toUpperCase();
+  const canCache = method === "GET" && options.cache !== "no-store" && typeof window !== "undefined";
+
+  if (!canCache) {
+    if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
+      // Any write can change a previously rendered dashboard panel.
+      getCache.clear();
+    }
+    return fetchApiUncached<T>(endpoint, options);
+  }
+
+  const token = localStorage.getItem("zenaipex_token");
+  const key = getCacheKey(endpoint, token);
+  const cached = getCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.value as T;
+  }
+  if (cached) getCache.delete(key);
+
+  const existing = inFlightGets.get(key);
+  if (existing) return existing as Promise<T>;
+
+  const request = fetchApiUncached<T>(endpoint, options)
+    .then((value) => {
+      getCache.set(key, { value, expiresAt: Date.now() + GET_CACHE_TTL_MS });
+      return value;
+    })
+    .finally(() => inFlightGets.delete(key));
+  inFlightGets.set(key, request);
+  return request;
 }
