@@ -50,3 +50,29 @@ async def test_scheduled_call_executor_rehydrates_request_and_invokes_call():
     assert trigger.await_args.args[0] == "channel-1"
     assert trigger.await_args.args[1].phone_number == "+919999999999"
 
+
+@pytest.mark.asyncio
+async def test_channel_admin_dependency_scopes_membership_to_channel_tenant():
+    from core.dependencies import require_channel_admin
+    from core.exceptions import InsufficientPermissionsError
+
+    channel = {"_id": "channel-object-id", "company_id": "company-1"}
+    channels = MagicMock()
+    channels.find_one = AsyncMock(return_value=channel)
+    members = MagicMock()
+    members.find_one = AsyncMock(return_value={"role": "admin"})
+    user = {"_id": "user-1", "is_platform_admin": False}
+    with patch("core.dependencies.col_channels", return_value=channels), patch(
+        "core.dependencies.col_team_members", return_value=members
+    ):
+        result = await require_channel_admin("507f1f77bcf86cd799439011", user)
+    assert result is channel
+    members.find_one.assert_awaited_once_with({"company_id": "company-1", "user_id": "user-1"})
+
+    members.find_one = AsyncMock(return_value={"role": "viewer"})
+    with patch("core.dependencies.col_channels", return_value=channels), patch(
+        "core.dependencies.col_team_members", return_value=members
+    ):
+        with pytest.raises(InsufficientPermissionsError):
+            await require_channel_admin("507f1f77bcf86cd799439011", user)
+

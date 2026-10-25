@@ -1,7 +1,7 @@
 """
 Admin Channels API.
 """
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from typing import Optional
 from pydantic import BaseModel
 from twilio.rest import Client
@@ -13,6 +13,7 @@ from core.config import settings
 from services import channel_service
 from core.database import col_channels, col_conversations, col_messages, col_subscriptions, col_usage_records, col_scheduled_calls
 from core.exceptions import NotFoundError
+from core.dependencies import require_channel_admin
 from bson import ObjectId
 from services.voice_channel_mapping import channel_conversation_query
 
@@ -419,8 +420,12 @@ from datetime import datetime, timezone
 import dateutil.parser
 
 @router.post("/channels/{channel_id}/schedule-call", summary="Schedule an outbound test call")
-async def schedule_test_call(channel_id: str, body: ScheduledCallRequest):
-    channel = await col_channels().find_one({"_id": ObjectId(channel_id)})
+async def schedule_test_call(
+    channel_id: str,
+    body: ScheduledCallRequest,
+    channel_context: dict = Depends(require_channel_admin),
+):
+    channel = channel_context if isinstance(channel_context, dict) else await col_channels().find_one({"_id": ObjectId(channel_id)})
     if not channel:
         raise NotFoundError("Channel")
     
@@ -812,7 +817,10 @@ async def get_channel_analytics(channel_id: str):
     }
 
 @router.get("/channels/{channel_id}/scheduled-calls", summary="List scheduled calls for a channel")
-async def list_scheduled_calls(channel_id: str):
+async def list_scheduled_calls(
+    channel_id: str,
+    channel_context: dict = Depends(require_channel_admin),
+):
     cursor = col_scheduled_calls().find({"channel_id": channel_id, "status": {"$in": ["pending", "running"]}}).sort("scheduled_at", 1)
     channel_jobs = []
     async for job in cursor:
@@ -828,7 +836,11 @@ async def list_scheduled_calls(channel_id: str):
     return {"success": True, "jobs": channel_jobs}
 
 @router.delete("/channels/{channel_id}/scheduled-calls/{job_id}", summary="Cancel a scheduled call")
-async def cancel_scheduled_call(channel_id: str, job_id: str):
+async def cancel_scheduled_call(
+    channel_id: str,
+    job_id: str,
+    channel_context: dict = Depends(require_channel_admin),
+):
     try:
         if ObjectId.is_valid(job_id):
             result = await col_scheduled_calls().update_one(

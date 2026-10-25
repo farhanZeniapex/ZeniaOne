@@ -12,9 +12,9 @@ from core.security import decode_access_token
 from core.exceptions import (
     NotAuthenticatedError, InsufficientPermissionsError,
     TenantNotFoundError, TenantSuspendedError, TrialExpiredError,
-    EmailNotVerifiedError,
+    EmailNotVerifiedError, NotFoundError,
 )
-from core.database import col_users, col_team_members, col_companies, col_subscriptions
+from core.database import col_users, col_team_members, col_companies, col_subscriptions, col_channels
 from datetime import datetime, timezone
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -244,6 +244,35 @@ def require_owner(ctx: AuthContext = Depends(get_auth_context)) -> AuthContext:
     if not ctx.is_owner:
         raise InsufficientPermissionsError("Owner role required")
     return ctx
+
+
+async def require_channel_admin(
+    channel_id: str,
+    user: dict = Depends(get_current_user),
+) -> dict:
+    """Authorize admin-only operations addressed by channel ID.
+
+    These routes do not carry a company_id path segment, so the dependency
+    resolves the channel first and enforces membership against its tenant.
+    Platform admins retain their existing view-as-company capability.
+    """
+    try:
+        channel = await col_channels().find_one({"_id": ObjectId(channel_id)})
+    except Exception:
+        channel = None
+    if not channel:
+        raise NotFoundError("Channel")
+
+    if user.get("is_platform_admin", False):
+        return channel
+
+    membership = await col_team_members().find_one({
+        "company_id": channel.get("company_id"),
+        "user_id": str(user["_id"]),
+    })
+    if not membership or membership.get("role") not in ("owner", "admin"):
+        raise InsufficientPermissionsError("Admin role required for this channel")
+    return channel
 
 
 # ── Twilio Webhook Resolution ─────────────────────────────────────────────────
