@@ -634,10 +634,13 @@ async def trigger_test_call(channel_id: str, body: TestCallRequest):
             scheme = "wss" if "localhost" not in host and "127.0.0.1" not in host else "ws"
             ws_url = f"{scheme}://{host}/api/v1/webhook/exotel/advanced/{company_id}/{agent_id}/media-stream"
             
-            webhook_url += f"?channel_id={channel_id_str}"
+            from core.webhook_security import build_signed_callback_query
+            callback_value = f"exotel:{company_id}:{agent_id}:{channel_id_str}"
+            callback_query = build_signed_callback_query(settings.exotel_webhook_secret, callback_value)
+            webhook_url += f"?channel_id={channel_id_str}&{callback_query}"
             
             url = f"https://{exotel_subdomain}/v1/Accounts/{exotel_sid}/Calls/connect.json"
-            status_webhook_url = f"{actual_webhook}/api/v1/webhook/exotel/advanced/{company_id}/{agent_id}/status"
+            status_webhook_url = f"{actual_webhook}/api/v1/webhook/exotel/advanced/{company_id}/{agent_id}/status?channel_id={channel_id_str}&{callback_query}"
             
             exotel_app_url = f"http://my.exotel.com/{exotel_sid}/exoml/start_voice/1355682"
             

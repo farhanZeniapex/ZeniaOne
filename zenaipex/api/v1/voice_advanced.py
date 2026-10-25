@@ -25,6 +25,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Advanced Voice Agent"])
 
 
+def _exotel_callback_value(company_id: str, agent_id: str, channel_id: str = "") -> str:
+    return f"exotel:{company_id}:{agent_id}:{channel_id}"
+
+
 def _exotel_stream_signature(company_id: str, agent_id: str, caller: str, called_number: str, call_sid: str) -> str:
     payload = "|".join((company_id, agent_id, caller, called_number, call_sid))
     return hmac.new(
@@ -75,7 +79,12 @@ async def _open_phone_transcriber(agent_doc: dict, deepgram_url: str):
 @router.api_route("/webhook/exotel/advanced/{company_id}/{agent_id}/voice", methods=["GET", "POST"])
 async def exotel_voice_webhook(company_id: str, agent_id: str, request: Request):
     from core.webhook_security import require_hmac_webhook
-    await require_hmac_webhook(request, settings.exotel_webhook_secret, provider="Exotel")
+    await require_hmac_webhook(
+        request,
+        settings.exotel_webhook_secret,
+        provider="Exotel",
+        signed_value=_exotel_callback_value(company_id, agent_id, request.query_params.get("channel_id", "")),
+    )
     """
     Inbound Call Handler: Exotel dials in and we return Exotel XML.
     """
@@ -161,7 +170,12 @@ async def exotel_voicebot_webhook(company_id: str, agent_id: str, request: Reque
     Inbound Call Handler for Exotel Studio Flow Voicebot Applet (Expects JSON)
     """
     from core.webhook_security import require_hmac_webhook
-    await require_hmac_webhook(request, settings.exotel_webhook_secret, provider="Exotel")
+    await require_hmac_webhook(
+        request,
+        settings.exotel_webhook_secret,
+        provider="Exotel",
+        signed_value=_exotel_callback_value(company_id, agent_id, request.query_params.get("channel_id", "")),
+    )
     if request.method == "POST":
         form = await request.form()
     else:
@@ -209,7 +223,12 @@ async def exotel_voicebot_webhook(company_id: str, agent_id: str, request: Reque
 @router.post("/webhook/exotel/advanced/{company_id}/{agent_id}/recording-status")
 async def exotel_recording_status(company_id: str, agent_id: str, request: Request):
     from core.webhook_security import require_hmac_webhook
-    await require_hmac_webhook(request, settings.exotel_webhook_secret, provider="Exotel")
+    await require_hmac_webhook(
+        request,
+        settings.exotel_webhook_secret,
+        provider="Exotel",
+        signed_value=_exotel_callback_value(company_id, agent_id, request.query_params.get("channel_id", "")),
+    )
     """
     Exotel calls this when a recording is ready.
     We save the recording URL to the conversation so the frontend can display it.
@@ -1981,7 +2000,12 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
 async def exotel_status_webhook(company_id: str, agent_id: str, request: Request):
     from core.config import settings
     from core.webhook_security import require_hmac_webhook
-    await require_hmac_webhook(request, settings.exotel_webhook_secret, provider="Exotel")
+    await require_hmac_webhook(
+        request,
+        settings.exotel_webhook_secret,
+        provider="Exotel",
+        signed_value=_exotel_callback_value(company_id, agent_id, request.query_params.get("channel_id", "")),
+    )
     # Callback to receive terminal call status from Exotel.
     try:
         # Exotel might send GET or POST depending on Passthru config

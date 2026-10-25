@@ -5,6 +5,7 @@
 - `MONGODB_URI` and `MONGODB_DB_NAME` must point to the persistent production Atlas database.
 - `APP_SECRET_KEY` must be a production-grade 64+ character value.
 - `PLATFORM_WEBHOOK_BASE_URL` must use HTTPS.
+- `EXOTEL_WEBHOOK_SECRET` must be set for production Exotel callbacks; generated callback URLs carry a short-lived tenant-bound signature because Exotel callbacks do not provide the platform's custom header.
 - `REDIS_URL` is optional, but should be configured for shared rate-limit counters and provider-cache snapshots when multiple instances run.
 - `BILLING_WEBHOOK_SECRET` is optional; when blank, the payment webhook fails closed with `503`.
 - `SENTRY_DSN` is optional; when configured, unhandled errors and traces are sent without default PII.
