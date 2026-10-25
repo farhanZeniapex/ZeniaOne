@@ -237,6 +237,16 @@ async def _ensure_admin_workspace():
         logger.info("✅ Created default ZeniaAI Assistant agent for admin_workspace")
 
 
+    else:
+        # Ensure existing agent has the KB attached
+        await col_agents().update_many(
+            {"company_id": comp_id, "knowledge_base_id": {"$exists": False}},
+            {"$set": {"knowledge_base_id": kb_id}}
+        )
+        logger.info(f"ℹ️  admin_workspace already has {agent_count} agent(s) (KB linked)")
+
+
+
 async def _ensure_platform_admin():
     """Create the configured platform admin once during production bootstrap."""
     admin_email = os.getenv("PLATFORM_ADMIN_EMAIL", "").strip().lower()
@@ -275,14 +285,6 @@ async def _ensure_platform_admin():
         "last_login_at": None,
     })
     logger.info("✅ Created configured platform admin: %s", admin_email)
-    else:
-        # Ensure existing agent has the KB attached
-        await col_agents().update_many(
-            {"company_id": comp_id, "knowledge_base_id": {"$exists": False}},
-            {"$set": {"knowledge_base_id": kb_id}}
-        )
-        logger.info(f"ℹ️  admin_workspace already has {agent_count} agent(s) (KB linked)")
-
 
 
 # ── FastAPI App ───────────────────────────────────────────────────────────────
