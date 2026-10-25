@@ -6,7 +6,8 @@ from core.database import (
     col_scheduled_calls, col_timing_metrics, col_activity_logs, col_custom_voices
 )
 from bson import ObjectId
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+from typing import Literal
 from datetime import datetime, timedelta, timezone
 from slugify import slugify
 from core.dependencies import get_platform_admin
@@ -23,11 +24,19 @@ class AdminCompanyCreate(BaseModel):
     industry: str | None = Field(default=None, max_length=100)
     country: str = Field(default="IN", max_length=5)
     timezone: str = Field(default="Asia/Kolkata", max_length=80)
-    plan: str = Field(default="free_trial")
-    business_email: str | None = Field(default=None, max_length=254)
+    plan: Literal["free_trial", "starter", "professional", "enterprise"] = Field(default="free_trial")
+    business_email: EmailStr | None = None
     business_phone: str | None = Field(default=None, max_length=40)
     business_address: str | None = Field(default=None, max_length=400)
     business_description: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("name")
+    @classmethod
+    def normalize_name(cls, value: str) -> str:
+        value = " ".join(value.split())
+        if len(value) < 2:
+            raise ValueError("Company name must contain at least 2 characters")
+        return value
 
 
 class AdminCompanySetupUpdate(BaseModel):
@@ -35,7 +44,7 @@ class AdminCompanySetupUpdate(BaseModel):
     industry: str | None = Field(default=None, max_length=100)
     country: str | None = Field(default=None, max_length=5)
     timezone: str | None = Field(default=None, max_length=80)
-    business_email: str | None = Field(default=None, max_length=254)
+    business_email: EmailStr | None = None
     business_phone: str | None = Field(default=None, max_length=40)
     business_address: str | None = Field(default=None, max_length=400)
     business_description: str | None = Field(default=None, max_length=1000)
