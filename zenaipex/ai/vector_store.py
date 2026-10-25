@@ -10,10 +10,12 @@ The legacy module is left untouched and still serves RK Hospital.
 import time
 import asyncio
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
 from collections import OrderedDict
 from pinecone import Pinecone, ServerlessSpec
-from sentence_transformers import SentenceTransformer
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 from core.config import settings
 
@@ -24,14 +26,18 @@ logger = logging.getLogger(__name__)
 
 import threading
 
-_embedding_model: Optional[SentenceTransformer] = None
+_embedding_model: Optional[Any] = None
 _embedding_lock = threading.Lock()
 
-def _get_embedding_model() -> SentenceTransformer:
+def _get_embedding_model() -> Any:
     global _embedding_model
     if _embedding_model is None:
         with _embedding_lock:
             if _embedding_model is None:
+                # Keep the API startup lightweight on small instances. The
+                # embedding stack (torch/transformers) is loaded only when a
+                # knowledge-base operation actually needs it.
+                from sentence_transformers import SentenceTransformer
                 logger.info(f"[EMBEDDING_MODEL_INIT] status=loading model={settings.embedding_model}")
                 start_time = time.perf_counter()
                 
