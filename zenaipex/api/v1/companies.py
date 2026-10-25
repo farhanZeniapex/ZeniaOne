@@ -31,7 +31,8 @@ from core.exceptions import NotFoundError
 from services.storage_service import save_upload, delete_file
 from models.company import CompanyCreate, CompanyUpdate, TeamMemberCreate
 from services import tenant_service, knowledge_service
-from services.usage_service import get_usage_summary
+from services.usage_service import get_usage_summary, get_usage_record
+import re
 from slugify import slugify
 
 router = APIRouter(prefix="/companies", tags=["Companies"])
@@ -476,6 +477,42 @@ async def get_subscription(
             "limits": sub.get("limits", {}) if sub else {},
         },
         "usage": usage,
+    }
+
+
+@router.get("/{company_id}/billing/invoice", summary="Get a transparent billing invoice preview")
+async def get_billing_invoice(
+    company_id: str = Path(...),
+    month: Optional[str] = None,
+    ctx: AuthContext = Depends(get_auth_context),
+):
+    """Return a month-scoped invoice preview without inventing prices."""
+    billing_month = month or datetime.now(timezone.utc).strftime("%Y-%m")
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", billing_month):
+        raise HTTPException(status_code=422, detail="month must use YYYY-MM format")
+
+    company = await col_companies().find_one({"_id": ObjectId(company_id)})
+    subscription = await tenant_service.get_subscription(company_id)
+    usage = await get_usage_record(company_id, billing_month) or {}
+    plan = (subscription or {}).get("plan", "free_trial")
+    configured_amount = (subscription or {}).get("monthly_price_inr")
+
+    line_items = [
+        {"name": "Voice minutes", "quantity": round(float(usage.get("call_minutes_used", 0) or 0), 2), "unit": "minute"},
+        {"name": "AI requests", "quantity": int(usage.get("llm_api_calls", 0) or 0), "unit": "request"},
+        {"name": "STT API calls", "quantity": int(usage.get("stt_api_calls", 0) or 0), "unit": "request"},
+        {"name": "TTS API calls", "quantity": int(usage.get("tts_api_calls", 0) or 0), "unit": "request"},
+    ]
+    return {
+        "invoice_id": f"{company_id[:8]}-{billing_month}",
+        "status": "preview",
+        "billing_period": billing_month,
+        "company": {"id": company_id, "name": (company or {}).get("name", "")},
+        "plan": plan,
+        "line_items": line_items,
+        "amount_due_inr": configured_amount,
+        "amount_status": "configured" if configured_amount is not None else "not_configured",
+        "message": "Invoice amount is shown only when a subscription price is configured; usage quantities are live recorded data.",
     }
 
 
