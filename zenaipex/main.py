@@ -98,23 +98,10 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             logger.warning(f"Admin workspace provisioning failed: {exc}")
 
-        # Eagerly preload RAG models to prevent cold-start timeouts on first request
-        try:
-            from ai.vector_store import _get_embedding_model, _get_pinecone_index
-            logger.info("Preloading embedding model and Pinecone connection...")
-            _get_embedding_model()
-            # Pinecone performs blocking network I/O.  Keep startup responsive
-            # and fall back to the existing lazy connection if it is slow or
-            # temporarily unavailable.
-            await asyncio.wait_for(
-                asyncio.to_thread(_get_pinecone_index),
-                timeout=10.0,
-            )
-            logger.info("✅ RAG models preloaded successfully")
-        except asyncio.TimeoutError:
-            logger.warning("Pinecone preload timed out after 10s (will lazy-load)")
-        except Exception as exc:
-            logger.warning(f"Failed to preload RAG models (will lazy-load): {exc}")
+        # RAG dependencies are loaded lazily on the first knowledge-base request.
+        # Keeping model/Pinecone initialization out of startup lets Render's
+        # health check pass quickly and keeps the API available during cold starts.
+        logger.info("RAG models will be loaded lazily on first knowledge-base request")
 
         # Start background tasks scheduler (e.g., daily KB sync)
         try:
