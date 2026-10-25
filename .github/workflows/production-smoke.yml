@@ -1,0 +1,49 @@
+name: ZeniaOne Production Smoke
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["ZeniaOne CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Verify production health and contract
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    env:
+      API_BASE_URL: https://zeniaone-backend.onrender.com
+    steps:
+      - name: Check health and readiness
+        run: |
+          curl --fail --silent --show-error "$API_BASE_URL/health" > health.json
+          curl --fail --silent --show-error "$API_BASE_URL/ready" > ready.json
+          python - <<'PY'
+          import json
+          health = json.load(open("health.json", encoding="utf-8"))
+          ready = json.load(open("ready.json", encoding="utf-8"))
+          assert health.get("service") == "ZeniaOne", health
+          assert health.get("database") == "connected", health
+          assert ready.get("status") == "ready", ready
+          PY
+
+      - name: Verify production API contract
+        run: |
+          curl --fail --silent --show-error "$API_BASE_URL/openapi.json" > openapi.json
+          python - <<'PY'
+          import json
+          paths = json.load(open("openapi.json", encoding="utf-8")).get("paths", {})
+          required = {
+              "/api/v1/companies/{company_id}/billing/invoice",
+              "/api/v1/companies/{company_id}/billing/usage.csv",
+              "/api/v1/companies/{company_id}/billing/usage.pdf",
+              "/api/v1/companies/{company_id}/data-export",
+              "/api/v1/companies/{company_id}/data",
+              "/api/v1/admin/monitoring-summary",
+          }
+          missing = sorted(required.difference(paths))
+          assert not missing, f"Missing production routes: {missing}"
+          PY
