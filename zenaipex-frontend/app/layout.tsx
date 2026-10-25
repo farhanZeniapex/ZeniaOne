@@ -30,6 +30,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="scroll-smooth" suppressHydrationWarning>
+      <head>
+        <link rel="icon" type="image/png" href="/ZeniaAI_Z_Logo.png" />
+        <link rel="apple-touch-icon" href="/ZeniaAI_Z_Logo.png" />
+      </head>
       <body suppressHydrationWarning className={cn(plusJakartaSans.className, "min-h-screen bg-[#FAF8F5] text-[#191614] antialiased")}>
         {children}
       </body>
