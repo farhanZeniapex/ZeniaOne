@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     mongodb_db_name: str = Field(default="zenaipex")
     redis_url: str = Field(default="", description="Optional shared Redis URL for multi-instance caching")
     redis_cache_ttl_seconds: int = Field(default=300, ge=1, le=86400)
+    rate_limit_enabled: bool = Field(default=True)
+    rate_limit_general_per_minute: int = Field(default=120, ge=1, le=10000)
+    rate_limit_auth_per_minute: int = Field(default=20, ge=1, le=1000)
 
     # ── Pinecone ───────────────────────────────────────────────────────────────
     pinecone_api_key: str = Field(default="")

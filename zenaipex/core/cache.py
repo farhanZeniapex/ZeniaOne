@@ -57,6 +57,19 @@ async def set_json(key: str, value: Any, ttl_seconds: Optional[int] = None) -> b
         return False
 
 
+async def increment(key: str, ttl_seconds: int) -> Optional[int]:
+    """Atomically increment a Redis counter and set its expiry on first use."""
+    client = await _client()
+    if not client:
+        return None
+    try:
+        count = await client.incr(key)
+        if count == 1:
+            await client.expire(key, ttl_seconds)
+        return int(count)
+    except Exception as exc:
+        logger.debug("Redis counter failed for %s: %s", key, exc)
+        return None
 async def close() -> None:
     global _redis_client
     if _redis_client is not None:

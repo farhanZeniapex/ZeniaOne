@@ -372,6 +372,30 @@ async def security_headers(request: Request, call_next):
     response.headers.setdefault("Permissions-Policy", "camera=(), geolocation=(), payment=()")
     return response
 
+
+@app.middleware("http")
+async def rate_limit_guard(request: Request, call_next):
+    """Limit abusive API traffic without affecting health/docs probes."""
+    path = request.url.path
+    if request.method == "OPTIONS" or path in {"/health", "/ready", "/docs", "/redoc", "/openapi.json"}:
+        return await call_next(request)
+    if not path.startswith("/api/"):
+        return await call_next(request)
+
+    from core.rate_limit import check_rate_limit
+    client_host = request.client.host if request.client else "unknown"
+    is_auth = path.startswith("/api/v1/auth")
+    limit = settings.rate_limit_auth_per_minute if is_auth else settings.rate_limit_general_per_minute
+    bucket = "auth" if is_auth else "api"
+    allowed, retry_after = await check_rate_limit(f"{bucket}:{client_host}", limit)
+    if not allowed:
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Too many requests. Please try again shortly."},
+            headers={"Retry-After": str(retry_after)},
+        )
+    return await call_next(request)
+
 # Read the maintenance switch from the platform settings document.  Admin
 # routes remain available so an administrator can switch it off again; public
 # chat, voice and customer API traffic receive a clear 503 response.
