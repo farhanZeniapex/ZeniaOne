@@ -13,6 +13,8 @@
 
 Every push to `main` runs backend tests and the frontend build. The production smoke workflow then checks `/health`, `/ready`, and the required billing, privacy, and monitoring routes on the Render backend.
 
+The same workflow can be dispatched manually with a staging API base URL using the `api_base_url` input. This verifies a staging service against the identical production contract before promotion.
+
 ## Rollback procedure
 
 1. Stop promotion if CI or production smoke fails.

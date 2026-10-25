@@ -2,6 +2,11 @@ name: ZeniaOne Production Smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      api_base_url:
+        description: "Environment API base URL to verify"
+        required: false
+        default: "https://zeniaone-backend.onrender.com"
   workflow_run:
     workflows: ["ZeniaOne CI"]
     types: [completed]
@@ -15,7 +20,7 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     env:
-      API_BASE_URL: https://zeniaone-backend.onrender.com
+      API_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.api_base_url || 'https://zeniaone-backend.onrender.com' }}
     steps:
       - name: Check health and readiness
         run: |
