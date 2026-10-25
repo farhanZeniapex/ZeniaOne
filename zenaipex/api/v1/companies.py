@@ -29,7 +29,8 @@ from core.dependencies import (
 from core.database import (
     col_companies, col_subscriptions, col_team_members, col_agents,
     col_documents, col_knowledge_bases, col_conversations, col_messages,
-    col_channels, col_usage_records,
+    col_channels, col_usage_records, col_scheduled_calls, col_timing_metrics,
+    col_custom_voices, col_activity_logs,
 )
 from core.exceptions import NotFoundError
 from services.storage_service import save_upload, delete_file
@@ -44,6 +45,11 @@ router = APIRouter(prefix="/companies", tags=["Companies"])
 class GreetingSuggestionRequest(BaseModel):
     direction: str = "inbound"
     language: str = "en-IN"
+
+
+class CompanyDeletionRequest(BaseModel):
+    """Explicit confirmation required for irreversible tenant deletion."""
+    confirmation: str
 
 
 def _fmt_company(doc: dict) -> dict:
@@ -557,6 +563,58 @@ async def export_company_data(
         "messages": col_messages(),
         "channels": col_channels(),
         "usage_records": col_usage_records(),
+    }
+
+
+@router.delete("/{company_id}/data", summary="Permanently delete tenant data")
+async def delete_company_data(
+    body: CompanyDeletionRequest,
+    company_id: str = Path(...),
+    ctx: AuthContext = Depends(require_owner),
+):
+    """Delete a tenant only after an owner explicitly confirms the exact ID."""
+    expected_confirmation = f"DELETE {company_id}"
+    if body.confirmation.strip() != expected_confirmation:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Type '{expected_confirmation}' to confirm permanent deletion",
+        )
+    if not ObjectId.is_valid(company_id):
+        raise HTTPException(status_code=422, detail="company_id must be a valid ObjectId")
+    if company_id == "6a990b403e9b17bef89acf87":
+        raise HTTPException(status_code=403, detail="The internal platform company cannot be deleted")
+
+    company = await col_companies().find_one({"_id": ObjectId(company_id)})
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    # Keep this list explicit so a newly-added collection cannot be deleted by
+    # accident without a deliberate code review.
+    tenant_collections = (
+        col_team_members(), col_subscriptions(), col_agents(),
+        col_knowledge_bases(), col_documents(), col_channels(),
+        col_messages(), col_conversations(), col_usage_records(),
+        col_scheduled_calls(), col_timing_metrics(), col_custom_voices(),
+    )
+    filter_query = {"company_id": company_id}
+    deleted_counts = {}
+    for collection in tenant_collections:
+        result = await collection.delete_many(filter_query)
+        deleted_counts[collection.name] = result.deleted_count
+
+    await col_companies().delete_one({"_id": ObjectId(company_id)})
+    await col_activity_logs().insert_one({
+        "action": "company_data_deleted",
+        "company_id": company_id,
+        "actor_user_id": ctx.user_id,
+        "details": "Tenant data permanently deleted after owner confirmation.",
+        "created_at": datetime.now(timezone.utc),
+    })
+    return {
+        "success": True,
+        "company_id": company_id,
+        "deleted_counts": deleted_counts,
+        "message": "Company and tenant-owned data permanently deleted.",
     }
     exported = {}
     for name, collection in collections.items():
