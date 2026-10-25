@@ -63,6 +63,9 @@ valid_mp3.txt
 *.jpeg
 *.jpg
 *.png
+!ZENIA1_CURRENT_SYSTEM_ARCHITECTURE.png
+!docs/images/**
+!assets/**
 *.tiff
 *.avi
 *.flv
