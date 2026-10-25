@@ -34,6 +34,8 @@ class Settings(BaseSettings):
     # ── MongoDB ────────────────────────────────────────────────────────────────
     mongodb_uri: str = Field(default="")
     mongodb_db_name: str = Field(default="zenaipex")
+    redis_url: str = Field(default="", description="Optional shared Redis URL for multi-instance caching")
+    redis_cache_ttl_seconds: int = Field(default=300, ge=1, le=86400)
 
     # ── Pinecone ───────────────────────────────────────────────────────────────
     pinecone_api_key: str = Field(default="")

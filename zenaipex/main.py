@@ -142,6 +142,12 @@ async def lifespan(app: FastAPI):
         stop_scheduler()
     except Exception as exc:
         pass
+
+    try:
+        from core.cache import close as close_shared_cache
+        await close_shared_cache()
+    except Exception as exc:
+        logger.debug("Shared cache shutdown skipped: %s", exc)
         
     try:
         await disconnect_db()

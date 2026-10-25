@@ -10,6 +10,7 @@ python-multipart==0.0.20
 # Database
 pymongo==4.15.5
 motor==3.7.1          # Async MongoDB driver
+redis==5.2.1          # Optional shared cache for multi-instance deployments
 
 # Auth & Security
 python-jose[cryptography]==3.5.0   # JWT tokens

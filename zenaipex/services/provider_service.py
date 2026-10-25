@@ -276,7 +276,18 @@ async def get_all_provider_balances(force_refresh: bool = False) -> list:
     global _balance_cache
     now = time.time()
     
-    # Check cache unless forced
+    # Check shared cache unless forced. This lets multiple Render instances
+    # reuse the same provider snapshot when REDIS_URL is configured.
+    if not force_refresh:
+        try:
+            from core.cache import get_json
+            shared = await get_json("zeniaone:provider_balances:v1")
+            if isinstance(shared, list):
+                return shared
+        except Exception:
+            pass
+
+    # Check local cache unless forced
     if not force_refresh and "data" in _balance_cache and "timestamp" in _balance_cache:
         if now - _balance_cache["timestamp"] < _cache_ttl:
             return _balance_cache["data"]
@@ -322,6 +333,11 @@ async def get_all_provider_balances(force_refresh: bool = False) -> list:
 
     _balance_cache["data"] = balances
     _balance_cache["timestamp"] = now
+    try:
+        from core.cache import set_json
+        await set_json("zeniaone:provider_balances:v1", balances)
+    except Exception:
+        pass
     return balances
 
 
