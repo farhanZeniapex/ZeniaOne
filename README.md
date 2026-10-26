@@ -34,6 +34,22 @@
   <sub>Listen clearly · reason with company knowledge · respond naturally · keep every turn observable</sub>
 </p>
 
+<p align="center">
+  <a href="https://zeniaone-web.onrender.com/">
+    <img src="https://img.shields.io/badge/🌐%20OPEN%20LIVE%20WEBSITE-zeniaone--web.onrender.com-0B8063?style=for-the-badge" alt="Open live ZeniaOne website" />
+  </a>
+  <a href="https://zeniaone-web.onrender.com/admin">
+    <img src="https://img.shields.io/badge/⚙️%20ADMIN%20CONSOLE-Open-164E63?style=for-the-badge" alt="Open ZeniaOne admin console" />
+  </a>
+  <a href="https://zeniaone-web.onrender.com/signup">
+    <img src="https://img.shields.io/badge/✨%20CREATE%20ACCOUNT-Sign%20up-6D28D9?style=for-the-badge" alt="Create a ZeniaOne account" />
+  </a>
+</p>
+
+<p align="center">
+  <sub>Hosted production web app · click a button above to open it</sub>
+</p>
+
 ---
 
 ## 🌟 What ZeniaOne does
