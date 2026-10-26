@@ -226,6 +226,36 @@ export default function AdminLayout({
           setIsAdmin(true);
           setUserProfile({ name: res.name, email: res.email });
           setIsLoading(false);
+
+          // Warm the most frequently visited admin resources after the shell
+          // is visible. fetchApi deduplicates in-flight requests and caches
+          // the responses, so route changes reuse these results instead of
+          // showing a full-page loader while Render wakes up.
+          const warmAdminRoutes = [
+            "/admin/companies",
+            "/admin/companies?limit=100",
+            "/admin/agents",
+            "/admin/channels",
+            "/admin/documents",
+            "/admin/knowledge-bases",
+            "/admin/monitoring-summary",
+            "/admin/subscriptions",
+            "/admin/users",
+            "/plans",
+          ];
+          const warm = () => {
+            void Promise.allSettled(warmAdminRoutes.map((path) => fetchApi(path)));
+          };
+          if (typeof window !== "undefined") {
+            const idleWindow = window as Window & {
+              requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+            };
+            if (idleWindow.requestIdleCallback) {
+              idleWindow.requestIdleCallback(warm, { timeout: 2500 });
+            } else {
+              window.setTimeout(warm, 800);
+            }
+          }
         } else {
           // They are logged in but not an admin.
           setIsLoading(false);

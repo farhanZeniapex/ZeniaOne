@@ -23,7 +23,9 @@ export class ApiError extends Error {
 }
 
 type CachedResponse = { value: unknown; expiresAt: number };
-const GET_CACHE_TTL_MS = 15_000;
+// Keep read data warm while an admin moves between routes. Mutations clear the
+// cache, so this longer window improves navigation without hiding updates.
+const GET_CACHE_TTL_MS = 60_000;
 const getCache = new Map<string, CachedResponse>();
 const inFlightGets = new Map<string, Promise<unknown>>();
 
