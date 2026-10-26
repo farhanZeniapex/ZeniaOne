@@ -331,7 +331,10 @@ export function LiveCallMonitor({ callSid, contactName, onClose }: Props) {
                     <Mic className="w-4 h-4 text-blue-600" /> Call Recording
                   </p>
                   {recordingToken ? (
-                    <CustomAudioPlayer src={`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8002/api/v1"}/admin/conversations/${data.company_id}/${data.id}/recording?token=${recordingToken}`} />
+                    <CustomAudioPlayer
+                      src={`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8002/api/v1"}/admin/conversations/${data.company_id}/${data.id}/recording?token=${recordingToken}`}
+                      durationSeconds={Number(data.duration_seconds) || Number((data as any).recording_duration) || 0}
+                    />
                   ) : (
                     <div className="animate-pulse bg-gray-200 h-10 w-full rounded-md"></div>
                   )}

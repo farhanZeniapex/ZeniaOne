@@ -3,9 +3,10 @@ import { Play, Pause, Volume2, VolumeX, Download, Settings2 } from 'lucide-react
 
 interface CustomAudioPlayerProps {
   src: string;
+  durationSeconds?: number;
 }
 
-export function CustomAudioPlayer({ src }: CustomAudioPlayerProps) {
+export function CustomAudioPlayer({ src, durationSeconds = 0 }: CustomAudioPlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -19,7 +20,15 @@ export function CustomAudioPlayer({ src }: CustomAudioPlayerProps) {
     if (!audio) return;
 
     const updateTime = () => setCurrentTime(audio.currentTime);
-    const updateDuration = () => setDuration(audio.duration);
+    const updateDuration = () => {
+      // Some Twilio proxy responses expose an unbounded duration while the
+      // MP3 metadata is loading. Never render Infinity/NaN or pass it to the
+      // range input; use the provider duration as a stable fallback.
+      const metadataDuration = Number(audio.duration);
+      setDuration(Number.isFinite(metadataDuration) && metadataDuration > 0
+        ? metadataDuration
+        : (Number.isFinite(durationSeconds) ? durationSeconds : 0));
+    };
     const onEnded = () => setIsPlaying(false);
 
     audio.addEventListener('timeupdate', updateTime);
@@ -31,7 +40,7 @@ export function CustomAudioPlayer({ src }: CustomAudioPlayerProps) {
       audio.removeEventListener('loadedmetadata', updateDuration);
       audio.removeEventListener('ended', onEnded);
     };
-  }, []);
+  }, [durationSeconds]);
 
   const togglePlay = () => {
     if (!audioRef.current) return;
@@ -57,7 +66,7 @@ export function CustomAudioPlayer({ src }: CustomAudioPlayerProps) {
   };
 
   const formatTime = (time: number) => {
-    if (isNaN(time)) return "0:00";
+    if (!Number.isFinite(time) || time < 0) return "0:00";
     const mins = Math.floor(time / 60);
     const secs = Math.floor(time % 60);
     return `${mins}:${secs.toString().padStart(2, '0')}`;
@@ -80,8 +89,8 @@ export function CustomAudioPlayer({ src }: CustomAudioPlayerProps) {
         <input 
           type="range" 
           min={0} 
-          max={duration || 100} 
-          value={currentTime}
+          max={Number.isFinite(duration) && duration > 0 ? duration : 100}
+          value={Number.isFinite(currentTime) ? currentTime : 0}
           onChange={handleSeek}
           className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-sage-600 hover:accent-sage-700"
         />

@@ -132,16 +132,17 @@ async def twilio_voice_webhook(company_slug: str, request: Request):
         if stream_status_url else ""
     )
 
-    # Minimal TwiML to connect the stream and pass required parameters
+    # Start the bidirectional AI stream immediately. A hard-coded Twilio
+    # <Say> here makes callers hear an unrelated English voice first and also
+    # delays the actual agent stream until that sentence has finished.
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say voice="alice" language="en-US">{escape(DEFAULT_PHONE_WELCOME)}</Say>
     <Connect>
         <Stream url="{escape(ws_url, quote=True)}"{stream_status_attr}>
             <Parameter name="caller" value="{escape(str(caller or ''), quote=True)}" />
             <Parameter name="called_number" value="{escape(str(phone_number or ''), quote=True)}" />
             <Parameter name="call_sid" value="{escape(str(call_sid or ''), quote=True)}" />
-            <Parameter name="skip_greeting" value="true" />
+            <Parameter name="skip_greeting" value="false" />
         </Stream>
     </Connect>
 </Response>
@@ -188,7 +189,6 @@ async def twilio_outbound_twiml(company_id: str, agent_id: str, channel_id: str,
 
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say voice="alice" language="en-US">{escape(welcome)}</Say>
     <Connect>
         <Stream url="{escape(ws_url, quote=True)}"{stream_status_attr}>
             <Parameter name="direction" value="outbound" />
@@ -198,7 +198,7 @@ async def twilio_outbound_twiml(company_id: str, agent_id: str, channel_id: str,
             <Parameter name="contact_name" value="{escape(contact_name, quote=True)}" />
             <Parameter name="topic" value="{escape(topic, quote=True)}" />
             <Parameter name="system_prompt" value="{escape(system_prompt, quote=True)}" />
-            <Parameter name="skip_greeting" value="true" />
+            <Parameter name="skip_greeting" value="false" />
         </Stream>
     </Connect>
 </Response>

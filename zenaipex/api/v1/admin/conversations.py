@@ -37,6 +37,7 @@ def _fmt_conv(doc: dict) -> dict:
         "answered_at": doc.get("answered_at"),
         "failure_reason": doc.get("failure_reason"),
         "duration_seconds": doc.get("duration_seconds", 0),
+        "recording_duration": doc.get("recording_duration", 0),
         "turn_count": doc.get("turn_count", 0),
         "title": doc.get("title", "New Chat"),
         "last_message": doc.get("last_message", ""),
