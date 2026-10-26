@@ -1,0 +1,31 @@
+name: ZeniaOne Production Monitor
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  monitor:
+    name: Verify live services
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check backend health
+        env:
+          BACKEND_URL: https://zeniaone-backend.onrender.com
+        run: |
+          set -euo pipefail
+          health="$(curl --fail --silent --show-error --max-time 30 "$BACKEND_URL/health")"
+          ready="$(curl --fail --silent --show-error --max-time 30 "$BACKEND_URL/ready")"
+          echo "health=$health"
+          echo "ready=$ready"
+          grep -q '"status":"healthy"' <<< "$health"
+          grep -q '"database":"connected"' <<< "$health"
+          grep -q '"status":"ready"' <<< "$ready"
+
+      - name: Check frontend availability
+        run: curl --fail --silent --show-error --location --max-time 30 -o /dev/null https://zeniaone-web.onrender.com/

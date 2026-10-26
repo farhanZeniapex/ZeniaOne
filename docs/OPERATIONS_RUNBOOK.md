@@ -28,6 +28,10 @@ Scheduled outbound calls are persisted in MongoDB (`scheduled_calls`) and proces
 
 Enable Atlas continuous/point-in-time backups for the production cluster. For an additional operator-controlled archive, install MongoDB Database Tools and run `python scripts/mongodb_backup.py backup --output-dir backups`; retain the archive and its manifest in encrypted storage outside the repository. Restore is deliberately guarded: use `restore <archive> --confirm-restore`, and add `--allow-production` only during an approved recovery window. Use `--dry-run` first to validate the target without writing data. The helper never drops collections automatically.
 
+### Production monitoring
+
+`.github/workflows/production-monitor.yml` runs hourly and can also be started manually. It verifies the live backend health/readiness contracts, confirms MongoDB connectivity through `/health`, and checks that the frontend responds. Keep GitHub Actions notifications enabled for the repository so a failed monitor run is surfaced to operators. `UPTIME_MONITOR_URL` remains available for an additional external monitor.
+
 ## Rollback procedure
 
 1. Stop promotion if CI or production smoke fails.
