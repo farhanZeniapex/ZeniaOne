@@ -58,10 +58,12 @@ async function fetchApiUncached<T = any>(endpoint: string, options: RequestInit 
   const method = String(options.method || "GET").toUpperCase();
   const canRetry = method === "GET" || method === "HEAD" || method === "OPTIONS";
   const retryDelays = canRetry ? [0, 500, 1500] : [0];
+  const transientStatuses = new Set([502, 503, 504]);
   let response: Response | undefined;
   let lastError: any = null;
 
-  for (const delay of retryDelays) {
+  for (let attempt = 0; attempt < retryDelays.length; attempt += 1) {
+    const delay = retryDelays[attempt];
     if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
     const controller = new AbortController();
     // A cold Render instance can take a while, but a three-minute timeout on
@@ -74,7 +76,13 @@ async function fetchApiUncached<T = any>(endpoint: string, options: RequestInit 
         headers,
         signal: controller.signal,
       });
-      break;
+      // Render can briefly return a gateway error while an instance is
+      // waking up or completing a rolling deploy. Retry only safe reads;
+      // authentication, validation, and application errors remain immediate.
+      if (!canRetry || !transientStatuses.has(response.status) || attempt === retryDelays.length - 1) {
+        break;
+      }
+      lastError = new ApiError(response.status, "Backend is restarting; retrying the request.", null);
     } catch (error: any) {
       lastError = error;
       if (error?.name === "AbortError") {
