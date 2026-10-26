@@ -52,6 +52,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Safe deployment marker exposed only through health endpoints. It lets us
+# verify which image is serving traffic without revealing configuration.
+BUILD_VERSION = "2026-10-26-live-ops-v3"
+
 if settings.sentry_dsn:
     try:
         import sentry_sdk
@@ -503,6 +507,7 @@ async def health():
         "status": "healthy" if database == "connected" else "degraded",
         "database": database,
         "service": settings.app_name,
+        "build_version": BUILD_VERSION,
     }
 
 
@@ -524,6 +529,7 @@ async def readiness():
         "status": "ready" if ready else "not_ready",
         "service": settings.app_name,
         "database": database,
+        "build_version": BUILD_VERSION,
     }
     if not ready:
         return JSONResponse(status_code=503, content=payload)
@@ -547,6 +553,7 @@ async def api_health():
         "persistent": mode_info["persistent"],
         "db_name": mode_info["db_name"],
         "database": database,
+        "build_version": BUILD_VERSION,
     }
 
 
