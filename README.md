@@ -1,6 +1,9 @@
 <div align="center">
 
-# 🎙️ ZeniaOne Voice Assistant
+<h1 align="center">
+  <img src="zenaipex-frontend/public/ZeniaAI_Z_Logo.png" alt="ZeniaOne logo" width="58" height="58" align="middle" />
+  &nbsp;ZeniaOne Voice Assistant
+</h1>
 
 ### Enterprise-ready multilingual voice, chat, RAG, and telephony platform
 
@@ -20,10 +23,6 @@
 </p>
 
 </div>
-
-<p align="center">
-  <img src="zenaipex-frontend/public/ZeniaAI_Z_Logo.png" alt="ZeniaOne logo" width="116" />
-</p>
 
 <p align="center">
   <img src="docs/assets/zeniaone-voice-hero.svg" alt="ZeniaOne realtime voice intelligence" width="100%" />
