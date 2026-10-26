@@ -3,10 +3,11 @@ Admin Channels API.
 """
 from fastapi import APIRouter, Query, Depends
 from typing import Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 from twilio.rest import Client
 import logging
 import time
+import re
 
 logger = logging.getLogger(__name__)
 from core.config import settings
@@ -21,12 +22,27 @@ router = APIRouter()
 _twilio_history_sync_at: dict[str, float] = {}
 
 class CreateChannelRequest(BaseModel):
-    name: str
-    type: str
-    phone_number: Optional[str] = None
-    agent_id: Optional[str] = None
-    company_id: str
+    name: str = Field(..., min_length=2, max_length=100)
+    type: str = Field(..., min_length=2, max_length=40)
+    phone_number: Optional[str] = Field(default=None, max_length=32)
+    agent_id: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    company_id: str = Field(..., min_length=1, max_length=64)
     is_active: bool = True
+
+    @field_validator("name", "type", "company_id", "agent_id", mode="before")
+    @classmethod
+    def strip_text(cls, value):
+        return value.strip() if isinstance(value, str) else value
+
+    @field_validator("phone_number", mode="before")
+    @classmethod
+    def validate_phone(cls, value):
+        if value in (None, ""):
+            return None
+        value = str(value).replace(" ", "").replace("-", "").strip()
+        if not re.fullmatch(r"\+?[1-9]\d{6,14}", value):
+            raise ValueError("Invalid phone number. Use an international number, e.g. +919876543210.")
+        return value
 
 class GeneratePromptRequest(BaseModel):
     contact_name: str
@@ -78,6 +94,22 @@ async def generate_prompt(body: GeneratePromptRequest):
 async def create_channel(body: CreateChannelRequest):
     import datetime
     from core.database import col_channels
+    from core.database import col_agents
+    from core.exceptions import ConflictError
+
+    if body.agent_id:
+        try:
+            agent = await col_agents().find_one({"_id": ObjectId(body.agent_id), "company_id": body.company_id})
+        except Exception as exc:
+            raise ValueError("Invalid agent ID.") from exc
+        if not agent:
+            raise NotFoundError("Agent")
+
+    if body.phone_number and body.is_active:
+        existing = await col_channels().find_one({"phone_number": body.phone_number, "is_active": True})
+        if existing:
+            raise ConflictError("Phone number is already in use by another active channel.")
+
     new_channel = {
         "name": body.name,
         "type": body.type,
@@ -85,8 +117,8 @@ async def create_channel(body: CreateChannelRequest):
         "agent_id": body.agent_id,
         "company_id": body.company_id,
         "is_active": body.is_active,
-        "created_at": datetime.datetime.utcnow().isoformat() + "Z",
-        "updated_at": datetime.datetime.utcnow().isoformat() + "Z",
+        "created_at": datetime.datetime.now(datetime.timezone.utc),
+        "updated_at": datetime.datetime.now(datetime.timezone.utc),
         "config": {}
     }
     res = await col_channels().insert_one(new_channel)
