@@ -244,6 +244,7 @@ async def get_channel_conversations(channel_id: str, limit: int = 50):
                             "to_phone": to_number,
                             "destination_phone": to_number,
                             "direction": "outbound" if outbound else "inbound",
+                            "source_type": "phone_call",
                             "language": "en-IN",
                             "status": status,
                             "provider_status": str(getattr(item, "status", "") or ""),

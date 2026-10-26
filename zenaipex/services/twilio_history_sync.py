@@ -70,6 +70,7 @@ async def sync_twilio_history(
                     "to_phone": to_number,
                     "destination_phone": to_number,
                     "direction": "outbound" if outbound else "inbound",
+                    "source_type": "phone_call",
                     "language": "en-IN",
                     "status": status_map.get(raw_status, "failed"),
                     "provider_status": raw_status,
@@ -89,6 +90,7 @@ async def sync_twilio_history(
                         "$set": {
                             "provider_status": doc["provider_status"],
                             "status": doc["status"],
+                            "source_type": "phone_call",
                             "duration_seconds": doc["duration_seconds"],
                             "ended_at": doc["ended_at"],
                         },
