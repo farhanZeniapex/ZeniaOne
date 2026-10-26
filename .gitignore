@@ -80,6 +80,8 @@ zenaipex/backups/
 data/uploads/
 scratch/
 logs/
+!zenaipex-frontend/app/admin/logs/
+!zenaipex-frontend/app/admin/logs/**
 .runtime-logs/
 .planning/
 .pytest_cache/
