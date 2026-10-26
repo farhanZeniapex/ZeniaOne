@@ -21,6 +21,19 @@
 
 </div>
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/PULPIT221090/zeniaone_voice/Farhan_work/zenaipex-frontend/public/ZeniaAI_Logo.png" alt="ZeniaOne logo" width="116" />
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/PULPIT221090/zeniaone_voice/Farhan_work/docs/assets/zeniaone-voice-hero.svg" alt="ZeniaOne realtime voice intelligence" width="100%" />
+</p>
+
+<p align="center">
+  <strong>Real-time voice intelligence for every customer conversation.</strong><br/>
+  <sub>Listen clearly · reason with company knowledge · respond naturally · keep every turn observable</sub>
+</p>
+
 ---
 
 ## 🌟 What ZeniaOne does
@@ -38,6 +51,22 @@ It combines:
 - A Next.js administration console for routing, calls, knowledge, billing, and health monitoring.
 
 The runtime is provider-driven: dashboard selections are stored, but every request is resolved again by the backend routing layer. This keeps the actual provider path explicit and makes fallbacks testable.
+
+<p align="center">
+  <img src="https://img.shields.io/badge/VOICE-Live%20WebSocket-0B8063?style=flat-square" alt="Live voice" />
+  <img src="https://img.shields.io/badge/RAG-Tenant%20isolated-164E63?style=flat-square" alt="Tenant isolated RAG" />
+  <img src="https://img.shields.io/badge/TTS-Clone%20voice-6D28D9?style=flat-square" alt="Clone voice" />
+  <img src="https://img.shields.io/badge/OPS-Observable-F59E0B?style=flat-square" alt="Observable operations" />
+</p>
+
+### Product surface
+
+<p align="center">
+  <img src="https://img.shields.io/badge/01%20Listen-STT%20%2B%20turn%20detection-0F766E?style=for-the-badge" alt="Listen" />
+  <img src="https://img.shields.io/badge/02%20Understand-Gemini%20%2B%20RAG-1D4ED8?style=for-the-badge" alt="Understand" />
+  <img src="https://img.shields.io/badge/03%20Respond-Streaming%20TTS-7C3AED?style=for-the-badge" alt="Respond" />
+  <img src="https://img.shields.io/badge/04%20Observe-Calls%20%2B%20analytics-B45309?style=for-the-badge" alt="Observe" />
+</p>
 
 ## ✅ Core capabilities
 

@@ -1,0 +1,46 @@
+<svg width="1200" height="420" viewBox="0 0 1200 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#061F1A"/>
+      <stop offset="0.52" stop-color="#073D31"/>
+      <stop offset="1" stop-color="#10233A"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(892 204) rotate(90) scale(188)">
+      <stop stop-color="#77E5B1" stop-opacity="0.36"/>
+      <stop offset="1" stop-color="#77E5B1" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ring" x1="760" y1="78" x2="1040" y2="344" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A9F4C9"/>
+      <stop offset="1" stop-color="#28B99B" stop-opacity="0.18"/>
+    </linearGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="18"/></filter>
+  </defs>
+  <rect width="1200" height="420" rx="28" fill="url(#bg)"/>
+  <circle cx="890" cy="208" r="190" fill="url(#glow)"/>
+  <g opacity="0.15" stroke="#B4F6D0">
+    <path d="M0 92H1200M0 164H1200M0 236H1200M0 308H1200"/>
+    <path d="M120 0V420M240 0V420M360 0V420M480 0V420M600 0V420M720 0V420M840 0V420M960 0V420M1080 0V420"/>
+  </g>
+  <g transform="translate(82 78)">
+    <rect x="0" y="0" width="210" height="52" rx="26" fill="#123F35" stroke="#65DCA7" stroke-opacity="0.55"/>
+    <circle cx="30" cy="26" r="7" fill="#7AF0B8"><animate attributeName="r" values="7;10;7" dur="1.6s" repeatCount="indefinite"/></circle>
+    <text x="51" y="32" fill="#B8F6D4" font-family="Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="2">LIVE VOICE AI</text>
+    <text x="0" y="132" fill="white" font-family="Arial, sans-serif" font-size="52" font-weight="800">ZeniaOne</text>
+    <text x="0" y="174" fill="#B4DCCD" font-family="Arial, sans-serif" font-size="22">Listen. Understand. Respond.</text>
+    <text x="0" y="210" fill="#8FBBAA" font-family="Arial, sans-serif" font-size="16">Realtime calls • multilingual AI • grounded answers</text>
+    <g transform="translate(0 264)" stroke="#8AF0BC" stroke-linecap="round" stroke-width="5">
+      <path d="M0 22V38M18 12V48M36 3V57M54 16V44M72 27V33M90 8V52M108 0V60M126 15V45M144 25V35M162 10V50M180 4V56M198 20V40M216 13V47M234 27V33">
+        <animate attributeName="d" dur="1.2s" repeatCount="indefinite" values="M0 22V38M18 12V48M36 3V57M54 16V44M72 27V33M90 8V52M108 0V60M126 15V45M144 25V35M162 10V50M180 4V56M198 20V40M216 13V47M234 27V33;M0 29V31M18 20V40M36 12V48M54 25V35M72 5V55M90 22V38M108 8V52M126 28V32M144 13V47M162 0V60M180 24V36M198 10V50M216 20V40M234 26V34;M0 22V38M18 12V48M36 3V57M54 16V44M72 27V33M90 8V52M108 0V60M126 15V45M144 25V35M162 10V50M180 4V56M198 20V40M216 13V47M234 27V33"/>
+      </path>
+    </g>
+  </g>
+  <g transform="translate(900 210)">
+    <circle r="126" stroke="url(#ring)" stroke-width="2" opacity="0.45"><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="18s" repeatCount="indefinite"/></circle>
+    <circle r="94" stroke="#7FE8B6" stroke-width="2" stroke-dasharray="10 14" opacity="0.75"><animateTransform attributeName="transform" type="rotate" from="360" to="0" dur="12s" repeatCount="indefinite"/></circle>
+    <circle r="58" fill="#0A4F40" stroke="#A7F5C9" stroke-width="3"/>
+    <path d="M-22 4C-22-16-8-29 10-29C28-29 42-16 42 4V10C42 28 28 42 10 42C-8 42-22 28-22 10V4Z" fill="#A7F5C9" opacity="0.95"/>
+    <path d="M-35 5H-47M53 5H65M10-58V-70M10 58V70" stroke="#A7F5C9" stroke-width="4" stroke-linecap="round"/>
+    <circle r="160" stroke="#80E7B5" stroke-width="1" stroke-dasharray="2 18" opacity="0.5"><animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="28s" repeatCount="indefinite"/></circle>
+  </g>
+  <text x="1074" y="376" fill="#8FBBAA" font-family="Arial, sans-serif" font-size="13" text-anchor="end" letter-spacing="2">VOICE • RAG • TELEPHONY</text>
+</svg>
