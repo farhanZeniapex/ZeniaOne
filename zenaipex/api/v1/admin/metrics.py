@@ -76,7 +76,7 @@ async def get_trends(days: int = 30, company_id: Optional[str] = None):
         }},
         {"$sort": {"_id": 1}}
     ]
-    ai_data = await col_messages().aggregate(ai_pipeline).to_list(None)
+    ai_data = await col_llm_requests().aggregate(ai_pipeline).to_list(None)
     
     # Format _id to date
     for item in companies_data: item["date"] = item.pop("_id")
