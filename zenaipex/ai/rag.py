@@ -377,13 +377,19 @@ class TenantRAGPipeline:
                 logger.info(f"[{request_id}] EMBEDDING_CACHE_HIT query='{expanded_query[:50]}'")
             else:
                 emb_start = __import__("time").time()
-                query_embedding = await asyncio.to_thread(vs._get_model().encode, [expanded_query])
+                query_embedding = await asyncio.wait_for(
+                    asyncio.to_thread(vs._get_model().encode, [expanded_query]),
+                    timeout=RAGConfig.embedding_timeout_seconds,
+                )
                 emb_latency = __import__("time").time() - emb_start
                 logger.info(f"[{request_id}] EMBEDDING\nModel: sentence-transformers/all-MiniLM-L6-v2\nLatency: {emb_latency:.2f}s")
                 query_embedding_list = query_embedding.tolist()[0]
                 cache_embedding(expanded_query, query_embedding_list)
             
-            await asyncio.to_thread(vs._get_index)
+            await asyncio.wait_for(
+                asyncio.to_thread(vs._get_index),
+                timeout=RAGConfig.index_timeout_seconds,
+            )
             
             # 2. Retry Strategy & Candidate Retrieval
             results = []

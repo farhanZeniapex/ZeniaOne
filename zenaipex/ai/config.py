@@ -6,6 +6,8 @@ Step 6: Added negative cache + namespace invalidation
 class RAGConfig:
     # 1. Timeout & Limits
     pinecone_timeout_seconds = 4.0
+    embedding_timeout_seconds = 8.0
+    index_timeout_seconds = 4.0
     llm_generation_timeout = 20.0
     
     # 2. Retry Logic

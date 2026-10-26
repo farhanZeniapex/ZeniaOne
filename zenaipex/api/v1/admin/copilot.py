@@ -720,6 +720,26 @@ async def _answer(
     if verified_details:
         return verified_details, [{"type": "knowledge_base", "verified": True, "domain": "company_details"}]
 
+    # The platform identity is stable product knowledge, not a document-search
+    # task. Keep this common question instant even when the RAG embedding model
+    # is cold-starting on a free Render instance.
+    zeniOne_intro = (
+        "zeniaone" in q or "zenia one" in q
+    ) and (
+        "kya hai" in q or "kya he" in q or "kyu use" in q or
+        "why use" in q or "what is" in q or "purpose" in q
+    )
+    if zeniOne_intro:
+        if lang == "hindi" and script != "latin":
+            answer = "ZeniaOne एक enterprise AI Voice and Chat Agents platform है। इसका उपयोग AI agents बनाने, company knowledge से answers देने, web chat संभालने और inbound/outbound voice calls चलाने के लिए होता है।"
+        elif lang == "hindi":
+            answer = "ZeniaOne ek enterprise AI Voice and Chat Agents platform hai. Iska use AI agents banane, company knowledge se answers dene, web chat handle karne aur inbound/outbound voice calls chalane ke liye hota hai."
+        elif lang == "gujarati":
+            answer = "ZeniaOne enterprise AI Voice and Chat Agents platform chhe. Teno upyog AI agents banava, company knowledge mathi jawab aapva, web chat sambhalva ane inbound/outbound voice calls mate thay chhe."
+        else:
+            answer = "ZeniaOne is an enterprise AI Voice and Chat Agents platform. It is used to build AI agents, answer from company knowledge, handle web chats, and run inbound and outbound voice calls."
+        return answer, [{"type": "capabilities", "verified": True, "domain": "product_identity"}]
+
     # Telephony configuration is platform data, not a knowledge-base fact.
     # Answer Exotel-number questions from configured channels without exposing
     # credentials or falling through to the generic document answer.
