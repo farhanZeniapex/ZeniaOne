@@ -163,6 +163,7 @@ async def handle_twilio_gemini_live_session(
     generation = [0]
     user_text: list[str] = []
     ai_text: list[str] = []
+    greeting_turn_pending = [True]
 
     async def save(role: str, text: str) -> None:
         if text.strip():
@@ -251,8 +252,13 @@ async def handle_twilio_gemini_live_session(
                         if len(frame) == 160:
                             queue.put_nowait((generation[0], frame))
             if content.get("turnComplete"):
-                await save("user", "".join(user_text))
-                await save("assistant", "".join(ai_text))
+                if greeting_turn_pending[0]:
+                    # The greeting is stored before the model turn starts;
+                    # Gemini can emit duplicate output transcription for it.
+                    greeting_turn_pending[0] = False
+                else:
+                    await save("user", "".join(user_text))
+                    await save("assistant", "".join(ai_text))
                 user_text.clear()
                 ai_text.clear()
                 output_rate.reset()
@@ -262,6 +268,10 @@ async def handle_twilio_gemini_live_session(
         or (agent.get("greeting_messages") or {}).get(agent.get("default_language", "en-IN"))
         or f"Hello, {company_name} mein aapka swagat hai. Boliye, main aapki kya madad kar sakta hoon?"
     ).strip()
+    # Gemini may return audio for this assistant-initiated turn without
+    # emitting outputTranscription. Persisting it immediately prevents a
+    # real recording from appearing as a zero-message call.
+    await save("assistant", greeting)
     await gemini_ws.send(json.dumps({"clientContent": {
         "turns": [{"role": "user", "parts": [{"text": f"Say exactly this greeting and nothing else: {greeting}"}]}],
         "turnComplete": True,
