@@ -10,7 +10,7 @@ import uuid
 import logging
 
 from core.database import col_channels, col_agents
-from core.exceptions import NotFoundError, ConflictError
+from core.exceptions import NotFoundError, ConflictError, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,10 @@ async def create_channel(company_id: str, data: Dict[str, Any]) -> Dict[str, Any
     # Verify agent exists and belongs to company
     agent_id = data.get("agent_id")
     if not agent_id:
-        raise ValueError("agent_id is required")
+        raise ValidationError("Agent is required for a channel.")
+
+    if not ObjectId.is_valid(str(agent_id)):
+        raise ValidationError("Invalid agent ID.")
         
     agent = await col_agents().find_one({
         "_id": ObjectId(agent_id),
@@ -40,6 +43,15 @@ async def create_channel(company_id: str, data: Dict[str, Any]) -> Dict[str, Any
         })
         if existing:
             raise ConflictError("Phone number is already in use by another active channel.")
+
+    existing_name = await col_channels().find_one({
+        "company_id": company_id,
+        "name": data["name"].strip(),
+        "type": data.get("type", "twilio_voice"),
+        "is_active": True,
+    })
+    if existing_name:
+        raise ConflictError("An active channel with this name and type already exists.")
 
     now = datetime.now(timezone.utc)
     channel_doc = {

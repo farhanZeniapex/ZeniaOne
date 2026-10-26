@@ -1,7 +1,7 @@
 """
 Admin Channels API.
 """
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query, Depends, HTTPException
 from typing import Optional
 from pydantic import BaseModel, Field, field_validator
 from twilio.rest import Client
@@ -101,7 +101,7 @@ async def create_channel(body: CreateChannelRequest):
         try:
             agent = await col_agents().find_one({"_id": ObjectId(body.agent_id), "company_id": body.company_id})
         except Exception as exc:
-            raise ValueError("Invalid agent ID.") from exc
+            raise HTTPException(status_code=400, detail="Invalid agent ID.") from exc
         if not agent:
             raise NotFoundError("Agent")
 
