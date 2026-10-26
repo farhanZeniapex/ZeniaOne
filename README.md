@@ -14,14 +14,6 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
 [![Pinecone](https://img.shields.io/badge/Pinecone-RAG-044F44?style=for-the-badge)](https://www.pinecone.io/)
 
-<p align="center">
-  <a href="#-what-zeniaone-does"><img src="https://img.shields.io/badge/🌟%20PRODUCT-What%20it%20does-0B8063?style=flat-square" alt="What it does" /></a>
-  <a href="#-runtime-routing"><img src="https://img.shields.io/badge/🔀%20ROUTING-Live%20paths-164E63?style=flat-square" alt="Runtime routing" /></a>
-  <a href="#-architecture"><img src="https://img.shields.io/badge/🧠%20ARCHITECTURE-System%20map-1D4ED8?style=flat-square" alt="Architecture" /></a>
-  <a href="#-quick-start"><img src="https://img.shields.io/badge/🚀%20START-Run%20locally-6D28D9?style=flat-square" alt="Quick start" /></a>
-  <a href="#-testing"><img src="https://img.shields.io/badge/🧪%20QUALITY-Test%20suite-B45309?style=flat-square" alt="Testing" /></a>
-</p>
-
 </div>
 
 <p align="center">
@@ -29,13 +21,12 @@
 </p>
 
 <p align="center">
-  <strong>Real-time voice intelligence for every customer conversation.</strong><br/>
-  <sub>Listen clearly · reason with company knowledge · respond naturally · keep every turn observable</sub>
+  <strong>Listen clearly · reason with company knowledge · respond naturally.</strong>
 </p>
 
 <p align="center">
   <a href="https://zeniaone-web.onrender.com/">
-    <img src="https://img.shields.io/badge/🌐%20OPEN%20LIVE%20WEBSITE-zeniaone--web.onrender.com-0B8063?style=for-the-badge" alt="Open live ZeniaOne website" />
+    <img src="https://img.shields.io/badge/🌐%20OPEN%20LIVE%20WEBSITE-Launch-0B8063?style=for-the-badge" alt="Open live ZeniaOne website" />
   </a>
   <a href="https://zeniaone-web.onrender.com/admin">
     <img src="https://img.shields.io/badge/⚙️%20ADMIN%20CONSOLE-Open-164E63?style=for-the-badge" alt="Open ZeniaOne admin console" />
@@ -46,7 +37,11 @@
 </p>
 
 <p align="center">
-  <sub>Hosted production web app · click a button above to open it</sub>
+  <a href="#-what-zeniaone-does"><img src="https://img.shields.io/badge/🌟%20PRODUCT-Overview-0B8063?style=flat-square" alt="Product overview" /></a>
+  <a href="#-runtime-routing"><img src="https://img.shields.io/badge/🔀%20ROUTING-Live%20paths-164E63?style=flat-square" alt="Runtime routing" /></a>
+  <a href="#-architecture"><img src="https://img.shields.io/badge/🧠%20ARCHITECTURE-System%20map-1D4ED8?style=flat-square" alt="Architecture" /></a>
+  <a href="#-quick-start"><img src="https://img.shields.io/badge/🚀%20START-Run%20locally-6D28D9?style=flat-square" alt="Quick start" /></a>
+  <a href="#-testing"><img src="https://img.shields.io/badge/🧪%20QUALITY-Test%20suite-B45309?style=flat-square" alt="Testing" /></a>
 </p>
 
 ---
@@ -72,15 +67,6 @@ The runtime is provider-driven: dashboard selections are stored, but every reque
   <img src="https://img.shields.io/badge/RAG-Tenant%20isolated-164E63?style=flat-square" alt="Tenant isolated RAG" />
   <img src="https://img.shields.io/badge/TTS-Clone%20voice-6D28D9?style=flat-square" alt="Clone voice" />
   <img src="https://img.shields.io/badge/OPS-Observable-F59E0B?style=flat-square" alt="Observable operations" />
-</p>
-
-### Product surface
-
-<p align="center">
-  <img src="https://img.shields.io/badge/01%20Listen-STT%20%2B%20turn%20detection-0F766E?style=for-the-badge" alt="Listen" />
-  <img src="https://img.shields.io/badge/02%20Understand-Gemini%20%2B%20RAG-1D4ED8?style=for-the-badge" alt="Understand" />
-  <img src="https://img.shields.io/badge/03%20Respond-Streaming%20TTS-7C3AED?style=for-the-badge" alt="Respond" />
-  <img src="https://img.shields.io/badge/04%20Observe-Calls%20%2B%20analytics-B45309?style=for-the-badge" alt="Observe" />
 </p>
 
 ## ✅ Core capabilities
