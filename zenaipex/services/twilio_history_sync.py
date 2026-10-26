@@ -96,17 +96,23 @@ async def sync_twilio_history(
                     "is_pinned": False,
                     "title": "Voice Call",
                 }
+                # MongoDB rejects an update when a field appears in both
+                # $setOnInsert and $set (WriteError code 40). Keep immutable
+                # call metadata in the insert document and update only the
+                # provider-owned fields on later reconciliation runs.
+                mutable_fields = {
+                    "provider_status": doc["provider_status"],
+                    "status": doc["status"],
+                    "source_type": "phone_call",
+                    "duration_seconds": doc["duration_seconds"],
+                    "ended_at": doc["ended_at"],
+                }
+                insert_doc = {key: value for key, value in doc.items() if key not in mutable_fields}
                 result = await col_conversations().update_one(
                     {"company_id": doc["company_id"], "call_sid": doc["call_sid"]},
                     {
-                        "$setOnInsert": doc,
-                        "$set": {
-                            "provider_status": doc["provider_status"],
-                            "status": doc["status"],
-                            "source_type": "phone_call",
-                            "duration_seconds": doc["duration_seconds"],
-                            "ended_at": doc["ended_at"],
-                        },
+                        "$setOnInsert": insert_doc,
+                        "$set": mutable_fields,
                     },
                     upsert=True,
                 )
