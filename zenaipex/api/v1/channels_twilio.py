@@ -41,6 +41,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Twilio Webhooks"])
 
 DEFAULT_PHONE_WELCOME = "Hello, thank you for calling ZeniaOne. How may I help you today?"
+_SUPPORTED_SARVAM_SPEAKERS = {
+    "aditya", "ritu", "ashutosh", "priya", "neha", "rahul", "pooja", "rohan",
+    "simran", "kavya", "amit", "dev", "ishita", "shreya", "ratan", "varun",
+    "manan", "sumit", "roopa", "kabir", "aayan", "shubh", "advait", "anand",
+    "tanya", "tarun", "sunny", "mani", "gokul", "vijay", "shruti", "suhani",
+    "mohit", "kavitha", "rehan", "soham", "rupali",
+}
+
+
+def _sarvam_tts_speaker(agent: dict) -> str:
+    """Return a voice supported by the configured Bulbul model.
+
+    Older agent records used ``anushka`` as a default, but that voice is not
+    supported by Bulbul v3. A safe fallback prevents the WebSocket from being
+    closed before the caller hears the greeting.
+    """
+    requested = str(agent.get("tts_voice") or "ritu").strip().lower()
+    if requested.startswith("svc-") or requested in _SUPPORTED_SARVAM_SPEAKERS:
+        return requested
+    logger.warning("[TWILIO_TTS] unsupported_speaker=%s fallback=ritu", requested)
+    return "ritu"
 
 
 def _twilio_external_url(request: Request) -> str:
@@ -410,10 +431,10 @@ async def process_voice_turn(websocket: WebSocket, stream_sid: str, session: dic
         
         # We use standard Sarvam TTS for this integration
         from modules.sarvam_tts import SarvamRealtimeTTS
-        speaker = session["agent_config"].get("tts_voice", "anushka")
-        
+        speaker = _sarvam_tts_speaker(session["agent_config"])
+
         if not session.get("tts_client"):
-            session["tts_client"] = SarvamRealtimeTTS(language_code=session["language"], speaker=speaker)
+            session["tts_client"] = SarvamRealtimeTTS(language=session["language"], speaker=speaker)
             await session["tts_client"].connect()
             
         tts = session["tts_client"]
@@ -780,8 +801,8 @@ async def media_stream_websocket(websocket: WebSocket):
                 session["is_speaking"] = True
                 
                 # We use Sarvam TTS directly for the greeting
-                speaker = agent.get("tts_voice", "anushka")
-                session["tts_client"] = SarvamRealtimeTTS(language_code=session["language"], speaker=speaker)
+                speaker = _sarvam_tts_speaker(agent)
+                session["tts_client"] = SarvamRealtimeTTS(language=session["language"], speaker=speaker)
                 await session["tts_client"].connect()
                 
                 normalized_greeting = normalize_text_for_tts(greeting, session["language"])
