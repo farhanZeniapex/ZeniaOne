@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     app_secret_key: str = Field(default="")
     sentry_dsn: str = Field(default="")
     sentry_traces_sample_rate: float = Field(default=0.1, ge=0.0, le=1.0)
+    atlas_backup_verified: bool = Field(default=False, description="Operator-confirmed Atlas backup/PITR readiness")
+    staging_base_url: str = Field(default="", description="Isolated staging API base URL")
+    uptime_monitor_url: str = Field(default="", description="External uptime monitor URL")
 
     # ── MongoDB ────────────────────────────────────────────────────────────────
     mongodb_uri: str = Field(default="")

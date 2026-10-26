@@ -15,6 +15,24 @@ router = APIRouter(tags=["Live Monitoring"])
 _monitoring_tickets: dict[str, float] = {}
 
 
+def configuration_gaps() -> list[dict]:
+    """Return safe, explicit production-readiness gaps without exposing secrets."""
+    gaps = []
+    if not settings.atlas_backup_verified:
+        gaps.append({"code": "atlas_backup_not_verified", "severity": "warning", "action": "Enable and verify Atlas backup/PITR."})
+    if not settings.staging_base_url:
+        gaps.append({"code": "staging_not_configured", "severity": "warning", "action": "Provision an isolated staging service and database."})
+    if not settings.uptime_monitor_url:
+        gaps.append({"code": "uptime_monitor_not_configured", "severity": "info", "action": "Configure an external uptime monitor."})
+    if not settings.sentry_dsn:
+        gaps.append({"code": "sentry_not_configured", "severity": "info", "action": "Configure Sentry for error tracking."})
+    if not settings.redis_url:
+        gaps.append({"code": "redis_not_configured", "severity": "info", "action": "Configure shared Redis for multi-instance rate limits and cache."})
+    if settings.exotel_api_key and not settings.exotel_webhook_secret:
+        gaps.append({"code": "exotel_webhook_secret_missing", "severity": "warning", "action": "Set EXOTEL_WEBHOOK_SECRET before live Exotel traffic."})
+    return gaps
+
+
 def _build_monitoring_alerts(
     queue_counts: dict,
     recent_failures: int,
@@ -63,6 +81,7 @@ async def monitoring_summary(_: dict = Depends(get_platform_admin)):
     }
     db_mode = get_db_mode()
     alerts = _build_monitoring_alerts(queue_counts, recent_failures, providers, scheduled_counts)
+    readiness_gaps = configuration_gaps()
     return {
         "generated_at": now,
         "database": {
@@ -75,6 +94,10 @@ async def monitoring_summary(_: dict = Depends(get_platform_admin)):
         "ai_failures_last_24h": recent_failures,
         "providers": providers,
         "alerts": alerts,
+        "production_readiness": {
+            "status": "ready" if not readiness_gaps else "attention_required",
+            "configuration_gaps": readiness_gaps,
+        },
         "integrations": {
             "sentry_configured": bool(settings.sentry_dsn),
             "redis_configured": bool(settings.redis_url),

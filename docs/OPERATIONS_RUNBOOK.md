@@ -10,6 +10,7 @@
 - `REDIS_URL` is optional, but should be configured for shared rate-limit counters and provider-cache snapshots when multiple instances run.
 - `BILLING_WEBHOOK_SECRET` is optional; when blank, the payment webhook fails closed with `503`.
 - `SENTRY_DSN` is optional; when configured, unhandled errors and traces are sent without default PII.
+- `ATLAS_BACKUP_VERIFIED=true` should only be set after Atlas backup/PITR and a restore drill are verified. `STAGING_BASE_URL` and `UPTIME_MONITOR_URL` make those operational gates visible in the admin monitoring summary.
 
 ## Release verification
 
