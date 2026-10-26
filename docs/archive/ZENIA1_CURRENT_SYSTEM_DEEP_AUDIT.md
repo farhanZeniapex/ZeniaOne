@@ -209,6 +209,6 @@ Before implementation, verify carrier applet webhook/WSS configuration, a real i
 
 **E. Safe future upgrade readiness:** The existing FastAPI router boundary and per-company Pinecone namespace make a parallel adapter feasible. Correct and test tenant identity, call lifecycle, audio contract, and accounting first. Preserve the old route during staged validation.
 
-**F. Complete audit report:** This file is `ZENIA1_CURRENT_SYSTEM_DEEP_AUDIT.md` in the repository root. It is the only artifact created by this audit.
+**F. Complete audit report:** This file is `docs/archive/ZENIA1_CURRENT_SYSTEM_DEEP_AUDIT.md`. It is the only artifact created by this audit.
 
 **G. Verdict: PARTIALLY.** The inspected code is understood well enough to **plan** future upgrades and identify integration seams, based on the concrete route and function chains above. It is not yet understood deeply enough to guarantee a safe implementation because the external Exotel route, production state, audio contract, and cross-tenant behavior remain unverified. Understanding alone does not guarantee safe implementation.
