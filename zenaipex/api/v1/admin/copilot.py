@@ -5,6 +5,7 @@ from calendar import monthrange
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
+from zoneinfo import ZoneInfo
 
 from bson import ObjectId
 from fastapi import APIRouter
@@ -25,6 +26,7 @@ from services.conversation_service import add_message, create_conversation, get_
 from ai.language_detector import detect_language
 
 router = APIRouter(prefix="/copilot", tags=["Admin Copilot"])
+BUSINESS_TIMEZONE = ZoneInfo("Asia/Kolkata")
 
 
 class CopilotRequest(BaseModel):
@@ -35,7 +37,10 @@ class CopilotRequest(BaseModel):
 
 
 def _period(question: str) -> tuple[datetime, datetime, str]:
-    now = datetime.now(timezone.utc)
+    # User-facing calendar periods follow the platform's business timezone.
+    # MongoDB stores UTC timestamps, and MongoDB compares aware datetimes by
+    # instant, so local midnight boundaries remain safe for indexed queries.
+    now = datetime.now(BUSINESS_TIMEZONE)
     q = question.lower()
     # Explicit calendar month questions must not fall back to rolling 30 days.
     month_aliases = {
@@ -473,7 +478,18 @@ async def _admin_live_snapshot(start: datetime, end: datetime, label: str, compa
     latency = latency_rows[0] if latency_rows else {}
     companies = await col_companies().find({}, {"name": 1}).to_list(length=500)
     company_names = [str(item.get("name")) for item in companies if item.get("name")]
-    activities = await col_activity_logs().find({"action": {"$nin": ["test_chat_started"]}}, {"action": 1, "target": 1, "details": 1, "created_at": 1}).sort("created_at", -1).limit(8).to_list(length=8)
+    activities = await col_activity_logs().find({
+        **_date_filter("created_at", start, end),
+        "action": {"$nin": ["test_chat_started"]},
+    }, {"action": 1, "target": 1, "details": 1, "created_at": 1}).sort("created_at", -1).limit(8).to_list(length=8)
+    channels = await col_channels().find({
+        **company_filter,
+        **_date_filter("created_at", start, end),
+    }, {"name": 1, "type": 1, "phone_number": 1, "created_at": 1}).sort("created_at", -1).limit(100).to_list(length=100)
+    channel_lines = [
+        f"{item.get('name', 'Unnamed')} ({item.get('type', 'unknown')})"
+        for item in channels
+    ]
     activity_lines = []
     for item in activities:
         created = item.get("created_at")
@@ -486,6 +502,7 @@ async def _admin_live_snapshot(start: datetime, end: datetime, label: str, compa
         f"Real customer calls: {calls_count}; average recorded LLM latency_ms: {round(float(latency.get('avg_latency', 0) or 0), 1)}; max recorded latency_ms: {round(float(latency.get('max_latency', 0) or 0), 1)}",
         f"Companies: {', '.join(company_names) if company_names else 'No company records found'}",
         f"Knowledge documents failed: {len(failed_docs)}; processing: {len(processing_docs)}",
+        f"Channels created in selected period: {', '.join(channel_lines) if channel_lines else 'None recorded'}",
         f"Failed document names: {', '.join(str(name) for name in failed_docs[:20] if name) or 'None'}",
         "Recent non-test activity:",
         *(activity_lines or ["None recorded"]),
@@ -697,6 +714,22 @@ async def _answer(
     call_conv = {**base_conv, "source_type": {"$in": ["phone_call", "voice_chat"]}}
     base_llm = _platform_llm_scope(company_filter, start, end)
     sources = [{"type": "period", "label": label, "verified": True, "scope": plan["company"], "domain": plan["domain"]}]
+
+    # Provider calls can exist before a webhook creates the local shell. Sync
+    # before any live call/date answer so the copilot never reports a stale
+    # MongoDB-only snapshot. This is idempotent and preserves transcripts.
+    live_data_question = has_call_term or any(term in q for term in (
+        "live", "latest", "today", "aaj", "yesterday", "kal", "channel",
+        "chanal", "created", "bana", "hua", "activity", "what happened",
+    ))
+    if live_data_question:
+        try:
+            from services.twilio_history_sync import sync_twilio_history
+            sync_result = await sync_twilio_history(company_id=company_filter.get("company_id"))
+            sources.append({"type": "twilio_sync", "verified": True, **sync_result})
+        except Exception as exc:
+            # Never fabricate a number when the provider is unavailable.
+            sources.append({"type": "twilio_sync", "verified": False, "error": type(exc).__name__})
     if matched_company:
         scope = f" for {matched_company}"
     elif lang == "hindi":
@@ -710,6 +743,24 @@ async def _answer(
     # knowledge fallback. Keep the refusal deterministic and non-leaky.
     if _is_secret_request(question):
         return _secret_refusal(lang, script), [{"type": "security_refusal", "verified": True}]
+
+    # Channel creation is a first-class live data query, not a knowledge-base
+    # question. Return exact records for the requested calendar period.
+    if "channel" in q or "chanal" in q:
+        channel_rows = await col_channels().find({
+            **company_filter,
+            **_date_filter("created_at", start, end),
+        }, {"name": 1, "type": 1, "phone_number": 1, "created_at": 1, "is_active": 1}).sort("created_at", -1).to_list(length=100)
+        if not channel_rows:
+            return f"No channels were created during {label} in the verified platform data.", [{"type": "channels", "period": label, "verified": True}]
+        lines = [f"Channels created during {label}: {len(channel_rows):,}."]
+        for row in channel_rows:
+            created = row.get("created_at")
+            when = created.astimezone(BUSINESS_TIMEZONE).strftime("%d %b %Y, %I:%M %p IST") if created else "unknown time"
+            phone = str(row.get("phone_number") or "")
+            masked = f"…{phone[-4:]}" if len(phone) > 4 else phone
+            lines.append(f"{row.get('name', 'Unnamed')} · {row.get('type', 'unknown')} · {when} · {masked or 'no number'}")
+        return "\n".join(lines), [{"type": "channels", "period": label, "verified": True}]
 
     verified_details = await _verified_company_details_answer(
         question,
