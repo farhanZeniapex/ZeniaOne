@@ -91,34 +91,63 @@ async def list_conversations(
     
     formatted_convs = []
     from core.database import col_messages
+
+    # Do not issue three MongoDB queries per conversation. Chat History asks
+    # for up to 150 rows; the old N+1 loop could therefore make 450 serial
+    # round trips and leave the page loading for minutes on Render. Fetch the
+    # message metadata in two bounded aggregations instead.
+    conversation_ids = [str(c["_id"]) for c in convs]
+    message_stats: dict[str, dict] = {}
+    first_user_messages: dict[str, dict] = {}
+    if conversation_ids:
+        stats_cursor = col_messages().aggregate([
+            {"$match": {
+                "company_id": company_id,
+                "conversation_id": {"$in": conversation_ids},
+            }},
+            {"$sort": {"timestamp": 1}},
+            {"$group": {
+                "_id": "$conversation_id",
+                "count": {"$sum": 1},
+                "first": {"$first": "$timestamp"},
+                "last": {"$last": "$timestamp"},
+                "last_text": {"$last": {"$ifNull": ["$text", {"$ifNull": ["$content", ""]}]}},
+            }},
+        ])
+        async for row in stats_cursor:
+            message_stats[str(row["_id"])] = row
+
+        first_user_cursor = col_messages().aggregate([
+            {"$match": {
+                "company_id": company_id,
+                "conversation_id": {"$in": conversation_ids},
+                "role": "user",
+            }},
+            {"$sort": {"timestamp": 1}},
+            {"$group": {
+                "_id": "$conversation_id",
+                "text": {"$first": {"$ifNull": ["$text", {"$ifNull": ["$content", ""]}]}},
+            }},
+        ])
+        async for row in first_user_cursor:
+            first_user_messages[str(row["_id"])] = row
+
     for c in convs:
+        conversation_id = str(c["_id"])
         fmt = _fmt_conv(c)
-        
-        # Fetch first and last message for metadata and title
-        first_msg = await col_messages().find_one(
-            {"conversation_id": str(c["_id"]), "role": "user"},
-            sort=[("timestamp", 1)]
-        )
-        last_msg = await col_messages().find_one(
-            {"conversation_id": str(c["_id"])},
-            sort=[("timestamp", -1)]
-        )
-        
-        msg_count = await col_messages().count_documents({"conversation_id": str(c["_id"])})
-        fmt["message_count"] = msg_count
-        
-        if first_msg:
-            fmt["first_message_at"] = first_msg.get("timestamp")
-        if last_msg:
-            fmt["last_message_at"] = last_msg.get("timestamp")
-            
+        stats = message_stats.get(conversation_id, {})
+        first_msg = first_user_messages.get(conversation_id)
+        fmt["message_count"] = int(stats.get("count", 0) or 0)
+        if stats.get("first"):
+            fmt["first_message_at"] = stats["first"]
+        if stats.get("last"):
+            fmt["last_message_at"] = stats["last"]
+
         if fmt["direction"] == "test-chat" or fmt["direction"] == "inbound":
-            # Use existing title if available, otherwise fallback to first user message text
-            first_text = first_msg.get("text") or first_msg.get("content") or "New Chat" if first_msg else "New Chat"
-            fmt["title"] = c.get("title") or first_text
-            last_text = last_msg.get("text") or last_msg.get("content", "") if last_msg else ""
-            fmt["last_message"] = last_text
-            
+            # Use existing title when available, otherwise use the first user message.
+            fmt["title"] = c.get("title") or (first_msg or {}).get("text") or "New Chat"
+            fmt["last_message"] = stats.get("last_text", "") or ""
+
         formatted_convs.append(fmt)
 
     return {"conversations": formatted_convs, "count": len(convs)}
