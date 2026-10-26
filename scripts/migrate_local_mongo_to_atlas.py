@@ -168,7 +168,14 @@ local_platform = local.platform_settings.find_one({"type": "global"})
 if local_platform:
     platform = deepcopy(local_platform)
     platform["platform"] = copy_logo(platform.get("platform"), "logo_path", "platform")
-    atlas.platform_settings.replace_one({"type": "global"}, platform, upsert=True)
+    # Keep the existing Atlas document identity. Replacing a global settings
+    # document with the local _id causes MongoDB's immutable _id constraint to
+    # fail when both databases already contain a global settings row.
+    atlas.platform_settings.update_one(
+        {"type": "global"},
+        {"$set": {key: value for key, value in platform.items() if key != "_id"}},
+        upsert=True,
+    )
 
 
 counts = {}
