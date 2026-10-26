@@ -336,6 +336,15 @@ async def refresh_access_token(refresh_token: str) -> Dict[str, str]:
     return {"access_token": new_access_token}
 
 
+async def revoke_all_sessions(user_id: str) -> bool:
+    """Revoke every refresh session for a user using the session-version gate."""
+    result = await col_users().update_one(
+        {"_id": ObjectId(user_id)},
+        {"$inc": {"session_version": 1}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+    )
+    return result.modified_count > 0
+
+
 async def verify_email(token: str) -> bool:
     """
     Mark user's email as verified using the email verification token.

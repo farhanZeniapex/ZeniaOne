@@ -134,6 +134,13 @@ async def refresh_token(body: RefreshTokenRequest):
     }
 
 
+@router.post("/logout", summary="Revoke all refresh sessions")
+async def logout(user: dict = Depends(get_current_user)):
+    """Invalidate refresh tokens issued before this logout."""
+    await auth_service.revoke_all_sessions(str(user["_id"]))
+    return {"success": True, "message": "All refresh sessions have been revoked."}
+
+
 @router.post("/verify-email", summary="Verify email address")
 async def verify_email(token: str):
     """Verify email with the token sent in the verification email."""
