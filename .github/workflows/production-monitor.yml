@@ -2,7 +2,10 @@ name: ZeniaOne Production Monitor
 
 on:
   schedule:
-    - cron: "17 * * * *"
+    # Keep the Render backend warm and verify availability every ten minutes.
+    # GitHub may delay scheduled jobs under load; a paid Render instance is
+    # still the reliable production solution because it does not sleep.
+    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 permissions:
