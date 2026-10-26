@@ -112,7 +112,7 @@ export default function AgentsPage() {
           enabled: voice.status !== "archived",
           description: voice.description || "Custom cloned voice for this workspace.",
           tone: voice.tone || "Cloned voice",
-          sampleText: "Namaste, main aapke business ki custom AI voice hoon. Main aapki kaise madad kar sakti hoon?",
+          sampleText: "Hello, I am your business's custom AI voice assistant. How can I help you?",
           supportedLanguages: ["Hindi", "Hinglish", "English"],
           accent: "Custom clone",
         })));

@@ -952,7 +952,7 @@ async def voice_preview(
     Lightweight TTS preview endpoint for listening to voice samples in the UI.
     """
     speaker = (body.get("voice") or "ritu").strip().lower()
-    text = (body.get("text") or "Hello! Main aapki ZeniaOne voice assistant hoon. Aap mujhse koi bhi sawal pooch sakte hain.").strip()
+    text = (body.get("text") or "Hello! I am your ZeniaOne voice assistant. Ask me any question.").strip()
     lang = (body.get("language") or "hi-IN").strip()
 
     from modules.sarvam_tts import realtime_tts

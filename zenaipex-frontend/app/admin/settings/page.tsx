@@ -75,7 +75,7 @@ export default function AdminSettingsPage() {
     try {
       setSettings(await getAdminSettings());
     } catch {
-      setNotice("Settings load nahi hui. Refresh karke try karein.");
+      setNotice("Settings could not be loaded. Please refresh and try again.");
     } finally {
       setLoading(false);
     }
@@ -92,9 +92,9 @@ export default function AdminSettingsPage() {
     try {
       const next = await updateAdminSettings({ [section]: settings[section] });
       setSettings(next);
-      setNotice(`${section.replace("_", " ")} settings save ho gayi.`);
+      setNotice(`${section.replace("_", " ")} settings saved successfully.`);
     } catch (error: any) {
-      setNotice(error?.message || "Settings save nahi ho saki.");
+      setNotice(error?.message || "Settings could not be saved.");
     } finally {
       setSaving(null);
     }
@@ -127,8 +127,7 @@ export default function AdminSettingsPage() {
               Settings
             </h1>
             <p className="mt-3 max-w-xl text-sm leading-6 text-[#C7DBCF]">
-              Security, notifications, AI defaults aur maintenance behavior ek
-              secure control center se manage karein.
+              Manage security, notifications, AI defaults, and maintenance behavior from one secure control center.
             </p>
           </div>
           <div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-3">
@@ -184,8 +183,7 @@ export default function AdminSettingsPage() {
               <div>
                 <p className="font-bold text-[#214333]">Live AI routing</p>
                 <p className="mt-1 text-sm text-[#527764]">
-                  Phone, Voice Chat aur website ke actual Gemini, Groq, STT aur
-                  TTS flow yahan nahi, AI Providers me control hote hain.
+                  Actual Gemini, Groq, STT, and TTS routing for phone, voice chat, and website experiences is managed in AI Providers.
                 </p>
               </div>
             </div>
@@ -424,7 +422,7 @@ function WorkspaceSettings() {
       companySettingsApi
         .getCompany(companyId)
         .then(setCompany)
-        .catch(() => setNotice("Workspace settings load nahi hui."));
+        .catch(() => setNotice("Workspace settings could not be loaded."));
   }, [companyId]);
   const update = async (updates: Partial<CompanyProfile>, message: string) => {
     if (!companyId || !company) return;
@@ -434,7 +432,7 @@ function WorkspaceSettings() {
       setCompany(result);
       setNotice(message);
     } catch (error: any) {
-      setNotice(error?.message || "Workspace settings save nahi hui.");
+      setNotice(error?.message || "Workspace settings could not be saved.");
     } finally {
       setSaving(false);
     }
@@ -458,7 +456,7 @@ function WorkspaceSettings() {
           business_description: String(form.get("business_description") || ""),
         },
       },
-      "Business profile save ho gaya.",
+      "Business profile saved successfully.",
     );
   };
   const saveHours = (event: React.FormEvent<HTMLFormElement>) => {
@@ -478,7 +476,7 @@ function WorkspaceSettings() {
           default_voice: String(form.get("default_voice") || "ritu"),
         },
       },
-      "Business hours aur agent defaults save ho gaye.",
+      "Business hours and agent defaults saved successfully.",
     );
   };
   const uploadLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -488,9 +486,9 @@ function WorkspaceSettings() {
     try {
       await companySettingsApi.uploadCompanyLogo(companyId, file);
       setCompany(await companySettingsApi.getCompany(companyId));
-      setNotice("Workspace logo update ho gaya.");
+      setNotice("Workspace logo updated successfully.");
     } catch (error: any) {
-      setNotice(error?.message || "Logo upload nahi hua.");
+      setNotice(error?.message || "Logo could not be uploaded.");
     } finally {
       setUploading(false);
       event.target.value = "";
@@ -502,9 +500,9 @@ function WorkspaceSettings() {
     try {
       await companySettingsApi.removeCompanyLogo(companyId);
       setCompany(await companySettingsApi.getCompany(companyId));
-      setNotice("Workspace logo remove ho gaya.");
+      setNotice("Workspace logo removed successfully.");
     } catch {
-      setNotice("Logo remove nahi hua.");
+      setNotice("Logo could not be removed.");
     } finally {
       setUploading(false);
     }
@@ -513,7 +511,7 @@ function WorkspaceSettings() {
     return (
       <Card className="border-[#D9E7DD]">
         <CardContent className="p-6 text-sm text-slate-500">
-          Workspace settings load ho rahi hain…
+          Loading workspace settings…
         </CardContent>
       </Card>
     );
@@ -527,7 +525,7 @@ function WorkspaceSettings() {
           Workspace & customer experience
         </h2>
         <p className="mt-1 text-sm text-slate-500">
-          Yeh data website, customer chat aur agent context me use hota hai.
+          This information is used by the website, customer chat, and agent context.
         </p>
       </div>
       {notice && (

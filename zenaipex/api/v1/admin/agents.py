@@ -86,7 +86,7 @@ async def admin_preview_voice(body: AdminVoicePreviewRequest):
     from core.database import col_custom_voices
 
     voice_id = body.voice
-    text = body.text or f"Namaste! Main {voice_id.capitalize()} hoon. Yeh aapka voice sample hai."
+    text = body.text or f"Hello! I am {voice_id.capitalize()}. This is your voice sample."
     lang = body.language or "en-IN"
     speed = body.speed
     volume = body.volume

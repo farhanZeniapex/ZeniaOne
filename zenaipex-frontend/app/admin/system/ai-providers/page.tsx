@@ -571,7 +571,7 @@ export default function AIProvidersPage() {
             <div>
               <p className="font-bold">Provider attention required</p>
               <p className="mt-1 text-xs leading-5">
-                Connection, quota, authentication ya model issue detect hua hai.
+                A connection, quota, authentication, or model issue was detected.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 {Object.entries(providerHealth)

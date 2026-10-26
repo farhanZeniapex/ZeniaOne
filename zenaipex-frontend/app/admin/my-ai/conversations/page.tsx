@@ -284,7 +284,7 @@ function AdvancedHistoryPageContent() {
   }, [filteredChats, viewArchived]);
 
   if (compLoading || loading) return <HistoryLoadingState />;
-  if (!companyId) return <div className="mx-auto grid min-h-[50vh] max-w-lg place-items-center text-center"><div><MessageSquare className="mx-auto h-10 w-10 text-[#74A887]"/><h1 className="mt-4 text-xl font-bold text-[#1C3A2D]">Choose a workspace first</h1><p className="mt-2 text-sm text-slate-500">Chat history load karne ke liye active company select karein.</p></div></div>;
+  if (!companyId) return <div className="mx-auto grid min-h-[50vh] max-w-lg place-items-center text-center"><div><MessageSquare className="mx-auto h-10 w-10 text-[#74A887]"/><h1 className="mt-4 text-xl font-bold text-[#1C3A2D]">Choose a workspace first</h1><p className="mt-2 text-sm text-slate-500">Select an active workspace to load chat history.</p></div></div>;
 
   const selectedChat = allConversations.find(c => c.id === selectedChatId);
 

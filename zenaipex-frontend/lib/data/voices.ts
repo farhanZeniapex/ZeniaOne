@@ -21,7 +21,7 @@ export const VOICES: Voice[] = [
     enabled: true,
     description: "Warm, natural, and friendly. Ideal for customer support and general assistance.",
     tone: "Warm & Friendly",
-    sampleText: "Namaste! Main Ritu hoon. Main aapki customer service aur sawalo me madad karne ke liye taiyaar hoon.",
+    sampleText: "Hello! I am Ritu. I am ready to help with customer service and questions.",
     supportedLanguages: ["Hinglish", "Hindi", "English"],
     accent: "Indian Natural"
   },
@@ -33,7 +33,7 @@ export const VOICES: Voice[] = [
     enabled: true,
     description: "Polished and conversational. Perfect for professional business calls and reception.",
     tone: "Professional & Smooth",
-    sampleText: "Hello! Main Priya hoon. Aapke business aur clients ke liye main seamlessly baat kar sakti hoon.",
+    sampleText: "Hello! I am Priya. I can speak naturally with your business customers and clients.",
     supportedLanguages: ["Hinglish", "Hindi", "English"],
     accent: "Indian Corporate"
   },
@@ -45,7 +45,7 @@ export const VOICES: Voice[] = [
     enabled: true,
     description: "Soft, patient, and empathetic. Excellent for healthcare, counseling, and delicate inquiries.",
     tone: "Soft & Empathetic",
-    sampleText: "Namaste! Main Neha hoon. Kahiye, aaj main aapki kya help kar sakti hoon? Main poori madad karungi.",
+    sampleText: "Hello! I am Neha. How can I help you today? I am here to assist.",
     supportedLanguages: ["Hinglish", "Hindi", "English"],
     accent: "Gentle Indian"
   },
@@ -57,7 +57,7 @@ export const VOICES: Voice[] = [
     enabled: true,
     description: "High energy, enthusiastic, and upbeat. Great for sales, outreach, and promotions.",
     tone: "Energetic & Upbeat",
-    sampleText: "Hi there! Main Pooja hoon. Ekdum fast aur accurate solutions ke liye aap mujhse jud sakte hain!",
+    sampleText: "Hi there! I am Pooja. I can help you find fast and accurate solutions.",
     supportedLanguages: ["Hinglish", "Hindi", "English"],
     accent: "Dynamic Indian"
   },
@@ -69,7 +69,7 @@ export const VOICES: Voice[] = [
     enabled: true,
     description: "Modern, expressive, and relatable. Great for e-commerce, consumer apps, and tech.",
     tone: "Modern & Expressive",
-    sampleText: "Hello! Main Shreya hoon. Aapki company ki smart voice assistant banne ke liye bilkul taiyaar hoon.",
+    sampleText: "Hello! I am Shreya. I am ready to become your company's smart voice assistant.",
     supportedLanguages: ["Hinglish", "Hindi", "English"],
     accent: "Urban Indian"
   },
@@ -81,7 +81,7 @@ export const VOICES: Voice[] = [
     enabled: true,
     description: "Calm, polite, and reassuring. Well-suited for banking, billing, and advisory.",
     tone: "Polite & Reassuring",
-    sampleText: "Namaste, main Kavya hoon. Har call aur customer interaction ko helpful aur aasan banana mera kaam hai.",
+    sampleText: "Hello, I am Kavya. I make every call and customer interaction helpful and effortless.",
     supportedLanguages: ["Hinglish", "Hindi", "English"],
     accent: "Classic Indian"
   },
@@ -95,7 +95,7 @@ export const VOICES: Voice[] = [
     enabled: true,
     description: "Friendly, casual, and approachable. Outstanding for tech support and everyday chat.",
     tone: "Friendly & Casual",
-    sampleText: "Namaste! Main Rahul hoon. Bataiye, aaj hum kis sawal ya service par baat karein?",
+    sampleText: "Hello! I am Rahul. What question or service would you like to discuss today?",
     supportedLanguages: ["Hinglish", "Hindi", "English"],
     accent: "Conversational Indian"
   },
@@ -107,7 +107,7 @@ export const VOICES: Voice[] = [
     enabled: true,
     description: "Dynamic, quick-witted, and vibrant. Great for sales calls, bookings, and onboarding.",
     tone: "Dynamic & Fast",
-    sampleText: "Hello! Main Rohan hoon. Sales aur quick support ke liye main ready hoon. Kahiye kya madad karun?",
+    sampleText: "Hello! I am Rohan. I am ready to help with sales and customer support.",
     supportedLanguages: ["Hinglish", "Hindi", "English"],
     accent: "Young Professional"
   },
@@ -119,7 +119,7 @@ export const VOICES: Voice[] = [
     enabled: true,
     description: "Crisp, articulated, and clear. Ideal for corporate operations and formal consultations.",
     tone: "Crisp & Articulated",
-    sampleText: "Namaste, main Aditya hoon. Main aapke business operations aur customer queries ko accurately guide karunga.",
+    sampleText: "Hello, I am Aditya. I can guide your business operations and answer customer questions accurately.",
     supportedLanguages: ["Hinglish", "Hindi", "English"],
     accent: "Corporate Indian"
   },
@@ -131,7 +131,7 @@ export const VOICES: Voice[] = [
     enabled: true,
     description: "Deep, confident, and authoritative. Excellent for legal, finance, and leadership updates.",
     tone: "Deep & Confident",
-    sampleText: "Hello! Main Kabir hoon. Clear communication aur reliable answers ke liye aap mujh par bharosa kar sakte hain.",
+    sampleText: "Hello! I am Kabir. You can rely on me for clear communication and dependable answers.",
     supportedLanguages: ["Hinglish", "Hindi", "English"],
     accent: "Deep Indian"
   },
@@ -143,7 +143,7 @@ export const VOICES: Voice[] = [
     enabled: true,
     description: "Experienced, steady, and trustworthy. Perfect for B2B relationships and enterprise clients.",
     tone: "Steady & Trustworthy",
-    sampleText: "Namaste! Main Amit hoon. Professional discussions aur business support ke liye main hamesha available hoon.",
+    sampleText: "Hello! I am Amit. I am available for professional discussions and business support.",
     supportedLanguages: ["Hinglish", "Hindi", "English"],
     accent: "Executive Indian"
   }

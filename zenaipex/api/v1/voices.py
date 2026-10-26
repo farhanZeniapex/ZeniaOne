@@ -312,13 +312,13 @@ def analyze_audio_quality(raw_audio_bytes: bytes, target_sr: int = 16000) -> Dic
     # 1. Volume / Level Check
     volume_pct = int(min(100, max(0, (rms / 0.22) * 100)))
     if rms < 0.025:
-        issues.append("🔊 Volume Too Low: Aawaz bahut dheemi hai, mic ke kareeb hokar bolein.")
+        issues.append("🔊 Volume Too Low: The recording is too quiet. Move closer to the microphone and speak clearly.")
     elif peak > 0.96:
-        issues.append("⚡ Mic Clipping / Distortion: Aawaz phat rahi hai (clipping), mic gain kam karein.")
+        issues.append("⚡ Mic Clipping / Distortion: The recording is clipping. Reduce microphone gain and record again.")
 
     # 2. Duration Check
     if duration_sec < 4.0:
-        issues.append(f"⏱️ Audio Too Short ({duration_sec}s): AI cloning ke liye kam se kam 10-15 seconds recommended hai.")
+        issues.append(f"⏱️ Audio Too Short ({duration_sec}s): At least 10–15 seconds is recommended for voice cloning.")
 
     # 3. Noise Floor / SNR estimation via frame energy
     frame_len = int(target_sr * 0.02)
@@ -332,9 +332,9 @@ def analyze_audio_quality(raw_audio_bytes: bytes, target_sr: int = 16000) -> Dic
         snr_db = 20.0
 
     if snr_db < 15.0:
-        issues.append("🌬️ Background Noise: Fan, AC ya aas-paas ka shor zyada hai.")
+        issues.append("🌬️ Background Noise: Too much ambient noise was detected. Move to a quieter environment.")
     elif snr_db < 22.0:
-        issues.append("Halka Ambient Hiss: Halka background hiss sound detect hua hai.")
+        issues.append("Light Ambient Hiss: A light background hiss was detected.")
 
     # 4. Echo / Double Voice detection via autocorrelation
     if len(samples) > target_sr:
@@ -348,7 +348,7 @@ def analyze_audio_quality(raw_audio_bytes: bytes, target_sr: int = 16000) -> Dic
         if max_lag < len(corr):
             echo_peak = float(np.max(corr[min_lag:max_lag]))
             if echo_peak > 0.52:
-                issues.append("📢 Double Voice / Room Echo: Aawaz goonj rahi hai ya room reverberation hai.")
+                issues.append("📢 Double Voice / Room Echo: Echo or room reverberation was detected. Record in a more acoustically controlled space.")
 
     # Compute score (100 base)
     score = 96
@@ -364,13 +364,13 @@ def analyze_audio_quality(raw_audio_bytes: bytes, target_sr: int = 16000) -> Dic
 
     if score >= 85:
         status = "Studio Grade 🟢"
-        recommendation = "Audio quality bilkul perfect hai! AI natural aur crystal clear bolegi."
+        recommendation = "Audio quality is excellent. The generated voice should sound natural and clear."
     elif score >= 68:
         status = "Good / Acceptable 🟡"
-        recommendation = "Audio theek hai. Background noise kam karne se aur accha output aayega."
+        recommendation = "Audio quality is acceptable. Reducing background noise will improve the result."
     else:
         status = "Needs Attention ⚠️"
-        recommendation = "Audio quality low hai. Fan/AC band karein aur mic ke kareeb hokar clear aawaz me bolein."
+        recommendation = "Audio quality is low. Reduce background noise, move closer to the microphone, and speak clearly."
 
     return {
         "quality_score": score,

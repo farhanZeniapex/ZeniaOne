@@ -78,7 +78,7 @@ const VOICE_RUNTIME_MODES = [
     shortLabel: "Gemini + Clone",
     label: "Gemini Live STT + Gemini Brain + Clone Voice",
     detail:
-      "Gemini samjhega, Google Gemini answer banayega, aur selected clone voice bolegi.",
+      "Gemini interprets the request, Google Gemini generates the answer, and the selected cloned voice speaks it.",
     badge: "Recommended",
     tone: "blue",
   },
@@ -87,7 +87,7 @@ const VOICE_RUNTIME_MODES = [
     shortLabel: "Classic Pipeline",
     label: "Deepgram STT + Groq + Selected Voice",
     detail:
-      "Purana stable voice flow; configured provider routing ke fallbacks use karega.",
+      "The stable voice flow uses the configured provider-routing fallbacks.",
     badge: "Stable fallback",
     tone: "emerald",
   },
@@ -96,7 +96,7 @@ const VOICE_RUNTIME_MODES = [
     shortLabel: "Gemini Live S2S",
     label: "Gemini Native Voice-to-Voice",
     detail:
-      "Sabse fast native Gemini audio; selected clone voice is mode mein use nahi hoti.",
+      "The fastest native Gemini audio mode; the selected cloned voice is not used here.",
     badge: "Fast demo",
     tone: "violet",
   },
@@ -302,7 +302,7 @@ export default function AdminAgentsPage() {
         provider: "Sarvam Cloned",
         enabled: true,
         sampleText:
-          cv.sample_text || "Namaste! Yeh meri cloned aawaz ka sample hai.",
+          cv.sample_text || "Hello! This is a sample of my cloned voice.",
         isCustom: true,
         tone: "Cloned Voice",
         description: cv.description || "Custom cloned voice",
@@ -3275,8 +3275,7 @@ export default function AdminAgentsPage() {
                       Phone Voice Runtime
                     </label>
                     <p className="mt-1 text-[11px] text-slate-500">
-                      Ek hi mode active rahega; nayi calls par selected flow
-                      apply hoga.
+                      Only one mode remains active; new calls use the selected flow.
                     </p>
                   </div>
                   <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
@@ -3348,8 +3347,8 @@ export default function AdminAgentsPage() {
                   })}
                 </div>
                 <p className="text-[11px] text-slate-500">
-                  Recommended: Gemini + Clone. Gemini STT fail hone par
-                  configured fallback provider use hoga.
+                  Recommended: Gemini + Clone. If Gemini STT fails, the configured
+                  fallback provider is used automatically.
                 </p>
               </div>
 

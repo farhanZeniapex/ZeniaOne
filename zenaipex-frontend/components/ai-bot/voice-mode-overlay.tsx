@@ -1420,7 +1420,7 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
       // creation.  A pending getUserMedia() promise used to leave the whole
       // voice panel stuck on "Starting..." with no audio feedback.
       const hasExistingMessages = !forceNewConversation && Boolean(messages?.length);
-      let greeting = "Hello! Main ZeniaOne Assistant hoon. Kahiye, aaj main aapki kya help karoon?";
+      let greeting = "Hello! I am the ZeniaOne Assistant. How can I help you today?";
       let synthLang = "hi-IN";
       if (langModeRef.current === "gujarati") {
         greeting = "નમસ્તે! હું ZeniaOne આસિસ્ટન્ટ છું. કહો, હું તમારી શું મદદ કરી શકું?";
