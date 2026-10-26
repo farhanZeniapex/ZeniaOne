@@ -285,6 +285,15 @@ async def handle_twilio_gemini_live_session(
         for task in (twilio_task, gemini_task):
             if not task.done():
                 task.cancel()
+        # A short call can end before Gemini emits turnComplete. Persist any
+        # transcription already received so the call never appears as a
+        # recording-only conversation with zero messages.
+        if user_text:
+            await save("user", "".join(user_text))
+            user_text.clear()
+        if ai_text:
+            await save("assistant", "".join(ai_text))
+            ai_text.clear()
         await queue.put(None)
         try:
             await asyncio.wait_for(sender_task, timeout=1.0)
