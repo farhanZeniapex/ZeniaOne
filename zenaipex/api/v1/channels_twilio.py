@@ -11,8 +11,9 @@ import json
 import asyncio
 import time
 from urllib.parse import urlparse
+from datetime import datetime, timezone
 
-from core.database import col_channels
+from core.database import col_channels, col_conversations
 from services.agent_service import load_agent_for_call
 from services.conversation_service import create_conversation, end_conversation, add_message
 from services.usage_service import increment_usage, check_call_minute_limit, check_ai_credit_limit
@@ -38,6 +39,8 @@ from html import escape
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Twilio Webhooks"])
+
+DEFAULT_PHONE_WELCOME = "Hello, thank you for calling ZeniaOne. How may I help you today?"
 
 
 def _twilio_external_url(request: Request) -> str:
@@ -132,11 +135,13 @@ async def twilio_voice_webhook(company_slug: str, request: Request):
     # Minimal TwiML to connect the stream and pass required parameters
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
+    <Say voice="alice" language="en-US">{escape(DEFAULT_PHONE_WELCOME)}</Say>
     <Connect>
         <Stream url="{escape(ws_url, quote=True)}"{stream_status_attr}>
             <Parameter name="caller" value="{escape(str(caller or ''), quote=True)}" />
             <Parameter name="called_number" value="{escape(str(phone_number or ''), quote=True)}" />
             <Parameter name="call_sid" value="{escape(str(call_sid or ''), quote=True)}" />
+            <Parameter name="skip_greeting" value="true" />
         </Stream>
     </Connect>
 </Response>
@@ -179,9 +184,11 @@ async def twilio_outbound_twiml(company_id: str, agent_id: str, channel_id: str,
     contact_name = str(request.query_params.get("contact_name") or "")
     topic = str(request.query_params.get("topic") or "")
     system_prompt = str(request.query_params.get("system_prompt") or "")
+    welcome = DEFAULT_PHONE_WELCOME
 
     twiml = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
+    <Say voice="alice" language="en-US">{escape(welcome)}</Say>
     <Connect>
         <Stream url="{escape(ws_url, quote=True)}"{stream_status_attr}>
             <Parameter name="direction" value="outbound" />
@@ -191,6 +198,7 @@ async def twilio_outbound_twiml(company_id: str, agent_id: str, channel_id: str,
             <Parameter name="contact_name" value="{escape(contact_name, quote=True)}" />
             <Parameter name="topic" value="{escape(topic, quote=True)}" />
             <Parameter name="system_prompt" value="{escape(system_prompt, quote=True)}" />
+            <Parameter name="skip_greeting" value="true" />
         </Stream>
     </Connect>
 </Response>
@@ -251,15 +259,16 @@ async def twilio_status_webhook(company_id: str, agent_id: str, channel_id: str,
         logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
         
         internal_status = status.lower()
+        if internal_status == "answered":
+            internal_status = "in-progress"
         if internal_status not in ["completed", "failed", "busy", "no-answer", "canceled", "in-progress", "ringing"]:
             internal_status = "unknown"
             
-        from core.database import col_conversations
         from datetime import datetime, timezone
         
-        update_data = {
-            "status": internal_status
-        }
+        update_data = {"status": internal_status, "provider_status": status.lower()}
+        if internal_status == "in-progress":
+            update_data["answered_at"] = datetime.now(timezone.utc)
         
         if internal_status in ["completed", "failed", "busy", "no-answer", "canceled"]:
             update_data["ended_at"] = datetime.now(timezone.utc)
@@ -268,10 +277,6 @@ async def twilio_status_webhook(company_id: str, agent_id: str, channel_id: str,
         if duration and duration.isdigit():
             update_data["duration_seconds"] = int(duration)
             
-        recording_url = str(form_data.get("RecordingUrl", ""))
-        if recording_url:
-            update_data["recording_url"] = recording_url
-
         error_code = str(form_data.get("ErrorCode") or "").strip()
         error_message = str(form_data.get("ErrorMessage") or "").strip()
         if error_code or error_message:
@@ -279,14 +284,43 @@ async def twilio_status_webhook(company_id: str, agent_id: str, channel_id: str,
                 part for part in (error_code, error_message) if part
             )
             
-        await col_conversations().update_one(
-            {"call_sid": call_sid, "company_id": company_id, "agent_id": agent_id},
-            {"$set": update_data}
-        )
+        scoped = {"call_sid": call_sid, "company_id": company_id, "agent_id": agent_id}
+        result = await col_conversations().update_one(scoped, {"$set": update_data})
+        if result.matched_count == 0:
+            await col_conversations().update_one({"call_sid": call_sid}, {"$set": update_data})
         
     except Exception as e:
         logger.error(f"Error in Twilio Status Webhook: {e}")
         
+    return {"status": "ok"}
+
+
+@router.api_route("/webhook/twilio/recording/{company_id}/{agent_id}/{channel_id}", methods=["GET", "POST"])
+async def twilio_recording_webhook(company_id: str, agent_id: str, channel_id: str, request: Request):
+    """Persist Twilio's asynchronous recording URL and duration."""
+    try:
+        form_data = await _validate_twilio_webhook(request)
+        call_sid = str(form_data.get("CallSid") or "").strip()
+        recording_url = str(form_data.get("RecordingUrl") or "").strip()
+        recording_sid = str(form_data.get("RecordingSid") or "").strip()
+        recording_status = str(form_data.get("RecordingStatus") or "").strip().lower()
+        duration = str(form_data.get("RecordingDuration") or "").strip()
+        if not call_sid or not recording_url:
+            return {"status": "ok"}
+        update = {
+            "recording_url": recording_url,
+            "recording_sid": recording_sid or None,
+            "recording_status": recording_status or "completed",
+        }
+        if duration.isdigit():
+            update["recording_duration"] = int(duration)
+        scoped = {"call_sid": call_sid, "company_id": company_id, "agent_id": agent_id}
+        result = await col_conversations().update_one(scoped, {"$set": update})
+        if result.matched_count == 0:
+            await col_conversations().update_one({"call_sid": call_sid}, {"$set": update})
+        logger.info("[TWILIO_RECORDING] saved call_sid=%s recording_sid=%s", call_sid, recording_sid)
+    except Exception as exc:
+        logger.error("Error in Twilio recording webhook: %s", exc)
     return {"status": "ok"}
 
 
@@ -574,6 +608,8 @@ async def media_stream_websocket(websocket: WebSocket):
                 custom_params = start_data.get("customParameters", {})
                 phone_number = custom_params.get("called_number")
                 caller = custom_params.get("caller")
+                call_direction = str(custom_params.get("direction") or "inbound").lower()
+                skip_greeting = str(custom_params.get("skip_greeting") or "").lower() == "true"
                 
                 # If custom parameters aren't provided, we have to look up the CallSid
                 # in the conversation DB to find the number, assuming the HTTP webhook 
@@ -680,15 +716,36 @@ async def media_stream_websocket(websocket: WebSocket):
                     logger.warning("[TWILIO_ROUTE] native_gemini_unavailable fallback=classic_pipeline")
                 
                 # 5. Create Conversation Record
-                conv = await create_conversation(
-                    company_id=session["company_id"],
-                    agent_id=session["agent_id"],
-                    channel_id=str(agent_context["channel"]["_id"]),
-                    call_sid=session["call_sid"],
-                    caller_phone=caller,
-                    direction="inbound",
-                    language=session["language"]
-                )
+                conv = None
+                if session["call_sid"]:
+                    for _ in range(5):
+                        conv = await col_conversations().find_one({"call_sid": session["call_sid"]})
+                        if conv:
+                            break
+                        await asyncio.sleep(0.2)
+                if not conv:
+                    conv = await create_conversation(
+                        company_id=session["company_id"],
+                        agent_id=session["agent_id"],
+                        channel_id=str(agent_context["channel"]["_id"]),
+                        call_sid=session["call_sid"],
+                        caller_phone=caller,
+                        direction=call_direction,
+                        language=session["language"]
+                    )
+                else:
+                    await col_conversations().update_one(
+                        {"_id": conv["_id"]},
+                        {"$set": {
+                            "company_id": session["company_id"],
+                            "agent_id": session["agent_id"],
+                            "channel_id": str(agent_context["channel"]["_id"]),
+                            "direction": call_direction,
+                            "answered_at": datetime.now(timezone.utc),
+                            "status": "in-progress",
+                        }},
+                    )
+                    conv = await col_conversations().find_one({"_id": conv["_id"]})
                 session["conversation_id"] = str(conv["_id"])
                 
                 logger.info(f"✅ Call started. Tenant: {session['company_name']}, Agent: {agent['name']}")
@@ -710,9 +767,15 @@ async def media_stream_websocket(websocket: WebSocket):
                 workspace_settings = agent_context["company"].get("settings", {})
                 greeting = (
                     workspace_settings.get("inbound_greeting")
-                    or agent.get("greeting_messages", {}).get(session["language"], "Hello!")
+                    or agent.get("greeting_messages", {}).get(session["language"], DEFAULT_PHONE_WELCOME)
                 )
                 greeting = greeting.format(company_name=session["company_name"])
+
+                if skip_greeting:
+                    await add_message(session["company_id"], session["conversation_id"], "assistant", greeting, session["language"])
+                    session["conversation_history"].append({"role": "assistant", "content": greeting})
+                    session["is_speaking"] = False
+                    continue
                 
                 session["is_speaking"] = True
                 

@@ -386,6 +386,7 @@ async def get_conversation_by_call_sid(call_sid: str):
         "ringing_started_at": conv.get("ringing_started_at") or conv.get("started_at"),
         "answered_at": conv.get("answered_at"),
         "ended_at": conv.get("ended_at"),
+        "duration_seconds": conv.get("duration_seconds", 0),
         "failure_reason": conv.get("failure_reason"),
         "messages": [
             {

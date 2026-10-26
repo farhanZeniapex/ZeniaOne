@@ -30,11 +30,15 @@ class TwilioTelephonyProvider(TelephonyProvider):
             call_params = {
                 "to": to_phone,
                 "from_": from_phone if from_phone and from_phone != "system_default" else settings.twilio_default_phone_number,
-                "url": webhook_url
+                "url": webhook_url,
+                "record": True,
             }
             if status_callback:
                 call_params["status_callback"] = status_callback
                 call_params["status_callback_event"] = ['initiated', 'ringing', 'answered', 'completed']
+                call_params["recording_status_callback"] = status_callback.replace("/status/", "/recording/")
+                call_params["recording_status_callback_event"] = ["completed"]
+                call_params["recording_status_callback_method"] = "POST"
                 
             call = self.client.calls.create(**call_params)
             logger.info(f"Initiated Twilio outbound call to {to_phone}. CallSid: {call.sid}")

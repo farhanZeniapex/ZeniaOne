@@ -333,7 +333,7 @@ async def proxy_recording(
     company_id: str = Path(...),
     conv_id: str = Path(...),
 ):
-    """Secure proxy for authenticated Exotel recording URLs via short-lived token."""
+    """Secure proxy for authenticated Exotel or Twilio recording URLs."""
     token = request.query_params.get("token")
     if not token:
         raise HTTPException(status_code=401, detail="Token required")
@@ -356,9 +356,10 @@ async def proxy_recording(
     parsed_url = urlparse(url)
     hostname = (parsed_url.hostname or "").lower().rstrip(".")
     configured_host = settings.exotel_subdomain.lower().split(":", 1)[0].rstrip(".")
-    allowed_host = hostname == configured_host or hostname.endswith(".exotel.com")
+    is_twilio = hostname == "api.twilio.com" or hostname.endswith(".twilio.com")
+    allowed_host = is_twilio or hostname == configured_host or hostname.endswith(".exotel.com")
     if parsed_url.scheme != "https" or not hostname or not allowed_host:
-        raise HTTPException(status_code=400, detail="Recording URL must be an HTTPS Exotel URL")
+        raise HTTPException(status_code=400, detail="Recording URL must be an approved HTTPS provider URL")
     try:
         for address in socket.getaddrinfo(hostname, 443, type=socket.SOCK_STREAM):
             ip = ipaddress.ip_address(address[4][0])
@@ -369,17 +370,23 @@ async def proxy_recording(
     except (socket.gaierror, ValueError, OSError):
         raise HTTPException(status_code=400, detail="Recording host could not be resolved")
 
-    exotel_key = settings.exotel_api_key
-    exotel_token = settings.exotel_api_token
-    if not exotel_key or not exotel_token:
-        raise HTTPException(status_code=503, detail="Exotel credentials are not configured")
+    if is_twilio:
+        recording_auth = (settings.twilio_account_sid, settings.twilio_auth_token)
+        if not all(recording_auth):
+            raise HTTPException(status_code=503, detail="Twilio credentials are not configured")
+        if not url.endswith(".mp3"):
+            url = url + ".mp3"
+    else:
+        recording_auth = (settings.exotel_api_key, settings.exotel_api_token)
+        if not all(recording_auth):
+            raise HTTPException(status_code=503, detail="Exotel credentials are not configured")
     
     req_headers = {}
     range_header = request.headers.get("range")
     if range_header:
         req_headers["Range"] = range_header
 
-    client = httpx.AsyncClient(auth=(exotel_key, exotel_token), follow_redirects=False, timeout=30.0)
+    client = httpx.AsyncClient(auth=recording_auth, follow_redirects=False, timeout=30.0)
     req = client.build_request("GET", url, headers=req_headers)
     upstream_response = await client.send(req, stream=True)
     

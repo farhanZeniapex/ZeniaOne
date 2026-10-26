@@ -21,6 +21,7 @@ interface CallData {
   ringing_started_at?: string;
   answered_at?: string;
   ended_at?: string;
+  duration_seconds?: number;
   failure_reason?: string;
   recording_url?: string;
   messages: Message[];
@@ -121,6 +122,12 @@ export function LiveCallMonitor({ callSid, contactName, onClose }: Props) {
 
   const getTimerText = () => {
     if (!data) return "";
+    if (state === "ENDED" && Number(data.duration_seconds) > 0) {
+      const totalSeconds = Math.floor(Number(data.duration_seconds));
+      const mins = Math.floor(totalSeconds / 60).toString().padStart(2, "0");
+      const secs = (totalSeconds % 60).toString().padStart(2, "0");
+      return `${mins}:${secs}`;
+    }
     let diff = 0;
     const answeredTime = data.answered_at ? new Date(data.answered_at).getTime() : (data.call_started_at ? new Date(data.call_started_at).getTime() : now);
     
