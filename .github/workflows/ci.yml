@@ -16,6 +16,7 @@ jobs:
     env:
       PYTHONPATH: zenaipex
       APP_ENV: test
+      APP_SECRET_KEY: ci-only-test-secret-0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
       MONGODB_URI: mongodb://localhost:27017/zenaipex_test
       MONGODB_DB_NAME: zenaipex_test
     steps:
