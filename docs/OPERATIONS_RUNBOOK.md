@@ -23,6 +23,10 @@ The same workflow can be dispatched manually with a staging API base URL using t
 
 Scheduled outbound calls are persisted in MongoDB (`scheduled_calls`) and processed by a leased worker. A worker restart recovers expired leases; failed calls retry with bounded backoff and become terminal after three attempts. The legacy in-memory scheduler is retained only to cancel jobs created by older releases.
 
+### Database backup and restore
+
+Enable Atlas continuous/point-in-time backups for the production cluster. For an additional operator-controlled archive, install MongoDB Database Tools and run `python scripts/mongodb_backup.py backup --output-dir backups`; retain the archive and its manifest in encrypted storage outside the repository. Restore is deliberately guarded: use `restore <archive> --confirm-restore`, and add `--allow-production` only during an approved recovery window. Use `--dry-run` first to validate the target without writing data. The helper never drops collections automatically.
+
 ## Rollback procedure
 
 1. Stop promotion if CI or production smoke fails.
