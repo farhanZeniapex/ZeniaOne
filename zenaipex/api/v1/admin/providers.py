@@ -82,6 +82,19 @@ async def modify_provider(
     updated = await update_provider(provider_id, updates, admin.get("email", "system"))
     if not updated:
         raise HTTPException(status_code=404, detail="Provider not found")
+
+    # Provider changes are security-sensitive and must remain auditable. Never
+    # write the key itself; only record that a rotation/config update occurred.
+    from core.database import col_activity_logs
+    from datetime import datetime, timezone
+    await col_activity_logs().insert_one({
+        "actor_email": admin.get("email", "system"),
+        "actor_name": admin.get("name", "Platform Admin"),
+        "action": "provider_key_rotated" if "api_key" in updates else "provider_settings_updated",
+        "target": updated.provider,
+        "details": "Provider credential rotated" if "api_key" in updates else "Provider settings changed",
+        "created_at": datetime.now(timezone.utc),
+    })
         
     return AIProviderResponse(
         id=updated.id,
