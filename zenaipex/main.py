@@ -54,7 +54,7 @@ logger = logging.getLogger(__name__)
 
 # Safe deployment marker exposed only through health endpoints. It lets us
 # verify which image is serving traffic without revealing configuration.
-BUILD_VERSION = "2026-10-26-live-ops-v3"
+BUILD_VERSION = "2026-10-26-twilio-reconcile-v4"
 
 if settings.sentry_dsn:
     try:
