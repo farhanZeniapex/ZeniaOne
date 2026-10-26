@@ -109,9 +109,11 @@ export default function AdminDashboardPage() {
         const [comps, logs, h, t, b, k] = await Promise.all([
           fetchApi<{ companies?: Company[] }>("/admin/companies?limit=5"),
           fetchApi<{ logs?: AdminLog[] }>("/admin/logs?limit=5"),
-          fetch(`${API_BASE_URL.replace("/api/v1", "")}/health`)
-            .then((r) => (r.ok ? r.json() : null))
-            .catch(() => null),
+          // Keep health checks on the same API client as the rest of the
+          // dashboard.  The old direct root `/health` fetch bypassed the
+          // browser API/CORS retry path and could falsely show the platform as
+          // unavailable during a Render wake-up or rolling restart.
+          fetchApi<Health>("/health").catch(() => null),
           fetchApi<Trend>(`/admin/metrics/trends?days=${days}`).catch(
             () => null,
           ),
