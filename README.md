@@ -11,12 +11,12 @@
 [![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
 [![Pinecone](https://img.shields.io/badge/Pinecone-RAG-044F44?style=for-the-badge)](https://www.pinecone.io/)
 
-<p>
-  <a href="#-what-zeniaone-does">What it does</a> ·
-  <a href="#-runtime-routing">Runtime routing</a> ·
-  <a href="#-architecture">Architecture</a> ·
-  <a href="#-quick-start">Quick start</a> ·
-  <a href="#-testing">Testing</a>
+<p align="center">
+  <a href="#-what-zeniaone-does"><img src="https://img.shields.io/badge/🌟%20PRODUCT-What%20it%20does-0B8063?style=flat-square" alt="What it does" /></a>
+  <a href="#-runtime-routing"><img src="https://img.shields.io/badge/🔀%20ROUTING-Live%20paths-164E63?style=flat-square" alt="Runtime routing" /></a>
+  <a href="#-architecture"><img src="https://img.shields.io/badge/🧠%20ARCHITECTURE-System%20map-1D4ED8?style=flat-square" alt="Architecture" /></a>
+  <a href="#-quick-start"><img src="https://img.shields.io/badge/🚀%20START-Run%20locally-6D28D9?style=flat-square" alt="Quick start" /></a>
+  <a href="#-testing"><img src="https://img.shields.io/badge/🧪%20QUALITY-Test%20suite-B45309?style=flat-square" alt="Testing" /></a>
 </p>
 
 </div>
