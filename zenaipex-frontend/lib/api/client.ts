@@ -26,6 +26,7 @@ type CachedResponse = { value: unknown; expiresAt: number };
 // Keep read data warm while an admin moves between routes. Mutations clear the
 // cache, so this longer window improves navigation without hiding updates.
 const GET_CACHE_TTL_MS = 60_000;
+const SESSION_CACHE_PREFIX = "zeniaone_api_cache_v1:";
 const getCache = new Map<string, CachedResponse>();
 const inFlightGets = new Map<string, Promise<unknown>>();
 
@@ -33,6 +34,56 @@ function getCacheKey(endpoint: string, token: string | null): string {
   // The suffix prevents one browser session's tenant data from being reused
   // after a different account signs in, without persisting the token itself.
   return `${endpoint}::${token ? token.slice(-20) : "anonymous"}`;
+}
+
+function canPersistGet(endpoint: string): boolean {
+  const path = endpoint.split("?", 1)[0];
+  if (path === "/auth/me" || path === "/plans") return true;
+  if (!path.startsWith("/admin/")) return false;
+  // Conversations, live calls, logs, and messages must remain request-fresh.
+  return !/(conversation|message|live|logs|recording)/i.test(path);
+}
+
+function readSessionCache(key: string): CachedResponse | undefined {
+  if (typeof window === "undefined" || !canPersistGet(key.split("::", 1)[0])) return undefined;
+  try {
+    const raw = window.sessionStorage.getItem(`${SESSION_CACHE_PREFIX}${key}`);
+    if (!raw) return undefined;
+    const cached = JSON.parse(raw) as CachedResponse;
+    if (!cached || cached.expiresAt <= Date.now()) {
+      window.sessionStorage.removeItem(`${SESSION_CACHE_PREFIX}${key}`);
+      return undefined;
+    }
+    return cached;
+  } catch {
+    // Storage can be disabled, full, or unavailable in privacy mode.
+    return undefined;
+  }
+}
+
+function writeSessionCache(key: string, cached: CachedResponse): void {
+  if (typeof window === "undefined" || !canPersistGet(key.split("::", 1)[0])) return;
+  try {
+    const serialized = JSON.stringify(cached);
+    // Do not persist unusually large payloads such as document/message bodies.
+    if (serialized.length <= 450_000) {
+      window.sessionStorage.setItem(`${SESSION_CACHE_PREFIX}${key}`, serialized);
+    }
+  } catch {
+    // Session caching is an optimization; storage failures must never break API calls.
+  }
+}
+
+function clearSessionCache(): void {
+  if (typeof window === "undefined") return;
+  try {
+    for (let index = window.sessionStorage.length - 1; index >= 0; index -= 1) {
+      const key = window.sessionStorage.key(index);
+      if (key?.startsWith(SESSION_CACHE_PREFIX)) window.sessionStorage.removeItem(key);
+    }
+  } catch {
+    // Ignore storage cleanup failures.
+  }
 }
 
 async function fetchApiUncached<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -158,14 +209,16 @@ export async function fetchApi<T = any>(endpoint: string, options: RequestInit =
     if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {
       // Any write can change a previously rendered dashboard panel.
       getCache.clear();
+      clearSessionCache();
     }
     return fetchApiUncached<T>(endpoint, options);
   }
 
   const token = localStorage.getItem("zenaipex_token");
   const key = getCacheKey(endpoint, token);
-  const cached = getCache.get(key);
+  const cached = getCache.get(key) || readSessionCache(key);
   if (cached && cached.expiresAt > Date.now()) {
+    getCache.set(key, cached);
     return cached.value as T;
   }
   if (cached) getCache.delete(key);
@@ -175,7 +228,9 @@ export async function fetchApi<T = any>(endpoint: string, options: RequestInit =
 
   const request = fetchApiUncached<T>(endpoint, options)
     .then((value) => {
-      getCache.set(key, { value, expiresAt: Date.now() + GET_CACHE_TTL_MS });
+      const nextCache = { value, expiresAt: Date.now() + GET_CACHE_TTL_MS };
+      getCache.set(key, nextCache);
+      writeSessionCache(key, nextCache);
       return value;
     })
     .finally(() => inFlightGets.delete(key));

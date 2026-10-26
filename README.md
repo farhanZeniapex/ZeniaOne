@@ -180,7 +180,7 @@ flowchart LR
 
 - Next.js 15 App Router, React, and TypeScript.
 - Admin console for overview, companies, agents, channels, calls, conversations, knowledge, routing, health, logs, and billing.
-- Client-side GET caching and in-flight request deduplication for faster navigation.
+- Client-side GET caching, session cache across refreshes, and in-flight request deduplication for faster navigation.
 
 ## 📂 Project structure
 
