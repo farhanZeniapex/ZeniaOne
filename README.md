@@ -22,11 +22,11 @@
 </div>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/PULPIT221090/zeniaone_voice/Farhan_work/zenaipex-frontend/public/ZeniaAI_Logo.png" alt="ZeniaOne logo" width="116" />
+  <img src="zenaipex-frontend/public/ZeniaAI_Z_Logo.png" alt="ZeniaOne logo" width="116" />
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/PULPIT221090/zeniaone_voice/Farhan_work/docs/assets/zeniaone-voice-hero.svg" alt="ZeniaOne realtime voice intelligence" width="100%" />
+  <img src="docs/assets/zeniaone-voice-hero.svg" alt="ZeniaOne realtime voice intelligence" width="100%" />
 </p>
 
 <p align="center">
