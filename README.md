@@ -1,9 +1,15 @@
 <div align="center">
 
-<h1 align="center">
-  <img src="zenaipex-frontend/public/ZeniaAI_Z_Logo.png" alt="ZeniaOne logo" width="58" height="58" align="middle" />
-  &nbsp;ZeniaOne Voice Assistant
-</h1>
+<table align="center" border="0">
+  <tr>
+    <td valign="middle">
+      <img src="zenaipex-frontend/public/ZeniaAI_Z_Logo.png" alt="ZeniaOne logo" width="58" height="58" />
+    </td>
+    <td valign="middle">
+      <h1>ZeniaOne Voice Assistant</h1>
+    </td>
+  </tr>
+</table>
 
 ### Enterprise-ready multilingual voice, chat, RAG, and telephony platform
 
