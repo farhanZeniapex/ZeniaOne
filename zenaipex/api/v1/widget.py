@@ -112,6 +112,26 @@ def _widget_runtime_metadata(
     return data
 
 
+def _widget_confidence_metadata(response: str, context_docs: Optional[List[Dict[str, Any]]]) -> Dict[str, Any]:
+    """Expose a conservative confidence/handoff signal to the public widget."""
+    from ai.evaluation import RAGEvaluator
+
+    docs = context_docs or []
+    scores = [float(doc.get("rerank_score", doc.get("score", 0.0)) or 0.0) for doc in docs]
+    validation = RAGEvaluator.validate_grounding(response, docs)
+    confidence, handoff, reason = RAGEvaluator.assess_confidence(
+        max_score=max(scores) if scores else 0.0,
+        retrieved_count=len(docs),
+        retained_count=len(docs),
+        validation_result=validation,
+    )
+    return {
+        "confidence_score": confidence,
+        "handoff_recommended": handoff,
+        "handoff_reason": reason,
+    }
+
+
 @router.post("/widget/chat/stream")
 async def widget_chat_stream(req: WidgetChatRequest):
     """Stream public chat tokens from the selected agent's configured LLM."""
@@ -381,6 +401,7 @@ async def widget_chat(req: WidgetChatRequest, request: Request):
             "answer": response_text,
             "sources": sources,
             "conversation_id": conv_id,
+            **_widget_confidence_metadata(response_text, context_docs),
             **_widget_runtime_metadata(started_at=started_at, rag_used=rag_used, rag_chunks=rag_chunks, rag_latency_ms=rag_latency_ms, llm=llm),
             **_smart_widget_metadata(req.message),
         }

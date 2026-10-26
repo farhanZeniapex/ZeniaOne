@@ -67,6 +67,13 @@ class RAGEvaluator:
         if not validation_result["grounded"]:
             failures.append("Answer grounding validation failed.")
             
+        confidence_score, handoff_recommended, handoff_reason = RAGEvaluator.assess_confidence(
+            max_score=max_score,
+            retrieved_count=retrieved_count,
+            retained_count=retained_count,
+            validation_result=validation_result,
+        )
+
         diagnostics = {
             "queries": queries,
             "candidates_retrieved": retrieved_count,
@@ -76,6 +83,9 @@ class RAGEvaluator:
             "generation_latency_sec": round(generation_latency, 3),
             "grounding_warnings": validation_result["warnings"],
             "failures_detected": failures
+            ,"confidence_score": confidence_score
+            ,"handoff_recommended": handoff_recommended
+            ,"handoff_reason": handoff_reason
         }
         
         if failures:
@@ -88,3 +98,33 @@ class RAGEvaluator:
         logger.info(f"[{request_id}] RAG QUALITY\nTop Score: {max_score:.2f}\nCandidates: {retrieved_count}\nRetained: {retained_count}\n{weak_str}")
             
         return diagnostics
+
+    @staticmethod
+    def assess_confidence(
+        *,
+        max_score: float,
+        retrieved_count: int,
+        retained_count: int,
+        validation_result: Dict[str, Any],
+    ) -> tuple[float, bool, str]:
+        """Return a conservative confidence signal and human-handoff reason.
+
+        This is an operational signal, not a claim that the model knows the
+        truth. It combines retrieval evidence with deterministic grounding
+        checks and is intentionally exposed to callers for UI/handoff logic.
+        """
+        grounded = bool(validation_result.get("grounded", False))
+        if retrieved_count == 0 and retained_count == 0:
+            confidence = 0.35
+        else:
+            evidence = min(1.0, retained_count / 4.0)
+            confidence = 0.20 + (0.55 * max(0.0, min(1.0, max_score))) + (0.20 * evidence)
+        if not grounded:
+            confidence -= 0.30
+        confidence = round(max(0.0, min(0.99, confidence)), 3)
+
+        if not grounded:
+            return confidence, True, "answer_not_grounded"
+        if confidence < 0.45:
+            return confidence, True, "weak_or_missing_knowledge_evidence"
+        return confidence, False, ""

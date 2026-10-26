@@ -447,6 +447,11 @@ async def agent_test_chat(
         # Bypass all LLM, RAG, and Billing. Skip to conversation persistence.
         response = fast_response
         val_result["details"] = "Deterministic profile/greeting"
+        diagnostics = {
+            "confidence_score": 0.99,
+            "handoff_recommended": False,
+            "handoff_reason": "",
+        }
         # Do not increment usage for fast greetings
     else:
         # Check AI Credit Limit
@@ -792,7 +797,10 @@ async def agent_test_chat(
         "answer": response,
         "sources": sources,
         "conversation_id": conv_id,
-        "diagnostics": diagnostics # Expose safe diagnostics for admin testing UI
+        "diagnostics": diagnostics, # Expose safe diagnostics for admin testing UI
+        "confidence_score": diagnostics.get("confidence_score"),
+        "handoff_recommended": diagnostics.get("handoff_recommended", False),
+        "handoff_reason": diagnostics.get("handoff_reason", ""),
     }
 
 
