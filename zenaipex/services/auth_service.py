@@ -10,7 +10,7 @@ from bson import ObjectId
 import logging
 import hashlib
 
-from core.database import col_users, col_team_members, col_companies, col_subscriptions
+from core.database import col_users, col_team_members, col_companies, col_subscriptions, col_activity_logs
 from core.security import (
     hash_password, verify_password,
     create_access_token, create_refresh_token,
@@ -223,6 +223,34 @@ async def login_user(email: str, password: str) -> Dict[str, Any]:
         {"$set": {"last_login_at": now}}
     )
     user["last_login_at"] = now
+
+    # Keep an auditable, tenant-scoped login event. This is intentionally
+    # metadata-only; credentials, tokens and IP/device secrets are excluded.
+    memberships = await col_team_members().find({"user_id": user_id}).to_list(length=100)
+    if memberships:
+        await col_activity_logs().insert_many([
+            {
+                "company_id": str(membership["company_id"]),
+                "actor_user_id": user_id,
+                "actor_name": user.get("name") or user.get("email") or "User",
+                "actor_email": user.get("email"),
+                "action": "user_login",
+                "target": user.get("email"),
+                "details": "User signed in successfully.",
+                "created_at": now,
+            }
+            for membership in memberships
+        ])
+    else:
+        await col_activity_logs().insert_one({
+            "actor_user_id": user_id,
+            "actor_name": user.get("name") or user.get("email") or "User",
+            "actor_email": user.get("email"),
+            "action": "user_login",
+            "target": user.get("email"),
+            "details": "Platform user signed in successfully.",
+            "created_at": now,
+        })
 
     access_token = create_access_token({"sub": user_id})
     refresh_token = create_refresh_token(user_id, int(user.get("session_version") or 0))

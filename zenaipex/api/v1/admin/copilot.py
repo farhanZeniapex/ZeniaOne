@@ -1,5 +1,7 @@
 """Secure internal Platform Copilot for the platform admin My AI screen."""
 
+import asyncio
+import logging
 import re
 from calendar import monthrange
 from collections import Counter
@@ -27,6 +29,7 @@ from ai.language_detector import detect_language
 
 router = APIRouter(prefix="/copilot", tags=["Admin Copilot"])
 BUSINESS_TIMEZONE = ZoneInfo("Asia/Kolkata")
+logger = logging.getLogger(__name__)
 
 
 class CopilotRequest(BaseModel):
@@ -476,6 +479,37 @@ async def _admin_live_snapshot(start: datetime, end: datetime, label: str, compa
         {"$group": {"_id": None, "avg_latency": {"$avg": "$latency_ms"}, "max_latency": {"$max": "$latency_ms"}}},
     ]).to_list(length=1)
     latency = latency_rows[0] if latency_rows else {}
+    voice_rows = await col_conversations().aggregate([
+        {"$match": call_filter},
+        {"$group": {"_id": None, "minutes": {"$sum": {"$divide": [{"$ifNull": ["$duration_seconds", 0]}, 60]}}}},
+    ]).to_list(length=1)
+    voice_minutes = round(float((voice_rows[0] if voice_rows else {}).get("minutes", 0) or 0), 1)
+    cost_rows = await col_conversations().aggregate([
+        {"$match": call_filter},
+        {"$group": {"_id": None, "cost": {"$sum": {"$ifNull": ["$cost", 0]}}}},
+    ]).to_list(length=1)
+    call_cost = round(float((cost_rows[0] if cost_rows else {}).get("cost", 0) or 0), 2)
+    login_rows = await col_activity_logs().find({
+        **_date_filter("created_at", start, end),
+        "action": "user_login",
+        **({"company_id": company_filter["company_id"]} if company_filter.get("company_id") else {}),
+    }, {"actor_name": 1, "actor_email": 1, "company_id": 1, "created_at": 1}).sort("created_at", -1).limit(100).to_list(length=100)
+    login_lines = []
+    for item in login_rows:
+        created = item.get("created_at")
+        when = created.astimezone(BUSINESS_TIMEZONE).strftime("%d %b %I:%M %p IST") if created else "unknown time"
+        login_lines.append(f"{item.get('actor_name') or item.get('actor_email') or 'User'} at {when}")
+
+    twilio_balance = "Unavailable"
+    try:
+        from modules.telephony.providers.twilio import TwilioTelephonyProvider
+        provider = TwilioTelephonyProvider()
+        if provider.client and provider.account_sid:
+            account = await asyncio.to_thread(lambda: provider.client.api.accounts(provider.account_sid).fetch())
+            if getattr(account, "balance", None) is not None:
+                twilio_balance = f"{account.balance} {getattr(account, 'currency', 'USD') or 'USD'}"
+    except Exception as exc:
+        logger.debug("Twilio balance unavailable: %s", type(exc).__name__)
     companies = await col_companies().find({}, {"name": 1}).to_list(length=500)
     company_names = [str(item.get("name")) for item in companies if item.get("name")]
     activities = await col_activity_logs().find({
@@ -500,6 +534,9 @@ async def _admin_live_snapshot(start: datetime, end: datetime, label: str, compa
         f"Selected period: {label}; UTC range: {start.isoformat()} to {end.isoformat()}",
         f"LLM requests: {int(usage_row.get('requests', 0) or 0)}; total tokens: {int(usage_row.get('tokens', 0) or 0)}; failed requests: {int(usage_row.get('failed', 0) or 0)}",
         f"Real customer calls: {calls_count}; average recorded LLM latency_ms: {round(float(latency.get('avg_latency', 0) or 0), 1)}; max recorded latency_ms: {round(float(latency.get('max_latency', 0) or 0), 1)}",
+        f"Twilio account balance: {twilio_balance}",
+        f"Voice minutes: {voice_minutes}; recorded call cost: {call_cost}",
+        f"Users logged in during selected period: {', '.join(login_lines) if login_lines else 'None recorded'}",
         f"Companies: {', '.join(company_names) if company_names else 'No company records found'}",
         f"Knowledge documents failed: {len(failed_docs)}; processing: {len(processing_docs)}",
         f"Channels created in selected period: {', '.join(channel_lines) if channel_lines else 'None recorded'}",

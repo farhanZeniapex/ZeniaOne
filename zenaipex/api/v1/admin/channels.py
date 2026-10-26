@@ -12,7 +12,7 @@ import re
 logger = logging.getLogger(__name__)
 from core.config import settings
 from services import channel_service
-from core.database import col_channels, col_conversations, col_messages, col_subscriptions, col_usage_records, col_scheduled_calls
+from core.database import col_channels, col_conversations, col_messages, col_subscriptions, col_usage_records, col_scheduled_calls, col_activity_logs
 from core.exceptions import NotFoundError
 from core.dependencies import require_channel_admin
 from bson import ObjectId
@@ -110,6 +110,7 @@ async def create_channel(body: CreateChannelRequest):
         if existing:
             raise ConflictError("Phone number is already in use by another active channel.")
 
+    now = datetime.datetime.now(datetime.timezone.utc)
     new_channel = {
         "name": body.name,
         "type": body.type,
@@ -117,11 +118,19 @@ async def create_channel(body: CreateChannelRequest):
         "agent_id": body.agent_id,
         "company_id": body.company_id,
         "is_active": body.is_active,
-        "created_at": datetime.datetime.now(datetime.timezone.utc),
-        "updated_at": datetime.datetime.now(datetime.timezone.utc),
+        "created_at": now,
+        "updated_at": now,
         "config": {}
     }
     res = await col_channels().insert_one(new_channel)
+    await col_activity_logs().insert_one({
+        "company_id": body.company_id,
+        "action": "channel_created",
+        "target": body.name,
+        "details": f"Created {body.type} channel.",
+        "resource_id": str(res.inserted_id),
+        "created_at": now,
+    })
     return {"success": True, "channel_id": str(res.inserted_id)}
 @router.get("/channels", summary="List all channels across platform")
 async def list_all_channels(
