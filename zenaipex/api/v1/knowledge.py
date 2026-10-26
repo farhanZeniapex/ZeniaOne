@@ -199,6 +199,16 @@ async def upload_document(
         from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Unsupported file type. Allowed: PDF, TXT, DOCX.")
 
+    # Reject common active-content and archive-abuse payloads before storage or
+    # document extraction. A real malware scanner can be added in front of
+    # this deterministic guard without changing the endpoint contract.
+    try:
+        from services.file_security import scan_document_upload
+        scan_document_upload(filename, content_type, content_bytes)
+    except ValueError as exc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     # 3. Deduplication and Replacement check
     existing_docs = await col_documents().find({
         "company_id": company_id,
