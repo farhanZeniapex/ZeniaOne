@@ -41,6 +41,8 @@ type Metrics = {
   total_conversations?: number;
   total_llm_calls?: number;
   total_call_minutes?: number;
+  total_tokens?: number;
+  total_cost?: number | null;
 };
 type Company = {
   id: string;
@@ -170,10 +172,11 @@ export default function AdminDashboardPage() {
       </div>
     );
 
-  const platformCost = unifiedProviders.reduce(
-    (sum, p) => sum + (p.zeniaai_cost?.amount_inr || 0),
-    0,
-  );
+  // Use the canonical analytics response for all Overview financial and
+  // token totals.  Provider unified-state is intentionally a provider detail
+  // view and can omit legacy/imported usage rows, which previously caused the
+  // Overview totals to differ from Usage analytics.
+  const platformCost = Number(metrics?.total_cost || 0);
 
   const apiHealthy = health?.status === "healthy";
   const dbHealthy = health?.database === "connected";
@@ -189,10 +192,7 @@ export default function AdminDashboardPage() {
   );
   const successRate =
     successful + failed ? (successful / (successful + failed)) * 100 : null;
-  const totalTokens = unifiedProviders.reduce(
-    (sum, provider) => sum + (provider.usage?.total_tokens || 0),
-    0,
-  );
+  const totalTokens = Number(metrics?.total_tokens || 0);
   const topProvider = [...unifiedProviders].sort(
     (a, b) => (b.usage?.api_calls || 0) - (a.usage?.api_calls || 0),
   )[0];

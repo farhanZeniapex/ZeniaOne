@@ -33,7 +33,9 @@ async def get_trends(days: int = 30, company_id: Optional[str] = None):
     
     now = datetime.now(timezone.utc)
     # Start of day for the oldest date
-    start_date = (now - timedelta(days=days-1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    # Keep the reporting window identical to get_canonical_analytics so the
+    # Overview trend and Usage KPIs never include different boundary days.
+    start_date = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
     
     # 1. Companies Growth
     company_match = {} if not company_id or company_id == "all" else {"company_id": company_id}
@@ -62,9 +64,12 @@ async def get_trends(days: int = 30, company_id: Optional[str] = None):
     ]
     conversations_data = await col_conversations().aggregate(conversations_pipeline).to_list(None)
     
-    # 3. AI Usage Trend (from messages)
+    # 3. AI Usage Trend (from the same LLM request ledger used by the
+    # canonical analytics endpoint).  Counting assistant messages here made
+    # the Overview chart disagree with Usage analytics because one request can
+    # produce more than one assistant message.
     ai_pipeline = [
-        {"$match": {**company_match, "timestamp": {"$gte": start_date}, "role": "assistant"}},
+        {"$match": {**company_match, "timestamp": {"$gte": start_date}}},
         {"$group": {
             "_id": {"$dateToString": {"format": "%Y-%m-%d", "date": "$timestamp"}},
             "count": {"$sum": 1}
