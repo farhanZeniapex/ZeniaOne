@@ -9,6 +9,7 @@ import logging
 from typing import Any, Optional
 
 from core.database import col_channels, col_conversations
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,17 @@ async def sync_twilio_history(
         return {"channels": 0, "provider_calls": 0, "imported": 0, "failed": 0}
 
     channels = await col_channels().find(channel_query).to_list(length=200)
+    # A Twilio number can be rotated in the provider console before the
+    # dashboard channel record is updated. Include the configured account
+    # default when the mapping is unambiguous (one active Twilio channel).
+    configured_line = str(settings.twilio_default_phone_number or "").strip()
+    known_lines = {str(channel.get("phone_number") or "").strip() for channel in channels}
+    if configured_line and configured_line not in known_lines:
+        active_candidates = [channel for channel in channels if channel.get("is_active", True)]
+        if len(active_candidates) == 1:
+            fallback_channel = dict(active_candidates[0])
+            fallback_channel["phone_number"] = configured_line
+            channels.append(fallback_channel)
     imported = 0
     provider_calls = 0
     failed = 0
@@ -55,7 +67,8 @@ async def sync_twilio_history(
             unique_calls = {str(item.sid): item for item in calls}
             provider_calls += len(unique_calls)
             for item in unique_calls.values():
-                from_number = str(getattr(item, "from_", "") or "")
+                # Twilio's Python SDK exposes the API field `from` as `_from`.
+                from_number = str(getattr(item, "_from", "") or getattr(item, "from_", "") or "")
                 to_number = str(getattr(item, "to", "") or "")
                 outbound = from_number.replace("+", "") == line.replace("+", "")
                 raw_status = str(getattr(item, "status", "") or "").lower()
