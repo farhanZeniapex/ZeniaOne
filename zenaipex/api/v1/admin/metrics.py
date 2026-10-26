@@ -77,11 +77,36 @@ async def get_trends(days: int = 30, company_id: Optional[str] = None):
         {"$sort": {"_id": 1}}
     ]
     ai_data = await col_llm_requests().aggregate(ai_pipeline).to_list(None)
+
+    # Canonical analytics also reconciles historical monthly usage records
+    # that predate the detailed llm_requests ledger. Add that legacy remainder
+    # to the trend at the start of the selected window so the chart total is
+    # identical to the Overview/Usage KPI (without double-counting detailed
+    # requests already present above).
+    usage_months = {start_date.strftime("%Y-%m"), now.strftime("%Y-%m")}
+    legacy_filter = {"month": {"$in": list(usage_months)}}
+    if company_id and company_id != "all":
+        legacy_filter["company_id"] = company_id
+    legacy_calls = 0
+    async for record in col_usage_records().find(legacy_filter, {"llm_api_calls": 1}):
+        legacy_calls += int(record.get("llm_api_calls", 0) or 0)
+    detailed_calls = sum(int(item.get("count", 0) or 0) for item in ai_data)
+    legacy_remainder = max(0, legacy_calls - detailed_calls)
+    if legacy_remainder:
+        ai_data.append({"_id": start_date.strftime("%Y-%m-%d"), "count": legacy_remainder})
+
+    # Merge the synthetic remainder with any detailed requests on the same
+    # day and keep the response ordered for the chart.
+    ai_by_date = {}
+    for item in ai_data:
+        date = item.pop("_id")
+        ai_by_date[date] = ai_by_date.get(date, 0) + int(item.get("count", 0) or 0)
+    ai_data = [{"date": date, "count": count} for date, count in sorted(ai_by_date.items())]
     
     # Format _id to date
     for item in companies_data: item["date"] = item.pop("_id")
     for item in conversations_data: item["date"] = item.pop("_id")
-    for item in ai_data: item["date"] = item.pop("_id")
+    # ai_data is already normalized above.
 
     # --- ADVANCED ANALYTICS ---
     # 4. Token & Cost Trends
