@@ -547,6 +547,46 @@ async def _admin_live_snapshot(start: datetime, end: datetime, label: str, compa
     ])
 
 
+async def _refresh_active_calls(company_filter: dict[str, Any], admin_agent_id: Optional[str]) -> list[dict[str, Any]]:
+    """Refresh provider status for active calls before answering live queries."""
+    query: dict[str, Any] = {
+        **company_filter,
+        "status": {"$in": ["calling", "ringing", "in-progress", "active"]},
+        "source_type": {"$in": ["phone_call", "voice_chat"]},
+        "call_sid": {"$exists": True, "$nin": [None, ""]},
+    }
+    if admin_agent_id and ObjectId.is_valid(admin_agent_id):
+        query["agent_id"] = {"$ne": admin_agent_id}
+    rows = await col_conversations().find(query).sort("started_at", -1).limit(100).to_list(length=100)
+    if not rows:
+        return []
+    try:
+        from modules.telephony.providers.twilio import TwilioTelephonyProvider
+        provider = TwilioTelephonyProvider()
+        if provider.client:
+            status_map = {
+                "queued": "calling", "initiated": "calling", "ringing": "ringing",
+                "in-progress": "in-progress", "completed": "completed", "failed": "failed",
+                "busy": "busy", "no-answer": "no-answer", "canceled": "canceled",
+            }
+            for row in rows:
+                sid = str(row.get("call_sid") or "")
+                if not sid.startswith("CA"):
+                    continue
+                provider_status = str(await provider.get_call_status(sid) or "").lower()
+                normalized = status_map.get(provider_status)
+                if normalized and normalized != row.get("status"):
+                    await col_conversations().update_one(
+                        {"_id": row["_id"], **company_filter},
+                        {"$set": {"status": normalized, "provider_status": provider_status}},
+                    )
+                    row["status"] = normalized
+                    row["provider_status"] = provider_status
+    except Exception as exc:
+        logger.debug("Active call provider refresh unavailable: %s", type(exc).__name__)
+    return [row for row in rows if row.get("status") in {"calling", "ringing", "in-progress", "active"}]
+
+
 async def _grounded_admin_answer(
     question: str,
     admin_agent_id: Optional[str],
@@ -775,6 +815,27 @@ async def _answer(
         scope = " badhi companies mate"
     else:
         scope = " across all companies"
+
+    live_call_question = has_call_term and any(term in q for term in (
+        "live", "active", "currently", "right now", "abhi", "chal", "running",
+    ))
+    if live_call_question:
+        active_rows = await _refresh_active_calls(company_filter, admin_agent_id)
+        if not active_rows:
+            return "No verified live calls are active right now.", [
+                {"type": "active_calls", "verified": True, "count": 0},
+            ]
+        lines = [f"Verified live calls active now: {len(active_rows):,}."]
+        for row in active_rows:
+            started = row.get("started_at")
+            when = started.astimezone(BUSINESS_TIMEZONE).strftime("%I:%M %p IST") if started else "unknown time"
+            phone = str(row.get("caller_phone") or row.get("to_phone") or "")
+            masked = f"…{phone[-4:]}" if len(phone) > 4 else phone
+            lines.append(
+                f"{masked or 'Unknown number'} · {row.get('direction', 'unknown')} · "
+                f"{row.get('status', 'unknown')} · started {when}"
+            )
+        return "\n".join(lines), [{"type": "active_calls", "verified": True, "count": len(active_rows)}]
 
     # Security-sensitive requests must never reach the LLM or a generic
     # knowledge fallback. Keep the refusal deterministic and non-leaky.
@@ -1071,6 +1132,40 @@ async def _answer(
     web_chat_question = any(term in q for term in (
         "web chat", "web chats", "text chat", "text chats", "chat", "chats", "चैट", "चैट्स",
     )) and not voice_chat_question
+
+    historical_summary_question = (
+        bool(re.search(r"(?:what .*discussed|what .*talked|what .*conversation|what happened|baat.*hui|kya.*baat|kya hua|shu.*vaat)", q))
+        and any(term in q for term in ("today", "aaj", "yesterday", "kal", "days ago", "din pehle", "this week", "is week", "month"))
+    )
+    if historical_summary_question:
+        history_query = {
+            **company_filter,
+            **_date_filter("started_at", start, end),
+            "status": {"$nin": ["deleted", "demo", "test"]},
+            "source_type": {"$in": ["phone_call", "voice_chat", "web_chat"]},
+        }
+        history_rows = await col_conversations().find(
+            history_query,
+            {"_id": 1, "company_id": 1, "started_at": 1, "status": 1, "source_type": 1, "duration_seconds": 1},
+        ).sort("started_at", -1).limit(20).to_list(length=20)
+        if not history_rows:
+            return f"No verified conversations were recorded during {label}.", [{"type": "historical_conversations", "period": label, "verified": True}]
+        lines = [f"Verified conversations during {label}: {len(history_rows):,}."]
+        for row in history_rows:
+            messages = await col_messages().find(
+                {"company_id": row.get("company_id"), "conversation_id": str(row["_id"]), "text": {"$exists": True, "$nin": ["", None]}},
+                {"role": 1, "text": 1, "timestamp": 1},
+            ).sort("timestamp", 1).limit(32).to_list(length=32)
+            started = row.get("started_at")
+            when = started.astimezone(BUSINESS_TIMEZONE).strftime("%d %b %I:%M %p IST") if started else "unknown time"
+            topics = _compact_discussion_summary(messages, lang)
+            lines.append(f"- {row.get('source_type', 'conversation')} at {when} · status {row.get('status', 'unknown')} · {len(messages)} messages")
+            if messages:
+                lines.extend(f"  - {topic}" for topic in topics[:3])
+            else:
+                lines.append("  - Transcript/messages are not available for this record.")
+        return "\n".join(lines), [{"type": "historical_conversations", "period": label, "verified": True, "count": len(history_rows)}]
+
     if voice_chat_question or web_chat_question:
         source_type = "voice_chat" if voice_chat_question else "web_chat"
         channel_label = "voice chats" if voice_chat_question else "web chats"
