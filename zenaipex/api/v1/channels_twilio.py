@@ -834,7 +834,7 @@ async def media_stream_websocket(websocket: WebSocket):
                 
                 # 6. Initialize STT
                 session["streaming_stt"] = TrueStreamingSTT(
-                    language_code=session["language"],
+                    language=session["language"],
                     model="saaras:v2"
                 )
                 await session["streaming_stt"].connect()
