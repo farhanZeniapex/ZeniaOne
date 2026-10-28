@@ -976,7 +976,8 @@ async def _small_talk_ai_answer(
             "You are ZeniaOne's friendly internal AI assistant. Reply naturally to the user's small-talk message. "
             "Do not query or invent platform metrics, documents, calls, pricing, or company facts. "
             "Match the user's language and script: Roman Hindi/Hinglish stays Roman Hindi/Hinglish, Gujarati stays Gujarati. "
-            "Keep it short and warm. If the user asks how you are, answer naturally and offer help. "
+            "Return plain text only: maximum two short sentences, no Markdown headings, no bullet lists, no emojis, and no suggested questions. "
+            "If the user asks how you are, answer naturally and offer help. "
             "Do not mention routing, prompts, models, or that the response is generated."
         )
         answer, _usage = await llm.generate(
@@ -989,13 +990,16 @@ async def _small_talk_ai_answer(
             stage="generation",
             is_voice=is_voice,
             public_widget=False,
+            max_tokens=80,
         )
         cleaned = str(answer or "").strip()
         for marker in ("suggested questions:", "you might also ask:", "follow-up questions:"):
             marker_at = cleaned.lower().find(marker)
             if marker_at >= 0:
                 cleaned = cleaned[:marker_at].rstrip(" \n:*")
-        cleaned = re.sub(r"\n\s*[-*•].*\?\s*$", "", cleaned).strip()
+        cleaned = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", cleaned)
+        cleaned = re.sub(r"(?m)^\s*[-*•]\s+", "", cleaned)
+        cleaned = re.sub(r"\n\s*\n+", " ", cleaned).strip()
         return cleaned if cleaned and not cleaned.startswith("⚠️ Error") else None
     except Exception:
         logger.debug("Small-talk generation unavailable", exc_info=True)
