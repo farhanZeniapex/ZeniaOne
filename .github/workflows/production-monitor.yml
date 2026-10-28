@@ -19,17 +19,36 @@ jobs:
         env:
           BACKEND_URL: https://zeniaone-backend.onrender.com
         run: |
+          set -euo pipefail
           echo "Warming Render backend ($BACKEND_URL)..."
-          # Allow up to 90s for cold start; retry on 502/503 during wake-up
-          health="$(curl --retry 3 --retry-delay 5 --retry-connrefused --max-time 90 --silent --show-error "$BACKEND_URL/health" || true)"
-          echo "Backend Health: $health"
-          
-          ready="$(curl --retry 2 --retry-delay 3 --max-time 60 --silent --show-error "$BACKEND_URL/ready" || true)"
-          echo "Backend Ready: $ready"
+          # Render may need a cold-start window. Retry transient HTTP, DNS,
+          # connection and timeout failures, but fail after the retry budget
+          # so a real outage still produces an actionable alert.
+          curl --fail --silent --show-error --location \
+            --connect-timeout 15 --max-time 45 --retry 4 --retry-all-errors \
+            --retry-delay 8 --retry-max-time 150 "$BACKEND_URL/health" > health.json
+          curl --fail --silent --show-error --location \
+            --connect-timeout 15 --max-time 45 --retry 4 --retry-all-errors \
+            --retry-delay 8 --retry-max-time 150 "$BACKEND_URL/ready" > ready.json
+          python - <<'PY'
+          import json
+          health = json.load(open("health.json", encoding="utf-8"))
+          ready = json.load(open("ready.json", encoding="utf-8"))
+          assert health.get("status") == "healthy", health
+          assert health.get("service") == "ZeniaOne", health
+          assert health.get("database") == "connected", health
+          assert ready.get("status") == "ready", ready
+          print("Backend health and readiness verified")
+          PY
 
       - name: Ping Frontend
+        env:
+          FRONTEND_URL: https://zeniaone-web.onrender.com/
         run: |
-          echo "Warming Render frontend (https://zeniaone-web.onrender.com)..."
-          curl --retry 3 --retry-delay 5 --max-time 60 --silent --show-error --location -o /dev/null https://zeniaone-web.onrender.com/ || true
+          set -euo pipefail
+          echo "Warming Render frontend ($FRONTEND_URL)..."
+          curl --fail --silent --show-error --location -o /dev/null \
+            --connect-timeout 15 --max-time 45 --retry 4 --retry-all-errors \
+            --retry-delay 8 --retry-max-time 150 "$FRONTEND_URL"
           echo "Frontend pinged successfully."
 
