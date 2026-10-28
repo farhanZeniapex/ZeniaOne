@@ -438,11 +438,12 @@ function ChatScreen({
           updated[updated.length - 1] = {
             ...updated[updated.length - 1],
             content: aiText,
+            isLiveVoice: true,
             sources: sources || updated[updated.length - 1].sources || []
           };
           return updated;
         }
-        return [...prev, { role: "assistant" as const, content: aiText, sources: sources || [] }];
+        return [...prev, { role: "assistant" as const, content: aiText, isLiveVoice: true, sources: sources || [] }];
       });
     }
   }
@@ -666,7 +667,7 @@ function ChatScreen({
                 </div>
               )}
               
-              <div className="flex flex-col max-w-[85%] sm:max-w-[75%]">
+              <div className="flex min-w-0 flex-col max-w-[85%] sm:max-w-[75%]">
                 {editingIndex === i ? (
                   <div className="flex flex-col gap-2 bg-sage-50 border border-sage-200 p-3 rounded-2xl w-full text-slate-800 shadow-sm">
                     <textarea 
@@ -689,7 +690,7 @@ function ChatScreen({
                         : "bg-white text-[#1C2421] rounded-[20px] rounded-tl-[4px] border border-[#E3E3DF] shadow-[0_2px_8px_rgba(0,0,0,0.02)]"
                     }`}
                   >
-                    {m.role === "assistant" ? (
+                    {m.role === "assistant" && !(m as any).isLiveVoice ? (
                       <div>
                         {/* Interactive Suggestion Pills */}
                         {(() => {
@@ -756,7 +757,7 @@ function ChatScreen({
                         })()}
                       </div>
                     ) : (
-                      <div className="whitespace-pre-wrap">{m.content}</div>
+                      <div className="whitespace-pre-wrap break-words">{m.content}</div>
                     )}
                   </div>
                 )}

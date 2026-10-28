@@ -376,6 +376,16 @@ async def handle_gemini_live_session(
                             full_ai = "".join(accumulated_ai_text).strip()
                             full_user = "".join(current_user_transcript).strip()
                             logger.info(f"[GEMINI_LIVE_TURN_COMPLETE] AI response: '{full_ai[:80]}'")
+
+                            # Publish the final user transcript separately.
+                            # Interim STT text is only a live preview and must
+                            # not be the only transcript state in the UI.
+                            if full_user:
+                                await client_ws.send_json({
+                                    "type": "transcript",
+                                    "text": full_user,
+                                    "is_final": True,
+                                })
                             
                             await client_ws.send_json({
                                 "type": "ai_text",
