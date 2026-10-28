@@ -756,6 +756,56 @@ async def _grounded_knowledge_answer(
 def _platform_how_to_answer(question: str, lang: str, script: str) -> Optional[str]:
     """Answer common ZeniaOne usage questions without cold-start RAG/LLM work."""
     q = re.sub(r"[^\w\s]", "", question.lower()).strip()
+
+    # Stable product-architecture questions should not enter the expensive RAG
+    # path. Apart from avoiding cold-start failures, these answers make it
+    # explicit which parts are product workflow versus customer-specific data.
+    if "hospital" in q and any(term in q for term in ("voice agent", "agent", "setup", "call flow")):
+        return (
+            "Hospital voice-agent setup ka practical flow:\n\n"
+            "1. **Scope:** Reception, appointment booking, reschedule/cancel, doctor timings, FAQs aur emergency handoff define karein.\n"
+            "2. **Documents:** Hospital services, departments, doctors, timings, fees, location, cancellation policy aur consent/privacy policy ki verified files upload karein.\n"
+            "3. **Agent:** AI Agent me greeting, Hindi/English language, tone, allowed actions aur emergency rule set karein.\n"
+            "4. **Call flow:** Caller identify kare → intent samjhe → required details le → Knowledge Base se answer de → booking ke liye authorized scheduling API/tool call kare → confirmation number repeat kare.\n"
+            "5. **Safety:** Diagnosis ya emergency me medical advice invent na kare; emergency number/clinical staff ko transfer kare. Patient data minimum collect kare aur sensitive data logs me expose na kare.\n"
+            "6. **Testing:** 20–30 test cases chalayein: new booking, duplicate booking, unavailable doctor, wrong date, language switch, cancellation, emergency aur no-answer.\n"
+            "7. **Deploy/monitor:** Pehle Web Chat ya test number par deploy karein, transcripts aur failed tool calls review karein, phir production Twilio/Exotel number connect karein.\n\n"
+            "Exact appointment saving tabhi hoga jab scheduling system ki authorized API/integration connected ho; Knowledge Base akela booking create nahi karta."
+        )
+    if "pdf" in q and any(term in q for term in ("knowledge base", "pdf upload", "technical", "answer")):
+        return (
+            "Knowledge Base PDF pipeline ka technical flow:\n\n"
+            "1. PDF upload hone par file ko workspace/company se associate karke access permission check hoti hai.\n"
+            "2. Text extraction, page/section cleanup aur metadata (file name, page, company) prepare hota hai. Scanned PDF ho to OCR ki zarurat hoti hai.\n"
+            "3. Text ko chhote overlapping chunks me split karke embeddings banaye jaate hain aur vector index me store kiye jaate hain.\n"
+            "4. User question par query embedding banti hai; relevant chunks similarity search se retrieve hote hain, permission filter ke saath.\n"
+            "5. Retrieved context ko agent instructions ke saath model ko diya jata hai. Model ko context-based answer dena chahiye aur unsupported fact invent nahi karna chahiye.\n"
+            "6. Answer ke saath source/file/page metadata preserve kiya ja sakta hai; document update ya delete par purane chunks re-index/remove hone chahiye.\n\n"
+            "Important: PDF upload hona aur live database access alag cheezein hain. Current appointments, calls ya billing ke liye authorized backend API/tool integration chahiye; PDF sirf static knowledge deta hai."
+        )
+    if "appointment" in q and any(term in q for term in ("book", "save", "live data", "phone")):
+        return (
+            "Phone appointment booking ka safe flow:\n\n"
+            "1. Caller ka intent aur preferred language identify karein.\n"
+            "2. Patient name, phone, department/doctor, date, time aur required consent minimum fields me collect karein.\n"
+            "3. Availability ke liye scheduling backend ko authorized tool/API se query karein; Knowledge Base se slot assume na karein.\n"
+            "4. Available slot caller ko read back karke explicit confirmation lein.\n"
+            "5. Booking API ko idempotency key ke saath call karein, taaki retry se duplicate appointment na bane.\n"
+            "6. API response ka appointment ID/confirmation caller ko repeat karein aur allowed fields hi transcript/CRM me save karein.\n"
+            "7. API timeout, unavailable slot ya duplicate request par clear retry/transfer message dein.\n\n"
+            "Live save tabhi possible hai jab calendar/hospital scheduling API connected ho aur agent ko permission mili ho; bina integration ke agent sirf request capture ya handoff kar sakta hai."
+        )
+    if ("primary ai provider" in q or "provider fail" in q or "fallback system" in q) and "fallback" in q:
+        return (
+            "AI-provider fallback ka expected flow:\n\n"
+            "1. Request ke liye primary configured provider/model select hota hai.\n"
+            "2. Timeout, rate limit, auth error ya provider outage ko bounded retry policy detect karti hai; unlimited retry nahi hona chahiye.\n"
+            "3. Health check/circuit breaker primary ko temporarily unhealthy mark karta hai aur configured secondary provider/model par request route hoti hai.\n"
+            "4. Same system prompt, safety rules aur relevant Knowledge Base context secondary ko diya jata hai; secret keys client ko expose nahi hoti.\n"
+            "5. Fallback success par user ko normal answer milta hai; internal logs me provider, latency aur failure reason record hota hai.\n"
+            "6. Agar sab providers fail hon, agent safe message de: service temporarily unavailable, thodi der baad retry karein ya human support par transfer karein.\n\n"
+            "Actual fallback tabhi chalega jab AI Routing me secondary provider credentials, model aur route configured hon."
+        )
     pricing_question = any(term in q for term in (
         "pricing", "price", "prices", "cost", "plan", "plans", "料金",
         "kitne paise", "kitna charge", "paisa", "kimat", "keemat",
