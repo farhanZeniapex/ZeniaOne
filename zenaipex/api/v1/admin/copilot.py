@@ -41,7 +41,18 @@ def _question_intent(question: str) -> tuple[str, float]:
     """
     q = re.sub(r"[^\w\s]", " ", question.lower())
     q = re.sub(r"\s+", " ", q).strip()
-    scores = {"small_talk": 0, "platform_help": 0, "live_data": 0, "knowledge": 0, "action": 0, "pricing": 0}
+    scores = {
+        "small_talk": 0,
+        "platform_help": 0,
+        "product_features": 0,
+        "benefits": 0,
+        "comparison": 0,
+        "voice_setup": 0,
+        "live_data": 0,
+        "knowledge": 0,
+        "action": 0,
+        "pricing": 0,
+    }
 
     def hits(*terms: str) -> int:
         return sum(
@@ -70,13 +81,33 @@ def _question_intent(question: str) -> tuple[str, float]:
     )
     scores["pricing"] += hits("pricing", "price", "cost", "plan", "plans", "kimat", "keemat", "paisa")
     scores["small_talk"] += hits("hi", "hello", "hey", "namaste", "how are you", "how r u", "kese ho", "kaise ho", "kem cho")
+    scores["small_talk"] += hits("good morning", "good evening", "good afternoon", "aaj mood", "mood kaisa", "how is your mood")
+    scores["product_features"] += hits("feature", "features", "main feature", "capabilities", "what can it do", "kya kya kar", "suvidha")
+    scores["benefits"] += hits("benefit", "benefits", "fayda", "faayda", "kis kaam", "mere kaam", "use case", "help me", "why use")
+    scores["comparison"] += hits("difference", "compare", "comparison", "alag kya", "farak", "between")
+    if "zeniaone" in q and "zeniahr" in q:
+        scores["comparison"] += 2
+    scores["voice_setup"] += hits("calling ke liye", "voice agent", "phone agent", "call agent", "voice bot", "telephony setup")
+    if scores["voice_setup"] and any(term in q for term in ("how", "kaise", "kese", "setup", "create", "build", "ban")):
+        scores["voice_setup"] += 2
 
     # Setup intent wins over live metrics when the user is asking how to build
     # or use an agent, even if “call/chat/voice” appears in the same sentence.
+    social_only = scores["small_talk"] and not any(
+        scores[key] for key in ("platform_help", "product_features", "benefits", "comparison", "voice_setup", "knowledge", "action", "pricing")
+    ) and not any(term in q for term in ("call", "chat", "usage", "provider", "company", "document"))
+    if social_only:
+        return "small_talk", min(0.97, 0.78 + scores["small_talk"] * 0.05)
+    if scores["comparison"]:
+        return "comparison", min(0.98, 0.78 + scores["comparison"] * 0.05)
+    if scores["voice_setup"]:
+        return "voice_setup", min(0.97, 0.76 + scores["voice_setup"] * 0.04)
+    if scores["product_features"]:
+        return "product_features", min(0.95, 0.72 + scores["product_features"] * 0.05)
+    if scores["benefits"]:
+        return "benefits", min(0.95, 0.72 + scores["benefits"] * 0.05)
     if scores["platform_help"] and any(term in q for term in ("agent", "use", "process", "proses", "setup", "kaam", "ban")):
         return "platform_help", min(0.99, 0.70 + scores["platform_help"] * 0.06)
-    if scores["small_talk"] and not any(scores[key] for key in ("live_data", "knowledge", "action", "pricing", "platform_help")):
-        return "small_talk", min(0.97, 0.78 + scores["small_talk"] * 0.05)
     if scores["pricing"]:
         return "pricing", min(0.99, 0.72 + scores["pricing"] * 0.06)
     if scores["action"] and scores["knowledge"]:
@@ -1060,6 +1091,37 @@ async def _answer(
     call_conv = {**base_conv, "source_type": {"$in": ["phone_call", "voice_chat"]}}
     base_llm = _platform_llm_scope(company_filter, start, end)
     sources = [{"type": "period", "label": label, "verified": True, "scope": plan["company"], "domain": plan["domain"]}]
+
+    # Product knowledge intents must reach the tenant Knowledge Base before
+    # the live-data sync branch. This prevents words like “calling” or “chat”
+    # from turning a setup/features question into a call-count query.
+    if intent in {"product_features", "benefits", "comparison", "voice_setup"}:
+        knowledge_answer = await _grounded_knowledge_answer(
+            question,
+            admin_agent_id,
+            company_filter,
+            lang,
+            is_voice=is_voice,
+        )
+        if knowledge_answer:
+            return knowledge_answer, [{
+                "type": "knowledge_base",
+                "verified": True,
+                "domain": intent,
+                "intent": intent,
+                "confidence": intent_confidence,
+            }]
+        unavailable = (
+            "Is product question ka verified answer Knowledge Base me available nahi hai. "
+            "Please ZeniaOne/ZeniaHR product documentation add karein; main live call metrics ko is question ka answer nahi banaunga."
+        )
+        return unavailable, [{
+            "type": "knowledge_base",
+            "verified": False,
+            "domain": intent,
+            "intent": intent,
+            "confidence": intent_confidence,
+        }]
 
     # Provider calls can exist before a webhook creates the local shell. Sync
     # before any live call/date answer so the copilot never reports a stale
