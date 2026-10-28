@@ -1,6 +1,7 @@
 """Secure internal Platform Copilot for the platform admin My AI screen."""
 
 import asyncio
+import json
 import logging
 import re
 from calendar import monthrange
@@ -1362,6 +1363,77 @@ async def _small_talk_ai_answer(
                 pass
 
 
+SEMANTIC_INTENTS = frozenset({
+    "small_talk", "live_data", "definition", "product_features", "benefits",
+    "comparison", "setup", "pricing", "knowledge_base", "document_inventory",
+    "document_list", "document_status", "action", "general",
+})
+
+
+async def _semantic_question_intent(
+    question: str,
+    admin_agent_id: Optional[str],
+    *,
+    is_voice: bool = False,
+) -> Optional[tuple[str, float]]:
+    """Classify question meaning before selecting a data source."""
+    if not admin_agent_id or not ObjectId.is_valid(admin_agent_id):
+        return None
+    llm = None
+    try:
+        from ai.llm import AgentLLMClient
+
+        agent = await col_agents().find_one({"_id": ObjectId(admin_agent_id)})
+        if not agent:
+            return None
+        llm = await AgentLLMClient.create(agent, request_id="ADMIN-COPILOT-INTENT")
+        llm.set_budget(2.5 if is_voice else 3.0)
+        llm.agent_type = "platform_admin"
+        llm.company_name = "ZeniaOne"
+        llm.system_prompt = (
+            "You are an intent classifier for ZeniaOne. Classify the user's meaning, not individual trigger words. "
+            "Return only valid JSON with exactly two fields: intent and confidence. "
+            "Allowed intents: small_talk, live_data, definition, product_features, benefits, comparison, setup, pricing, "
+            "knowledge_base, document_inventory, document_list, document_status, action, general. "
+            "Use definition for questions asking what a concept/product/term means, even if the sentence contains call, chat, or voice. "
+            "Use live_data only when the user asks for a current number, count, status, latest activity, or historical platform record. "
+            "Use knowledge_base for facts explicitly requested from uploaded documents. "
+            "confidence must be a number between 0 and 1. Do not answer the question."
+        )
+        raw, _usage = await asyncio.wait_for(
+            llm.generate(
+                question,
+                context_docs=[],
+                language="en-IN",
+                current_date=datetime.now(timezone.utc).date().isoformat(),
+                company_name="ZeniaOne",
+                intent="intent_classification",
+                stage="routing",
+                is_voice=is_voice,
+                public_widget=False,
+            ),
+            timeout=3.5 if is_voice else 4.0,
+        )
+        match = re.search(r"\{.*?\}", str(raw or ""), flags=re.DOTALL)
+        if not match:
+            return None
+        payload = json.loads(match.group(0))
+        intent = str(payload.get("intent") or "").strip().lower()
+        confidence = max(0.0, min(1.0, float(payload.get("confidence", 0))))
+        if intent not in SEMANTIC_INTENTS or confidence < 0.55:
+            return None
+        return ("platform_help" if intent in {"definition", "setup"} else intent), confidence
+    except Exception:
+        logger.debug("Semantic intent classification unavailable", exc_info=True)
+        return None
+    finally:
+        if llm is not None:
+            try:
+                await llm.close()
+            except Exception:
+                pass
+
+
 async def _answer(
     question: str,
     admin_agent_id: Optional[str] = None,
@@ -1376,6 +1448,16 @@ async def _answer(
     # like “calling ke liye agent kaise banate hain” contain call words, but
     # they are setup questions—not requests for call metrics or sync data.
     intent, intent_confidence = _question_intent(question)
+    # Use semantic routing for ambiguous/competing intents. Authoritative
+    # inventory/status queries stay deterministic and avoid an extra model hop.
+    if intent not in {"small_talk", "document_inventory", "document_list", "document_status"} and intent_confidence < 0.94:
+        semantic_intent = await _semantic_question_intent(
+            question,
+            admin_agent_id,
+            is_voice=is_voice,
+        )
+        if semantic_intent:
+            intent, intent_confidence = semantic_intent
     if intent in {"platform_help", "pricing"}:
         early_platform_how_to = _platform_how_to_answer(question, lang, script)
         if early_platform_how_to:
