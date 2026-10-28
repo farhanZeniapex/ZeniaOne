@@ -299,9 +299,9 @@ async def handle_gemini_live_session(
                                 if not question:
                                     question = "".join(current_user_transcript).strip()
                                 try:
-                                    from api.v1.admin.copilot import _answer as admin_copilot_answer
+                                    from api.v1.admin.copilot import answer_admin_voice_question
                                     admin_agent_id = str(agent.get("_id") or agent.get("id") or "")
-                                    verified_answer, _sources = await admin_copilot_answer(
+                                    verified_answer, _sources = await answer_admin_voice_question(
                                         question,
                                         admin_agent_id=admin_agent_id,
                                     )

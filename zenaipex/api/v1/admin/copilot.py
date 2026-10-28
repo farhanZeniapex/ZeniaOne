@@ -2172,6 +2172,18 @@ async def _answer(
     return _localized_fallback(lang, script), [{"type": "capabilities"}]
 
 
+async def answer_admin_voice_question(
+    question: str,
+    admin_agent_id: Optional[str] = None,
+) -> tuple[str, list[dict[str, Any]]]:
+    """Single voice entry point for the Admin Platform Copilot.
+
+    Keeping this wrapper separate prevents callers from accidentally omitting
+    voice constraints or bypassing the central intent/source router.
+    """
+    return await _answer(question, admin_agent_id=admin_agent_id, is_voice=True)
+
+
 @router.post("/query")
 async def query_copilot(payload: CopilotRequest):
     """Answer a platform-admin question using live, tenant-aware MongoDB data."""

@@ -1915,16 +1915,15 @@ async def voice_stream(
                             # Keep admin voice answers identical to My AI text
                             # answers: one deterministic router, one source of
                             # truth, no free-form model-made platform metrics.
-                            from api.v1.admin.copilot import _answer as admin_copilot_answer
+                            from api.v1.admin.copilot import answer_admin_voice_question
                             logger.info(
                                 "[VOICE_ADMIN_COPILOT_START] transcript='%s' session=%s",
                                 clean_raw,
                                 voice_session_id,
                             )
-                            admin_answer, admin_sources = await admin_copilot_answer(
+                            admin_answer, admin_sources = await answer_admin_voice_question(
                                 clean_raw,
                                 admin_agent_id=agent_id,
-                                is_voice=True,
                             )
                             resp = {
                                 "answer": admin_answer,
