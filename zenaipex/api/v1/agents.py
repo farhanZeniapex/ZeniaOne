@@ -1856,6 +1856,8 @@ async def voice_stream(
             clean_raw = re.sub(r'\bche\b', 'chhe', clean_raw, flags=re.IGNORECASE)  # Gujarati "is"
             clean_raw = re.sub(r'\bketli\b', 'ketli', clean_raw, flags=re.IGNORECASE)
             clean_raw = re.sub(r'\bshu\b', 'shu', clean_raw, flags=re.IGNORECASE)    # Gujarati "what"
+            from services.voice_input_normalizer import normalize_voice_transcript
+            clean_raw = normalize_voice_transcript(clean_raw)
 
 
             # Prepare Request with actual session conversation history

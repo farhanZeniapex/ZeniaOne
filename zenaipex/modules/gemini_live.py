@@ -298,6 +298,8 @@ async def handle_gemini_live_session(
                                 question = str(args.get("question") or "").strip()
                                 if not question:
                                     question = "".join(current_user_transcript).strip()
+                                from services.voice_input_normalizer import normalize_voice_transcript
+                                question = normalize_voice_transcript(question)
                                 try:
                                     from api.v1.admin.copilot import answer_admin_voice_question
                                     admin_agent_id = str(agent.get("_id") or agent.get("id") or "")

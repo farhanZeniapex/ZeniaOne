@@ -408,6 +408,9 @@ async def _fetch_configured_voice_response(
 ):
     """Stream the agent-selected LLM and return its concise voice response."""
     from ai.llm import AgentLLMClient
+    from services.voice_input_normalizer import normalize_voice_transcript
+
+    latest_utterance = normalize_voice_transcript(latest_utterance)
 
     context_docs = []
     if rag_pipeline and latest_utterance and latest_utterance != "<unclear_speech>":
@@ -488,6 +491,8 @@ async def fetch_llm_response(conversation_history, active_product="ZeniaONE", ra
     """
     STEP 2: Brain - Groq LLM inference with Product-Aware RAG.
     """
+    from services.voice_input_normalizer import normalize_voice_transcript
+    latest_utterance = normalize_voice_transcript(latest_utterance)
     if agent_doc:
         try:
             logger.info(
