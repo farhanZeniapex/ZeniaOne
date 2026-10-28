@@ -940,28 +940,39 @@ async def media_stream_websocket(websocket: WebSocket):
             
         # Close STT/TTS
         if session.get("streaming_stt"):
-            await session["streaming_stt"].close()
+            try:
+                await session["streaming_stt"].close()
+            except Exception as exc:
+                logger.debug("Twilio STT cleanup skipped: %s", type(exc).__name__)
         if session.get("tts_client"):
-            await session["tts_client"].close()
+            try:
+                await session["tts_client"].close()
+            except Exception as exc:
+                logger.debug("Twilio TTS cleanup skipped: %s", type(exc).__name__)
         if session.get("llm_client"):
-            await session["llm_client"].close()
+            try:
+                await session["llm_client"].close()
+            except Exception as exc:
+                logger.debug("Twilio LLM cleanup skipped: %s", type(exc).__name__)
             
         # Update Usage & Conversation
         if session.get("company_id") and session.get("conversation_id") and not session.get("native_managed"):
             duration = time.time() - session["start_time"]
-            await end_conversation(
-                company_id=session["company_id"],
-                conversation_id=session["conversation_id"],
-                status="completed"
-            )
-            
-            await increment_usage(
-                company_id=session["company_id"],
-                call_duration_seconds=duration,
-                stt_calls=session["stt_api_calls"],
-                tts_calls=session["tts_api_calls"],
-                rag_queries=session["rag_queries"],
-                direction="inbound"
-            )
+            try:
+                await end_conversation(
+                    company_id=session["company_id"],
+                    conversation_id=session["conversation_id"],
+                    status="completed"
+                )
+                await increment_usage(
+                    company_id=session["company_id"],
+                    call_duration_seconds=duration,
+                    stt_calls=session["stt_api_calls"],
+                    tts_calls=session["tts_api_calls"],
+                    rag_queries=session["rag_queries"],
+                    direction="inbound"
+                )
+            except Exception as exc:
+                logger.error("Twilio conversation cleanup failed: %s", type(exc).__name__)
         
         logger.info(f"Call ended for session {session.get('call_sid')}")
