@@ -76,6 +76,24 @@ def _twilio_external_url(request: Request) -> str:
     return str(request.url)
 
 
+def _twilio_websocket_external_url(websocket_url: str, forwarded_host: str = "", forwarded_proto: str = "") -> str:
+    """Build the public URL Twilio used when signing a media WebSocket.
+
+    Render forwards a public ``wss://`` request to the app as an internal
+    WebSocket request and commonly reports ``x-forwarded-proto: https``.
+    Signature validation must therefore translate HTTP proxy schemes back to
+    their external WebSocket equivalents.
+    """
+    if not forwarded_host:
+        return websocket_url
+    parsed = urlparse(websocket_url)
+    public_scheme = {
+        "https": "wss",
+        "http": "ws",
+    }.get(str(forwarded_proto or "").lower(), forwarded_proto or "wss")
+    return f"{public_scheme}://{forwarded_host}{parsed.path}{('?' + parsed.query) if parsed.query else ''}"
+
+
 def _validate_twilio_signature(request: Request, params: dict) -> None:
     """Validate Twilio webhooks without breaking local tunnel development.
 
@@ -553,6 +571,11 @@ async def media_stream_websocket(websocket: WebSocket):
         if not signature and not settings.is_production:
             logger.warning("Twilio media stream arrived without X-Twilio-Signature; allowing in development")
         elif not signature:
+            logger.error(
+                "[TWILIO_WS_REJECTED] reason=missing_signature host=%s path=%s",
+                websocket.headers.get("host", ""),
+                websocket.url.path,
+            )
             await websocket.close(code=1008, reason="Missing Twilio media signature")
             return
         else:
@@ -560,20 +583,34 @@ async def media_stream_websocket(websocket: WebSocket):
             forwarded_host = websocket.headers.get("x-forwarded-host")
             forwarded_proto = websocket.headers.get("x-forwarded-proto")
             if forwarded_host:
-                ws_url = f"{forwarded_proto or 'wss'}://{forwarded_host}{websocket.url.path}"
-                if websocket.url.query:
-                    ws_url += f"?{websocket.url.query}"
+                # Render terminates TLS before forwarding the WebSocket request.
+                # Its proxy therefore reports https/http even though Twilio
+                # signed the public endpoint as wss/ws. Validate against the
+                # externally visible WebSocket scheme, not the proxy scheme.
+                ws_url = _twilio_websocket_external_url(
+                    str(websocket.url), forwarded_host, forwarded_proto
+                )
             from twilio.request_validator import RequestValidator
             validator = RequestValidator(settings.twilio_auth_token)
             if not validator.validate(ws_url, dict(websocket.query_params), signature):
+                logger.error(
+                    "[TWILIO_WS_REJECTED] reason=invalid_signature host=%s forwarded_host=%s "
+                    "forwarded_proto=%s validation_url=%s",
+                    websocket.headers.get("host", ""),
+                    forwarded_host or "",
+                    forwarded_proto or "",
+                    ws_url,
+                )
                 await websocket.close(code=1008, reason="Invalid Twilio media signature")
                 return
 
-    print("========================================")
-    print("🚀 TWILIO WEBSOCKET CONNECTION ATTEMPTED!")
-    print("========================================")
+    logger.info(
+        "[TWILIO_WS_ACCEPTING] host=%s path=%s",
+        websocket.headers.get("host", ""),
+        websocket.url.path,
+    )
     await websocket.accept()
-    print("✅ TWILIO WEBSOCKET ACCEPTED!")
+    logger.info("[TWILIO_WS_ACCEPTED] path=%s", websocket.url.path)
     
     session = {
         "call_sid": "",
