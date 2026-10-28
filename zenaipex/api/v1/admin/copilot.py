@@ -1549,7 +1549,8 @@ async def _answer(
     identity_phrase = any(term in q for term in (
         "kya hai", "kya he", "kyu use", "why use", "what is", "purpose",
         "tell me about", "ke bare me", "ke baare me", "ke bare mein",
-        "ke baare mein", "के बारे में", "बारे में", "बताओ", "बताइए",
+        "ke baare mein", "क्या है", "क्या हे", "क्यों उपयोग", "के बारे में",
+        "बारे में", "बताओ", "बताइए",
     ))
     zeniOne_intro = zeniaone_alias and identity_phrase
     if zeniOne_intro:
