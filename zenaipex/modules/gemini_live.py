@@ -13,6 +13,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime, timezone
 from bson import ObjectId
 import websockets
+from services.voice_input_normalizer import normalize_voice_transcript
 
 logger = logging.getLogger("zenaipex.gemini_live")
 
@@ -95,6 +96,7 @@ async def handle_gemini_live_session(
         "If the user asks what ZeniaOne is, explain ZeniaOne itself in 2-4 clear sentences before mentioning any product. "
         "If the user asks how to use it, explain a short practical workflow; if they ask when to use it, explain the relevant use cases. "
         "If a name or phrase is unclear because of speech recognition, ask one short clarification instead of guessing or changing the topic. "
+        "If the user pauses after an incomplete phrase or asks only part of a question, do not stay silent: ask one short clarification, such as 'Aap ZeniaOne mein kya jaana chahte hain?' "
         "When the user corrects you, acknowledge the correction and answer only the corrected request."
     )
     instruction_text += (
@@ -342,9 +344,10 @@ async def handle_gemini_live_session(
                             it_text = sc["inputTranscription"].get("text", "")
                             if it_text:
                                 current_user_transcript.append(it_text)
+                                display_transcript = normalize_voice_transcript("".join(current_user_transcript))
                                 await client_ws.send_json({
                                     "type": "transcript",
-                                    "text": "".join(current_user_transcript),
+                                    "text": display_transcript,
                                     "is_final": False
                                 })
 
@@ -374,7 +377,7 @@ async def handle_gemini_live_session(
                         # 4.5 Turn Completion
                         if sc.get("turnComplete"):
                             full_ai = "".join(accumulated_ai_text).strip()
-                            full_user = "".join(current_user_transcript).strip()
+                            full_user = normalize_voice_transcript("".join(current_user_transcript))
                             logger.info(f"[GEMINI_LIVE_TURN_COMPLETE] AI response: '{full_ai[:80]}'")
 
                             # Publish the final user transcript separately.
