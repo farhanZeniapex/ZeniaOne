@@ -1438,32 +1438,55 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
         if (engineModeRef.current !== "gemini_live") {
           // Native Gemini Live speaks through its own audio stream. Clone
           // routes use the configured TTS voice for this greeting.
-          let welcomeSettled = false;
+          const welcomeCacheKey = `zeniaone:welcome-clone:${companyId}:${agent.id}:${langModeRef.current}:${encodeURIComponent(greeting)}`;
+          let cachedWelcome = "";
+          try {
+            cachedWelcome = window.localStorage.getItem(welcomeCacheKey) || "";
+          } catch {
+            // Storage may be blocked; the network path remains available.
+          }
+
+          let welcomeSettled = Boolean(cachedWelcome);
+          if (cachedWelcome) {
+            // Reuse the last successful clone immediately. Refresh it in the
+            // background below so slow TTS does not delay every new session.
+            welcomeAudioRef.current = cachedWelcome;
+            setVoiceState("connecting");
+            void playMp3Audio(cachedWelcome);
+          }
+
           // Clone TTS can take several seconds to return its first audio.
           // Keep the greeting responsive with a browser voice fallback instead
           // of leaving the voice panel silent for the full provider timeout.
           const welcomeTimer = window.setTimeout(() => {
+            if (cachedWelcome) return;
             if (welcomeSettled || sessionTokenRef.current !== token || !mountedRef.current) return;
             welcomeSettled = true;
             setVoiceNotice("Voice provider is slow. Trying browser audio for the welcome message.");
             speakWithBrowserSynthesis(greeting, synthLang);
           }, 1800);
           speakPromiseRef.current = agentsApi.speak(companyId, agent.id, greeting);
-          setVoiceState("connecting");
           speakPromiseRef.current
             .then((welcome) => {
-              if (welcomeSettled || sessionTokenRef.current !== token || !mountedRef.current) return;
-              welcomeSettled = true;
-              window.clearTimeout(welcomeTimer);
               if (welcome?.audio_base64) {
+                try {
+                  window.localStorage.setItem(welcomeCacheKey, welcome.audio_base64);
+                } catch {
+                  // Ignore cache write failures; playback still works.
+                }
+                if (cachedWelcome || welcomeSettled || sessionTokenRef.current !== token || !mountedRef.current) return;
+                welcomeSettled = true;
+                window.clearTimeout(welcomeTimer);
                 welcomeAudioRef.current = welcome.audio_base64;
                 playMp3Audio(welcome.audio_base64);
-              } else {
+              } else if (!cachedWelcome && !welcomeSettled && sessionTokenRef.current === token && mountedRef.current) {
+                welcomeSettled = true;
+                window.clearTimeout(welcomeTimer);
                 speakWithBrowserSynthesis(greeting, synthLang);
               }
             })
             .catch(() => {
-              if (!welcomeSettled && sessionTokenRef.current === token && mountedRef.current) {
+              if (!cachedWelcome && !welcomeSettled && sessionTokenRef.current === token && mountedRef.current) {
                 welcomeSettled = true;
                 window.clearTimeout(welcomeTimer);
                 speakWithBrowserSynthesis(greeting, synthLang);
