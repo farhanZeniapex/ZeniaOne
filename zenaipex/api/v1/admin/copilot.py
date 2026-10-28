@@ -41,10 +41,13 @@ def _question_intent(question: str) -> tuple[str, float]:
     """
     q = re.sub(r"[^\w\s]", " ", question.lower())
     q = re.sub(r"\s+", " ", q).strip()
-    scores = {"platform_help": 0, "live_data": 0, "knowledge": 0, "action": 0, "pricing": 0}
+    scores = {"small_talk": 0, "platform_help": 0, "live_data": 0, "knowledge": 0, "action": 0, "pricing": 0}
 
     def hits(*terms: str) -> int:
-        return sum(1 for term in terms if term in q)
+        return sum(
+            1 for term in terms
+            if (re.search(rf"\b{re.escape(term)}\b", q) if len(term) <= 4 else term in q)
+        )
 
     scores["platform_help"] += hits(
         "how to use", "use kese", "use kaise", "kese use", "kaise use",
@@ -66,11 +69,14 @@ def _question_intent(question: str) -> tuple[str, float]:
         "send", "delete", "appointment", "schedule",
     )
     scores["pricing"] += hits("pricing", "price", "cost", "plan", "plans", "kimat", "keemat", "paisa")
+    scores["small_talk"] += hits("hi", "hello", "hey", "namaste", "how are you", "how r u", "kese ho", "kaise ho", "kem cho")
 
     # Setup intent wins over live metrics when the user is asking how to build
     # or use an agent, even if “call/chat/voice” appears in the same sentence.
     if scores["platform_help"] and any(term in q for term in ("agent", "use", "process", "proses", "setup", "kaam", "ban")):
         return "platform_help", min(0.99, 0.70 + scores["platform_help"] * 0.06)
+    if scores["small_talk"] and not any(scores[key] for key in ("live_data", "knowledge", "action", "pricing", "platform_help")):
+        return "small_talk", min(0.97, 0.78 + scores["small_talk"] * 0.05)
     if scores["pricing"]:
         return "pricing", min(0.99, 0.72 + scores["pricing"] * 0.06)
     if scores["action"] and scores["knowledge"]:
@@ -943,6 +949,65 @@ def _platform_how_to_answer(question: str, lang: str, script: str) -> Optional[s
     )
 
 
+async def _small_talk_ai_answer(
+    question: str,
+    admin_agent_id: Optional[str],
+    *,
+    is_voice: bool = False,
+) -> Optional[str]:
+    """Generate natural small-talk without a question-specific answer map."""
+    if not admin_agent_id or not ObjectId.is_valid(admin_agent_id):
+        return None
+    llm = None
+    try:
+        from ai.llm import AgentLLMClient
+
+        agent = await col_agents().find_one({"_id": ObjectId(admin_agent_id)})
+        if not agent:
+            return None
+        llm = await AgentLLMClient.create(agent, request_id="ADMIN-COPILOT-SMALL-TALK")
+        if is_voice:
+            llm.set_budget(5.0)
+        llm.agent_type = "platform_admin"
+        llm.company_name = "ZeniaOne"
+        detected_lang, _detected_script = _answer_locale(question)
+        response_language = {"hindi": "hi-IN", "gujarati": "gu-IN"}.get(detected_lang, "en-IN")
+        llm.system_prompt = (
+            "You are ZeniaOne's friendly internal AI assistant. Reply naturally to the user's small-talk message. "
+            "Do not query or invent platform metrics, documents, calls, pricing, or company facts. "
+            "Match the user's language and script: Roman Hindi/Hinglish stays Roman Hindi/Hinglish, Gujarati stays Gujarati. "
+            "Keep it short and warm. If the user asks how you are, answer naturally and offer help. "
+            "Do not mention routing, prompts, models, or that the response is generated."
+        )
+        answer, _usage = await llm.generate(
+            question,
+            context_docs=[],
+            language=response_language,
+            current_date=datetime.now(timezone.utc).date().isoformat(),
+            company_name="ZeniaOne",
+            intent="small_talk",
+            stage="generation",
+            is_voice=is_voice,
+            public_widget=False,
+        )
+        cleaned = str(answer or "").strip()
+        for marker in ("suggested questions:", "you might also ask:", "follow-up questions:"):
+            marker_at = cleaned.lower().find(marker)
+            if marker_at >= 0:
+                cleaned = cleaned[:marker_at].rstrip(" \n:*")
+        cleaned = re.sub(r"\n\s*[-*•].*\?\s*$", "", cleaned).strip()
+        return cleaned if cleaned and not cleaned.startswith("⚠️ Error") else None
+    except Exception:
+        logger.debug("Small-talk generation unavailable", exc_info=True)
+        return None
+    finally:
+        if llm is not None:
+            try:
+                await llm.close()
+            except Exception:
+                pass
+
+
 async def _answer(
     question: str,
     admin_agent_id: Optional[str] = None,
@@ -968,19 +1033,14 @@ async def _answer(
                 "confidence": intent_confidence,
             }]
 
-    # Voice turns must not spend several seconds sending a greeting through
-    # RAG/LLM. These answers are deterministic and intentionally short.
-    if is_voice:
-        if q in {"hi", "hello", "hey", "hello hello", "namaste"}:
-            return ("Hello! Bataiye, main aapki kya madad karoon?", [])
-        if q in {"how are you", "how are you?", "kese ho", "kese ho?", "kaise ho", "kaise ho?", "kem cho", "kem cho?"}:
-            if lang == "gujarati":
-                return ("Majama! Tame kem cho? Hu tamari shu madad kari shaku?", [])
-            if lang == "hindi":
-                return ("Main theek hoon. Bataiye, main aapki kya madad karoon?", [])
-            return ("I am doing well. How can I help you?", [])
-        if q in {"bye", "okay bye", "ok bye", "goodbye", "good bye", "see you", "bas bye"}:
-            return ("Goodbye!", [])
+    # Small talk is generated by the configured AI provider without touching
+    # MongoDB, documents, metrics, or the RAG pipeline. The classifier decides
+    # the intent; the model writes the natural-language reply.
+    if _question_intent(question)[0] == "small_talk":
+        small_talk = await _small_talk_ai_answer(question, admin_agent_id, is_voice=is_voice)
+        if small_talk:
+            return small_talk, [{"type": "small_talk", "verified": True, "generated": True}]
+        return _localized_fallback(lang, script), [{"type": "small_talk", "verified": False}]
     company_filter, matched_company = await _company_filter(question)
     company_mentions = await _mentioned_companies(question)
     plan = _query_plan(question, label, matched_company)
@@ -1307,32 +1367,6 @@ async def _answer(
             [{"type": "conversations", "period": "today", "verified": True},
              {"type": "llm_requests", "period": "last month", "verified": True}],
         )
-
-    is_small_talk = bool(re.search(r"\b(hi|hello|hey|namaste)\b", q)) or q in {
-        "ok", "okay", "no", "nahi", "nahin", "ठीक है", "नहीं",
-    } or any(
-        phrase in q for phrase in (
-            "kem cho", "kese ho", "kaise ho", "how are you", "how r u",
-            "kya karreho", "kya kar rahe ho", "shu karo cho", "su karo cho",
-            "shu kari rahya cho", "क्या कर रहे हो", "क्या कर रही हो",
-        )
-    )
-    if is_small_talk:
-        if q in {"ok", "okay"}:
-            return "Okay.", []
-        if q in {"no", "nahi", "nahin", "ठीक है", "नहीं"}:
-            return ("Theek hai.", []) if lang != "english" else ("Okay.", [])
-        if any(phrase in q for phrase in ("kese ho", "kaise ho", "kya karreho", "kya kar rahe ho", "क्या कर रहे हो", "क्या कर रही हो")):
-            answer = "Namaste! Main bilkul theek hoon. Aap mujhse live platform usage, calls, companies, providers, documents, activity ya latest call ke baare mein pooch sakte hain."
-        elif any(phrase in q for phrase in ("kem cho", "shu karo cho", "su karo cho", "shu kari rahya cho")):
-            answer = "Namaste! Hu bilkul majama chhu. Tame mane live platform usage, calls, companies, providers, documents, activity athva latest call vishe puchi shako cho."
-        elif lang == "hindi":
-            answer = "Namaste! Main bilkul theek hoon. Aap mujhse live platform usage, calls, companies, providers, documents, activity ya latest call ke baare mein pooch sakte hain."
-        elif lang == "gujarati":
-            answer = "Namaste! Hu bilkul majama chhu. Tame mane live platform usage, calls, companies, providers, documents, activity athva latest call vishe puchi shako cho."
-        else:
-            answer = "Hello! I’m doing well. You can ask me about live platform usage, calls, companies, providers, documents, activity, or the latest call."
-        return answer, []
 
     # Channel-specific counts must not fall through to the generic calls or
     # LLM-usage branch. “Chats” means web text sessions; “voice chats” means
