@@ -41,6 +41,7 @@ def _question_intent(question: str) -> tuple[str, float]:
     also contains words such as “call”, “voice”, or “chat”.
     """
     q = re.sub(r"[^\w\s]", " ", question.lower())
+    q = re.sub(r"\b(?:doucmnets|documnets|documens|docments|douments)\b", "documents", q)
     q = re.sub(r"\s+", " ", q).strip()
     scores = {
         "small_talk": 0,
@@ -51,6 +52,9 @@ def _question_intent(question: str) -> tuple[str, float]:
         "voice_setup": 0,
         "live_data": 0,
         "knowledge": 0,
+        "document_inventory": 0,
+        "document_list": 0,
+        "document_status": 0,
         "action": 0,
         "pricing": 0,
     }
@@ -58,7 +62,7 @@ def _question_intent(question: str) -> tuple[str, float]:
     def hits(*terms: str) -> int:
         return sum(
             1 for term in terms
-            if (re.search(rf"\b{re.escape(term)}\b", q) if len(term) <= 4 else term in q)
+            if re.search(rf"\b{re.escape(term)}\b", q)
         )
 
     scores["platform_help"] += hits(
@@ -76,6 +80,13 @@ def _question_intent(question: str) -> tuple[str, float]:
         "pdf", "document", "documents", "knowledge base", "faq", "manual", "policy",
         "according to", "document me", "pdf me", "file me",
     )
+    has_document_term = bool(re.search(r"\b(?:document|documents|doc|docs|knowledge\s+base)\b", q))
+    if has_document_term and re.search(r"\b(?:how many|kitne|kitni|ketla|total|count)\b", q):
+        scores["document_inventory"] += 3
+    if has_document_term and re.search(r"\b(?:name|names|list|filename|files|kaunsa|kaunse|konsa|konse)\b", q):
+        scores["document_list"] += 3
+    if has_document_term and re.search(r"\b(?:processing|processed|pending|ready|failed|failure|status)\b", q):
+        scores["document_status"] += 3
     scores["action"] += hits(
         "book", "booking", "create", "save", "update", "cancel", "reschedule",
         "send", "delete", "appointment", "schedule",
@@ -101,6 +112,9 @@ def _question_intent(question: str) -> tuple[str, float]:
     ) and not any(term in q for term in ("call", "chat", "usage", "provider", "company", "document"))
     if social_only:
         return "small_talk", min(0.97, 0.78 + scores["small_talk"] * 0.05)
+    for document_intent in ("document_status", "document_list", "document_inventory"):
+        if scores[document_intent]:
+            return document_intent, 0.94
     if scores["comparison"]:
         return "comparison", min(0.98, 0.78 + scores["comparison"] * 0.05)
     if scores["voice_setup"]:
@@ -137,6 +151,7 @@ def _period(question: str) -> tuple[datetime, datetime, str]:
     # instant, so local midnight boundaries remain safe for indexed queries.
     now = datetime.now(BUSINESS_TIMEZONE)
     q = question.lower()
+    q = re.sub(r"\b(?:doucmnets|documnets|documens|docments|douments)\b", "documents", q)
     # Explicit calendar month questions must not fall back to rolling 30 days.
     month_aliases = {
         "january": 1, "जनवरी": 1, "february": 2, "फरवरी": 2,
@@ -944,6 +959,7 @@ async def _document_status_answer(
 ) -> Optional[tuple[str, dict[str, Any]]]:
     """Answer document inventory/status questions directly from MongoDB."""
     q = question.lower()
+    q = re.sub(r"\b(?:doucmnets|documnets|documens|docments|douments)\b", "documents", q)
     count_question = any(term in q for term in (
         "how many documents", "documents kitne", "documents kitni", "kitne documents",
         "kitne document", "document count", "documents count", "knowledge base me kitne",
@@ -953,7 +969,9 @@ async def _document_status_answer(
         "failed document", "failed documents", "document failed", "documents failed",
         "kaunsa document failed", "kaunse documents failed", "failed hai",
     ))
-    if not count_question and not failed_question:
+    list_question = bool(re.search(r"\b(?:name|names|list|filename|files|kaunsa|kaunse|konsa|konse)\b", q)) and bool(re.search(r"\b(?:document|documents|doc|docs)\b", q))
+    status_question = bool(re.search(r"\b(?:processing|processed|pending|ready|failed|failure|status)\b", q)) and bool(re.search(r"\b(?:document|documents|doc|docs|knowledge\s+base)\b", q))
+    if not count_question and not failed_question and not list_question and not status_question:
         return None
 
     query = {**company_filter, "status": {"$ne": "deleted"}}
@@ -962,12 +980,31 @@ async def _document_status_answer(
     processing = sum(1 for doc in docs if doc.get("status") in {"processing", "pending"})
     ready = sum(1 for doc in docs if doc.get("status") == "ready")
 
-    if failed_question:
-        if failed:
-            answer = "Failed documents: " + ", ".join(failed[:30])
+    if list_question and not status_question:
+        if not docs:
+            answer = "No Knowledge Base documents are recorded."
         else:
-            answer = "No failed Knowledge Base documents are recorded."
-        return answer, {"type": "documents", "verified": True, "metric": "failed_documents", "count": len(failed)}
+            lines = ["Knowledge Base documents:"]
+            lines.extend(f"{index}. {doc.get('filename') or 'unnamed document'} — {doc.get('status') or 'unknown'}" for index, doc in enumerate(docs[:100], 1))
+            if len(docs) > 100:
+                lines.append(f"Showing 100 of {len(docs):,} documents.")
+            answer = "\n".join(lines)
+        return answer, {"type": "documents", "verified": True, "metric": "document_list", "count": len(docs)}
+
+    if failed_question or status_question:
+        requested_status = "failed" if (failed_question or "failed" in q or "failure" in q) else ("processing" if "processing" in q else ("pending" if "pending" in q else ("ready" if "ready" in q else None)))
+        if requested_status:
+            names = [str(doc.get("filename") or "unknown") for doc in docs if doc.get("status") == requested_status or (requested_status == "processing" and doc.get("status") == "pending")]
+        else:
+            names = failed
+        if failed:
+            if requested_status == "failed":
+                answer = "Failed documents: " + ", ".join(names[:30])
+            else:
+                answer = f"{requested_status.capitalize()} documents: " + (", ".join(names[:30]) if names else "none")
+        else:
+            answer = f"{requested_status.capitalize()} documents: " + (", ".join(names[:30]) if names else "none") if requested_status else "No failed Knowledge Base documents are recorded."
+        return answer, {"type": "documents", "verified": True, "metric": "document_status", "status": requested_status, "count": len(names)}
 
     if lang == "hindi":
         answer = f"Knowledge Base me total {len(docs):,} documents hain: {ready:,} ready, {processing:,} processing/pending aur {len(failed):,} failed."
@@ -1360,6 +1397,14 @@ async def _answer(
     call_conv = {**base_conv, "source_type": {"$in": ["phone_call", "voice_chat"]}}
     base_llm = _platform_llm_scope(company_filter, start, end)
     sources = [{"type": "period", "label": label, "verified": True, "scope": plan["company"], "domain": plan["domain"]}]
+
+    # Inventory, filename, and indexing-status questions are authoritative
+    # MongoDB lookups. They must never enter the generative workflow path.
+    if intent in {"document_inventory", "document_list", "document_status"}:
+        document_answer = await _document_status_answer(question, company_filter, lang)
+        if document_answer:
+            answer, source = document_answer
+            return answer, [source]
 
     # Product knowledge intents must reach the tenant Knowledge Base before
     # the live-data sync branch. This prevents words like “calling” or “chat”
@@ -2165,7 +2210,9 @@ async def query_copilot(payload: CopilotRequest):
     # Preserve the active product/topic for short follow-ups such as
     # “Zenia HR ka”. The UI history is not sent as an LLM prompt, so load only
     # the same admin conversation and add a bounded context hint to routing.
-    if payload.company_id and payload.conversation_id and len(question.split()) <= 6:
+    current_intent = _question_intent(question)[0]
+    document_direct_intent = current_intent in {"document_inventory", "document_list", "document_status"}
+    if payload.company_id and payload.conversation_id and len(question.split()) <= 6 and not document_direct_intent:
         incomplete_topic = bool(re.search(
             r"(?:\b(?:ka|ke|ki|का|के|की)\b|\b(?:about|details|detail)\s*$)",
             question.lower(),

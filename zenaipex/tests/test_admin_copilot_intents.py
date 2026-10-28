@@ -21,3 +21,13 @@ def test_product_questions_use_product_sources():
 def test_live_questions_remain_live_data():
     for question in ("aaj kitni chats hui?", "Aaje ketla calls aavya?", "latest call kya hai?"):
         assert _question_intent(question)[0] == "live_data"
+
+
+def test_document_inventory_questions_bypass_generation():
+    cases = {
+        "Knowledge Base me kitne documents hain?": "document_inventory",
+        "konsa document processing mehe": "document_status",
+        "11 documents ka name batav": "document_list",
+    }
+    for question, expected in cases.items():
+        assert _question_intent(question)[0] == expected
