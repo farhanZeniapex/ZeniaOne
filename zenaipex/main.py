@@ -343,9 +343,21 @@ app = FastAPI(
 
 # ── Middleware ────────────────────────────────────────────────────────────────
 
+def _cors_origins() -> list[str]:
+    """Return normalized browser origins for local and hosted deployments."""
+    configured = [
+        settings.frontend_url,
+        "https://zeniaone-web.onrender.com",
+        *settings.cors_allowed_origins.split(","),
+    ]
+    if settings.is_development:
+        configured.extend(["http://localhost:3000", "http://127.0.0.1:3000"])
+    return sorted({origin.strip().rstrip("/") for origin in configured if origin.strip()})
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"] if settings.is_development else [settings.frontend_url],
+    allow_origins=_cors_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With", "X-Request-ID"],

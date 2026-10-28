@@ -134,7 +134,7 @@ async def register_user(
 
     # Generate tokens
     access_token = create_access_token({"sub": user_id})
-    refresh_token = create_refresh_token(user_id, int(user.get("session_version") or 0))
+    refresh_token = create_refresh_token(user_id, int(user_doc.get("session_version") or 0))
 
     # Generate email verification token
     verify_token = create_email_verification_token(email.lower())

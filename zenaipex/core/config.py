@@ -27,7 +27,11 @@ class Settings(BaseSettings):
     # Render supplies APP_ENV=production in the deployed service.
     app_env: str = Field(default="development")
     app_base_url: str = Field(default="http://localhost:8000")
-    frontend_url: str = Field(default="http://localhost:3000")
+    # Render's production frontend is the safe fallback when FRONTEND_URL was
+    # omitted during deployment. Local development is handled separately by
+    # the CORS middleware when APP_ENV=development.
+    frontend_url: str = Field(default="https://zeniaone-web.onrender.com")
+    cors_allowed_origins: str = Field(default="", description="Comma-separated additional browser origins")
     app_secret_key: str = Field(default="")
     sentry_dsn: str = Field(default="")
     sentry_traces_sample_rate: float = Field(default=0.1, ge=0.0, le=1.0)
