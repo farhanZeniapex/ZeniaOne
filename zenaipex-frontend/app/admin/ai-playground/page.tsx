@@ -494,57 +494,35 @@ export default function AdminAiPlaygroundPage() {
     sources?: any[],
     isInterimUser: boolean = false,
   ) {
-    if (userText.trim()) {
-      setMessages((prev) => {
-        // If previous message was a live voice turn from user, update it in-place
-        if (
-          prev.length > 0 &&
-          prev[prev.length - 1].role === "user" &&
-          (prev[prev.length - 1] as any).isLiveVoice
-        ) {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            ...updated[updated.length - 1],
-            content: userText,
-            isLiveVoice: isInterimUser,
-          };
-          return updated;
+    const trimmedUser = userText.trim();
+    const trimmedAi = aiText.trim();
+    const normalize = (value: string) => value.toLowerCase().replace(/[\s\u200b]+/g, " ").replace(/[?!.,।]+$/g, "").trim();
+    setMessages((prev) => {
+      const updated = [...prev];
+      if (trimmedUser) {
+        const incoming = normalize(trimmedUser);
+        const last = updated[updated.length - 1] as any;
+        if (last?.role === "user" && normalize(String(last.content || "")) === incoming) {
+          last.content = trimmedUser;
+          last.isLiveVoice = isInterimUser;
+        } else if (last?.role === "user" && last.isLiveVoice) {
+          last.content = trimmedUser;
+          last.isLiveVoice = isInterimUser;
+        } else {
+          updated.push({ role: "user", content: trimmedUser, isLiveVoice: isInterimUser } as any);
         }
-        return [
-          ...prev,
-          {
-            role: "user" as const,
-            content: userText,
-            isLiveVoice: isInterimUser,
-          } as any,
-        ];
-      });
-    }
-    if (aiText.trim()) {
-      setMessages((prev) => {
-        if (
-          prev.length > 0 &&
-          prev[prev.length - 1].role === "assistant" &&
-          !userText.trim()
-        ) {
-          const updated = [...prev];
-          updated[updated.length - 1] = {
-            ...updated[updated.length - 1],
-            content: aiText,
-            sources: sources || updated[updated.length - 1].sources || [],
-          };
-          return updated;
+      }
+      if (trimmedAi) {
+        const last = updated[updated.length - 1] as any;
+        if (last?.role === "assistant" && last.isLiveVoice) {
+          last.content = trimmedAi;
+          last.sources = sources || last.sources || [];
+        } else {
+          updated.push({ role: "assistant", content: trimmedAi, isLiveVoice: true, sources: sources || [] } as any);
         }
-        return [
-          ...prev,
-          {
-            role: "assistant" as const,
-            content: aiText,
-            sources: sources || [],
-          },
-        ];
-      });
-    }
+      }
+      return updated;
+    });
   }
 
   function handleVoiceConvIdChange(newId: string) {

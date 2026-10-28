@@ -102,6 +102,14 @@ def _question_intent(question: str) -> tuple[str, float]:
         "what is", "what are", "meaning", "explain", "kya hai", "matlab",
     )):
         scores["platform_help"] += 3
+    product_aliases = ("zeniaone", "zenia one", "zeniahr", "zenia hr", "zeniachat", "zenia chat", "zeniafleets", "zenia fleets", "tender guruji", "zeniapex")
+    definition_question = bool(re.search(
+        r"\bwhat\s+(?:is|are)\b|\b(?:meaning|explain)\b|\bkya\s+hai\b|\bkya\s+he\b|ke\s+ba(?:re|are)\s+(?:me|mein)\b|बारे\s+में|बताओ",
+        q,
+    ))
+    if any(alias in q for alias in product_aliases) and definition_question and not scores["pricing"] and not scores["benefits"]:
+        scores["product_features"] += 2
+    scores["live_data"] += hits("provider", "providers", "model", "models", "active provider", "active model", "current provider", "current model")
     if "zeniapex" in q and not scores["pricing"] and not scores["live_data"]:
         scores["product_features"] += 1
     scores["benefits"] += hits("benefit", "benefits", "fayda", "faayda", "kis kaam", "mere kaam", "use case", "help me", "why use")
@@ -132,6 +140,8 @@ def _question_intent(question: str) -> tuple[str, float]:
         return "benefits", min(0.95, 0.72 + scores["benefits"] * 0.05)
     if scores["platform_help"] and any(term in q for term in ("agent", "use", "process", "proses", "setup", "kaam", "ban")):
         return "platform_help", min(0.99, 0.70 + scores["platform_help"] * 0.06)
+    if scores["platform_help"] >= 3 and any(term in q for term in ("inbound", "outbound")):
+        return "platform_help", 0.94
     if scores["pricing"]:
         return "pricing", min(0.99, 0.72 + scores["pricing"] * 0.06)
     if scores["action"] and scores["knowledge"]:
@@ -837,7 +847,7 @@ async def _platform_document_answer(
     ]
     if intent == "comparison":
         source_paths.append(repo_root / "zenaipex" / "data" / "ZeniaHR_Sales_Knowledge.txt")
-    if "zeniapex" in question.lower():
+    if any(alias in question.lower() for alias in ("zeniapex", "zenia chat", "zeniachat", "zenia fleets", "zeniafleets", "tender guruji", "zeniahr", "zenia hr")):
         source_paths.append(repo_root / "docs" / "guides" / "ZeniaPex_Product_Catalog.md")
 
     async def read_source(path: Path) -> Optional[dict[str, Any]]:
@@ -939,7 +949,7 @@ async def _platform_document_excerpt(intent: str, question: str = "") -> Optiona
     ]
     if intent == "comparison":
         paths.append(repo_root / "zenaipex" / "data" / "ZeniaHR_Sales_Knowledge.txt")
-    if "zeniapex" in question.lower():
+    if any(alias in question.lower() for alias in ("zeniapex", "zenia chat", "zeniachat", "zenia fleets", "zeniafleets", "tender guruji", "zeniahr", "zenia hr")):
         paths.append(repo_root / "docs" / "guides" / "ZeniaPex_Product_Catalog.md")
     keywords = {
         "product_features": ("feature", "platform", "voice", "knowledge", "telephony", "integration"),

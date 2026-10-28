@@ -443,52 +443,32 @@ function ChatScreen({
   function handleVoiceMessagesUpdate(userText: string, aiText: string, sources?: any[], isInterimUser: boolean = false) {
     const trimmedUser = userText.trim();
     const trimmedAi = aiText.trim();
+    const normalize = (value: string) => value.toLowerCase().replace(/[\s\u200b]+/g, " ").replace(/[?!.,।]+$/g, "").trim();
 
     setMessages((prev) => {
       const updated = [...prev];
-
       if (trimmedUser) {
-        const lastMsg = updated[updated.length - 1];
-        const secondLastMsg = updated.length >= 2 ? updated[updated.length - 2] : null;
-
-        if (lastMsg && lastMsg.role === "user") {
-          updated[updated.length - 1] = {
-            ...lastMsg,
-            content: trimmedUser,
-            isLiveVoice: isInterimUser
-          };
-        } else if (secondLastMsg && secondLastMsg.role === "user" && lastMsg && lastMsg.role === "assistant" && lastMsg.content === "...") {
-          updated[updated.length - 2] = {
-            ...secondLastMsg,
-            content: trimmedUser,
-            isLiveVoice: isInterimUser
-          };
+        const incoming = normalize(trimmedUser);
+        const last = updated[updated.length - 1] as any;
+        if (last?.role === "user" && normalize(String(last.content || "")) === incoming) {
+          last.content = trimmedUser;
+          last.isLiveVoice = isInterimUser;
+        } else if (last?.role === "user" && last.isLiveVoice) {
+          last.content = trimmedUser;
+          last.isLiveVoice = isInterimUser;
         } else {
-          updated.push({
-            role: "user",
-            content: trimmedUser,
-            isLiveVoice: isInterimUser
-          });
+          updated.push({ role: "user", content: trimmedUser, isLiveVoice: isInterimUser } as any);
         }
       }
-
       if (trimmedAi) {
-        const lastMsg = updated[updated.length - 1];
-        if (lastMsg && lastMsg.role === "assistant") {
-          updated[updated.length - 1] = {
-            ...lastMsg,
-            content: trimmedAi,
-            sources: sources || lastMsg.sources || []
-          };
+        const last = updated[updated.length - 1] as any;
+        if (last?.role === "assistant" && last.isLiveVoice) {
+          last.content = trimmedAi;
+          last.sources = sources || last.sources || [];
         } else {
-          updated.push({
-            role: "assistant",
-            content: trimmedAi,
-            sources: sources || []
-          });
+          updated.push({ role: "assistant", content: trimmedAi, isLiveVoice: true, sources: sources || [] } as any);
         }
       }
-
       return updated;
     });
   }
