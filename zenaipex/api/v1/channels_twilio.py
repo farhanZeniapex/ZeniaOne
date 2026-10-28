@@ -107,14 +107,28 @@ def _validate_twilio_signature(request: Request, params: dict) -> None:
     from twilio.request_validator import RequestValidator
 
     signature = request.headers.get("X-Twilio-Signature", "")
+    logger.info(
+        "[TWILIO_WEBHOOK_REQUEST] path=%s host=%s forwarded_host=%s forwarded_proto=%s method=%s query_keys=%s signature_present=%s",
+        request.url.path,
+        request.headers.get("host", ""),
+        request.headers.get("x-forwarded-host", ""),
+        request.headers.get("x-forwarded-proto", ""),
+        request.method,
+        sorted(dict(request.query_params).keys()),
+        bool(signature),
+    )
     if not signature:
         if settings.is_production:
             raise HTTPException(status_code=401, detail="Missing Twilio webhook signature")
         logger.warning("Twilio webhook arrived without X-Twilio-Signature; allowing in development")
         return
-    if not RequestValidator(settings.twilio_auth_token).validate(
-        _twilio_external_url(request), params, signature
-    ):
+    signed_url = _twilio_external_url(request)
+    if not RequestValidator(settings.twilio_auth_token).validate(signed_url, params, signature):
+        logger.error(
+            "[TWILIO_WEBHOOK_REJECTED] path=%s signed_url=%s reason=invalid_signature",
+            request.url.path,
+            signed_url,
+        )
         raise HTTPException(status_code=401, detail="Invalid Twilio webhook signature")
 
 
@@ -242,6 +256,14 @@ async def twilio_outbound_twiml(company_id: str, agent_id: str, channel_id: str,
     </Connect>
 </Response>
 """
+    logger.info(
+        "[TWILIO_TWIML_READY] company_id=%s agent_id=%s channel_id=%s call_sid=%s ws_url=%s",
+        company_id,
+        agent_id,
+        channel_id,
+        call_sid,
+        ws_url,
+    )
     return Response(content=twiml, media_type="text/xml")
 
 
