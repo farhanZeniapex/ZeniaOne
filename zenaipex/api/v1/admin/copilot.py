@@ -756,13 +756,40 @@ async def _grounded_knowledge_answer(
 def _platform_how_to_answer(question: str, lang: str, script: str) -> Optional[str]:
     """Answer common ZeniaOne usage questions without cold-start RAG/LLM work."""
     q = re.sub(r"[^\w\s]", "", question.lower()).strip()
+    pricing_question = any(term in q for term in (
+        "pricing", "price", "prices", "cost", "plan", "plans", "料金",
+        "kitne paise", "kitna charge", "paisa", "kimat", "keemat",
+    ))
     how_to = any(term in q for term in (
         "kese use", "kaise use", "kese chal", "kaise chal", "kya process",
         "kya proses", "use karna", "use karne", "how to use", "how do i use",
         "how does it work", "process kya", "process batao", "steps batao",
     ))
-    if not how_to:
+    if not how_to and not pricing_question:
         return None
+    if pricing_question and lang == "hindi" and script != "latin":
+        return (
+            "ZeniaOne की pricing इस workspace के live verified data में configured नहीं है, इसलिए मैं गलत price नहीं बताऊँगा।\n\n"
+            "Pricing देखने के लिए **Billing & Plans** section खोलें या sales/admin team से exact quote लें। Price आमतौर पर agents की संख्या, monthly conversations, voice minutes, telephony provider और integrations पर depend करता है।\n\n"
+            "Use करने का process: Company setup → Knowledge Base upload → AI Agent create → Web Chat या Twilio/Exotel deploy → usage monitor."
+        )
+    if pricing_question and lang == "hindi":
+        return (
+            "ZeniaOne ki pricing is workspace ke live verified data me configured nahi hai, isliye main galat price nahi bataunga.\n\n"
+            "Exact pricing ke liye **Billing & Plans** section dekhein ya sales/admin team se quote lein. Price agents ki sankhya, monthly conversations, voice minutes, telephony provider aur integrations par depend karti hai.\n\n"
+            "Use process: Company setup → Knowledge Base upload → AI Agent create → Web Chat ya Twilio/Exotel deploy → usage monitor."
+        )
+    if pricing_question and lang == "gujarati":
+        return (
+            "ZeniaOne ni pricing aa workspace na live verified data ma configured nathi, etle hu khoti kimat nahi kahu.\n\n"
+            "Exact pricing mate **Billing & Plans** section kholo athva sales/admin team pase quote lo. Price agents, monthly conversations, voice minutes, telephony provider ane integrations par depend kare chhe."
+        )
+    if pricing_question:
+        return (
+            "ZeniaOne pricing is not configured in this workspace's live verified data, so I will not invent a price.\n\n"
+            "Open **Billing & Plans** or contact the sales/admin team for an exact quote. Pricing usually depends on agent count, monthly conversations, voice minutes, telephony provider, and integrations.\n\n"
+            "Usage flow: Company setup → Knowledge Base → AI Agent → Web Chat or Twilio/Exotel deployment → monitoring."
+        )
     if lang == "hindi" and script != "latin":
         return (
             "ZeniaOne इस्तेमाल करने का basic process:\n\n"
