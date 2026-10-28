@@ -84,6 +84,8 @@ def _question_intent(question: str) -> tuple[str, float]:
     scores["small_talk"] += hits("hi", "hello", "hey", "namaste", "how are you", "how r u", "kese ho", "kaise ho", "kem cho")
     scores["small_talk"] += hits("good morning", "good evening", "good afternoon", "aaj mood", "mood kaisa", "how is your mood")
     scores["product_features"] += hits("feature", "features", "main feature", "capabilities", "what can it do", "kya kya kar", "suvidha")
+    if "zeniapex" in q and not scores["pricing"] and not scores["live_data"]:
+        scores["product_features"] += 1
     scores["benefits"] += hits("benefit", "benefits", "fayda", "faayda", "kis kaam", "mere kaam", "use case", "help me", "why use")
     scores["comparison"] += hits("difference", "compare", "comparison", "alag kya", "farak", "between")
     if "zeniaone" in q and "zeniahr" in q:
@@ -801,6 +803,8 @@ async def _platform_document_answer(
     ]
     if intent == "comparison":
         source_paths.append(repo_root / "zenaipex" / "data" / "ZeniaHR_Sales_Knowledge.txt")
+    if "zeniapex" in question.lower():
+        source_paths.append(repo_root / "docs" / "guides" / "ZeniaPex_Product_Catalog.md")
 
     async def read_source(path: Path) -> Optional[dict[str, Any]]:
         try:
@@ -872,7 +876,7 @@ async def _platform_document_answer(
                 pass
 
 
-async def _platform_document_excerpt(intent: str) -> Optional[str]:
+async def _platform_document_excerpt(intent: str, question: str = "") -> Optional[str]:
     """Return verified source points when model generation is unavailable."""
     repo_root = Path(__file__).resolve().parents[4]
     paths = [
@@ -881,6 +885,8 @@ async def _platform_document_excerpt(intent: str) -> Optional[str]:
     ]
     if intent == "comparison":
         paths.append(repo_root / "zenaipex" / "data" / "ZeniaHR_Sales_Knowledge.txt")
+    if "zeniapex" in question.lower():
+        paths.append(repo_root / "docs" / "guides" / "ZeniaPex_Product_Catalog.md")
     keywords = {
         "product_features": ("feature", "platform", "voice", "knowledge", "telephony", "integration"),
         "benefits": ("enable", "automate", "support", "scale", "reduce", "streamline", "24/7"),
@@ -1291,7 +1297,7 @@ async def _answer(
                 "intent": intent,
                 "confidence": intent_confidence,
             }]
-        platform_excerpt = await _platform_document_excerpt(intent)
+        platform_excerpt = await _platform_document_excerpt(intent, question)
         if platform_excerpt:
             return platform_excerpt, [{
                 "type": "platform_documentation_excerpt",

@@ -8,6 +8,7 @@ def test_small_talk_is_not_live_data():
 
 def test_product_questions_use_product_sources():
     cases = {
+        "zeniapex ?": "product_features",
         "ZeniaOne ke main features kya hain?": "product_features",
         "ZeniaOne mere kis kaam aa sakta hai?": "benefits",
         "ZeniaOne aur ZeniaHR me kya difference hai?": "comparison",
