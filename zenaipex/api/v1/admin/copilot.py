@@ -812,7 +812,10 @@ def _platform_how_to_answer(question: str, lang: str, script: str) -> Optional[s
     ))
     how_to = any(term in q for term in (
         "kese use", "kaise use", "kese chal", "kaise chal", "kya process",
-        "kya proses", "use karna", "use karne", "how to use", "how do i use",
+        "kya proses", "process", "proses", "use kese", "use kaise",
+        "use karna", "use karne", "kab use", "kis kam", "kis kaam",
+        "kaam aayega", "kam aayega", "agent kese", "agent kaise",
+        "how to use", "how do i use",
         "how does it work", "process kya", "process batao", "steps batao",
     ))
     if not how_to and not pricing_question:
@@ -897,6 +900,13 @@ async def _answer(
     start, end, label = _period(question)
     lang, script = _answer_locale(question)
     q = re.sub(r"[^\w\s']+", "", question.lower()).strip()
+
+    # Resolve stable product/workflow intent before live-data routing. Phrases
+    # like “calling ke liye agent kaise banate hain” contain call words, but
+    # they are setup questions—not requests for call metrics or sync data.
+    early_platform_how_to = _platform_how_to_answer(question, lang, script)
+    if early_platform_how_to:
+        return early_platform_how_to, [{"type": "capabilities", "verified": True, "domain": "product_workflow"}]
 
     # Voice turns must not spend several seconds sending a greeting through
     # RAG/LLM. These answers are deterministic and intentionally short.
