@@ -1493,10 +1493,12 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
           }
 
           // Clone TTS can take several seconds to return its first audio.
-          // Keep the greeting responsive with a browser voice fallback instead
-          // of leaving the voice panel silent for the full provider timeout.
+          // In clone mode, never silently switch to a different female browser
+          // voice merely because Sarvam is slow. The cached clone is instant on
+          // later sessions; the first session waits for the selected voice.
+          const allowBrowserWelcomeFallback = engineModeRef.current !== "gemini_clone";
           const welcomeTimer = window.setTimeout(() => {
-            if (cachedWelcome) return;
+            if (cachedWelcome || !allowBrowserWelcomeFallback) return;
             if (welcomeSettled || sessionTokenRef.current !== token || !mountedRef.current) return;
             welcomeSettled = true;
             setVoiceNotice("Voice provider is slow. Trying browser audio for the welcome message.");
