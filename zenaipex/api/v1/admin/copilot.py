@@ -537,6 +537,29 @@ def _localized_fallback(lang: str, script: str) -> str:
     return "I am your internal Platform Copilot. I can answer with live platform data about calls, conversations, company-wise usage, providers, models, tokens, costs, recent activity, and the latest call transcript. Ask a question such as: 'How many calls came today?', 'Which company used the most this month?', or 'What was discussed in the last call?'"
 
 
+def _clean_generated_answer(answer: Any, *, max_chars: int = 7000) -> Optional[str]:
+    """Apply one response contract to every model-generated copilot answer."""
+    cleaned = str(answer or "").strip()
+    if not cleaned or cleaned.startswith("⚠️ Error"):
+        return None
+    markers = (
+        "suggested questions:", "you might also ask:", "follow-up questions:",
+        "suggested questions", "follow-up questions",
+    )
+    lower = cleaned.lower()
+    cut_points = [lower.find(marker) for marker in markers if lower.find(marker) >= 0]
+    if cut_points:
+        cleaned = cleaned[:min(cut_points)].rstrip(" \n:*")
+    cleaned = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", cleaned)
+    cleaned = re.sub(r"\n\s*\n\s*\n+", "\n\n", cleaned).strip()
+    if len(cleaned) > max_chars:
+        # Keep complete lines so the guard never cuts a number or citation in
+        # the middle of a sentence.
+        bounded = cleaned[:max_chars].rsplit("\n", 1)[0].rstrip()
+        cleaned = bounded or cleaned[:max_chars].rstrip()
+    return cleaned or None
+
+
 async def _admin_live_snapshot(start: datetime, end: datetime, label: str, company_filter: dict[str, Any]) -> str:
     """Build a compact, verified snapshot for complex copilot questions."""
     # Copilot's own grounded generation is operational telemetry, but must not
@@ -738,7 +761,7 @@ async def _grounded_admin_answer(
             while answer_lines and re.match(r"^\s*(?:[-*•]|\d+[.)])\s*.+\?\s*$", answer_lines[-1]):
                 answer_lines.pop()
             cleaned = "\n".join(answer_lines).strip()
-            return cleaned
+            return _clean_generated_answer(cleaned, max_chars=12000)
     except Exception:
         # Complex-answer generation is additive; deterministic analytics must
         # remain available if an LLM provider is unavailable.
@@ -837,7 +860,7 @@ async def _platform_document_answer(
             marker_at = cleaned.lower().find(marker)
             if marker_at >= 0:
                 cleaned = cleaned[:marker_at].rstrip(" \n:*")
-        return cleaned or None
+        return _clean_generated_answer(cleaned)
     except Exception:
         logger.debug("Platform documentation generation unavailable", exc_info=True)
         return None
@@ -989,7 +1012,7 @@ async def _grounded_knowledge_answer(
             maxsplit=1,
             flags=re.IGNORECASE,
         )[0].rstrip(" \n:*")
-        return cleaned or None
+        return _clean_generated_answer(cleaned, max_chars=12000)
     except Exception:
         return None
     finally:
@@ -1188,7 +1211,7 @@ async def _small_talk_ai_answer(
         cleaned = re.sub(r"(?m)^\s{0,3}#{1,6}\s*", "", cleaned)
         cleaned = re.sub(r"(?m)^\s*[-*•]\s+", "", cleaned)
         cleaned = re.sub(r"\n\s*\n+", " ", cleaned).strip()
-        return cleaned if cleaned and not cleaned.startswith("⚠️ Error") else None
+        return _clean_generated_answer(cleaned, max_chars=1200)
     except Exception:
         logger.debug("Small-talk generation unavailable", exc_info=True)
         return None
