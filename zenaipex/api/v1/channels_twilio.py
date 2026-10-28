@@ -602,7 +602,10 @@ async def media_stream_websocket(websocket: WebSocket):
             return
         else:
             ws_url = str(websocket.url)
-            forwarded_host = websocket.headers.get("x-forwarded-host")
+            # Render may omit x-forwarded-host while preserving the public
+            # hostname in Host. Using the internal socket host here makes the
+            # Twilio signature fail before the WebSocket is accepted.
+            forwarded_host = websocket.headers.get("x-forwarded-host") or websocket.headers.get("host", "")
             forwarded_proto = websocket.headers.get("x-forwarded-proto")
             if forwarded_host:
                 # Render terminates TLS before forwarding the WebSocket request.
