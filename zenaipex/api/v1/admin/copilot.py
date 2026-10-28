@@ -69,8 +69,8 @@ def _question_intent(question: str) -> tuple[str, float]:
         "kab use", "kaam aayega", "kam aayega",
     )
     scores["live_data"] += hits(
-        "aaj", "today", "yesterday", "kal", "live", "latest", "kitni", "kitne",
-        "count", "number of", "usage", "activity", "snapshot", "how many", "real customer",
+        "aaj", "aaje", "today", "yesterday", "kal", "live", "latest", "kitni", "kitne", "ketla",
+        "calls", "chats", "conversation", "count", "number of", "usage", "activity", "snapshot", "how many", "real customer",
     )
     scores["knowledge"] += hits(
         "pdf", "document", "documents", "knowledge base", "faq", "manual", "policy",
