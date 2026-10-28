@@ -42,16 +42,8 @@ def _clean_voice_answer(text: str) -> str:
     Keep the complete grounded answer. Older code kept only two paragraphs,
     which silently dropped facts from long admin answers.
     """
-    value = str(text or "").strip()
-    value = re.split(r"\n\s*(?:suggested questions|follow[- ]?up questions?)\s*:?.*$", value, maxsplit=1, flags=re.I | re.S)[0]
-    lines = []
-    for line in value.splitlines():
-        line = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s+", "• ", line.strip())
-        line = re.sub(r"[*_~`#]", "", line)
-        line = re.sub(r"[✨🚀⭐🔥👍🙏😊🤖💡🎙️📊✅]", "", line)
-        if line.strip():
-            lines.append(line.strip())
-    return "\n".join(lines).strip()
+    from services.voice_input_normalizer import normalize_voice_answer
+    return normalize_voice_answer(text)
 
 
 def _fmt_agent(doc: dict) -> dict:

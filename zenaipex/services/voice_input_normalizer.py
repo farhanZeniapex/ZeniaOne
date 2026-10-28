@@ -25,3 +25,17 @@ def normalize_voice_transcript(text: str) -> str:
     for pattern, replacement in replacements:
         value = re.sub(pattern, replacement, value, flags=re.IGNORECASE)
     return re.sub(r"\s+", " ", value).strip()
+
+
+def normalize_voice_answer(text: str, max_chars: int = 1400) -> str:
+    """Convert a model answer into concise, speakable plain text."""
+    value = str(text or "").strip()
+    value = re.split(r"\n\s*(?:suggested questions|follow[- ]?up questions?)\s*:?.*$", value, maxsplit=1, flags=re.IGNORECASE | re.DOTALL)[0]
+    value = re.sub(r"(?m)^\s*(?:[-*•]|\d+[.)])\s+", "", value)
+    value = re.sub(r"[*_~`#]", "", value)
+    value = re.sub(r"[\U00010000-\U0010ffff]", "", value)
+    value = re.sub(r"\s+", " ", value).strip()
+    if len(value) > max_chars:
+        shortened = value[:max_chars].rsplit(".", 1)[0].rstrip()
+        value = (shortened + ".") if shortened else value[:max_chars].rstrip()
+    return value

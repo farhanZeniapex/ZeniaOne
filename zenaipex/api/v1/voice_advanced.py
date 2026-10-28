@@ -408,7 +408,7 @@ async def _fetch_configured_voice_response(
 ):
     """Stream the agent-selected LLM and return its concise voice response."""
     from ai.llm import AgentLLMClient
-    from services.voice_input_normalizer import normalize_voice_transcript
+    from services.voice_input_normalizer import normalize_voice_transcript, normalize_voice_answer
 
     latest_utterance = normalize_voice_transcript(latest_utterance)
 
@@ -484,7 +484,7 @@ async def _fetch_configured_voice_response(
         metrics.mark_llm_complete()
     if not response or response.startswith("⚠️ Error:"):
         raise RuntimeError(response or "Selected LLM returned an empty response")
-    return normalize_text_for_speech(response)
+    return normalize_voice_answer(normalize_text_for_speech(response))
 
 
 async def fetch_llm_response(conversation_history, active_product="ZeniaONE", rag_pipeline=None, latest_utterance="", agent_persona="", company_name="", company_info=None, direction="inbound", caller_stats="", http_client=None, agent_doc=None, metrics=None, on_sentence=None):
