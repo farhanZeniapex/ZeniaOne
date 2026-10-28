@@ -304,8 +304,8 @@ For a production rollout, validate in this order:
 
 **Farhan Kureshi**
 
-- GitHub: [@farhanzeniapex-a11y](https://github.com/farhanzeniapex-a11y)
-- Repository: [PULPIT221090/zeniaone_voice](https://github.com/PULPIT221090/zeniaone_voice/tree/Farhan_work)
+- GitHub: [@farhanZeniapex](https://github.com/farhanZeniapex)
+- Repository: [PULPIT221090/ZeniaOne](https://github.com/PULPIT221090/ZeniaOne/tree/Farhan_work)
 
 <div align="center">
   <sub>Built for reliable, multilingual, knowledge-grounded customer conversations.</sub>
