@@ -584,6 +584,18 @@ def _clean_generated_answer(answer: Any, *, max_chars: int = 7000) -> Optional[s
     return cleaned or None
 
 
+def _looks_incomplete_answer(answer: Optional[str]) -> bool:
+    """Detect a visibly truncated model answer before it reaches the UI."""
+    text = str(answer or "").strip()
+    if len(text.split()) < 4:
+        return False
+    if text.endswith("-") or text.endswith("/"):
+        return True
+    if re.search(r"(?:and|or|but|with|to|for|like|aur|ya|lekin|ke|ki|ka|mein|में|और|या|लेकिन)$", text, re.IGNORECASE):
+        return True
+    return len(text) < 90 and not re.search(r"[.!?।]$", text)
+
+
 async def _admin_live_snapshot(start: datetime, end: datetime, label: str, company_filter: dict[str, Any]) -> str:
     """Build a compact, verified snapshot for complex copilot questions."""
     # Copilot's own grounded generation is operational telemetry, but must not
@@ -886,7 +898,27 @@ async def _platform_document_answer(
             marker_at = cleaned.lower().find(marker)
             if marker_at >= 0:
                 cleaned = cleaned[:marker_at].rstrip(" \n:*")
-        return _clean_generated_answer(cleaned)
+        cleaned = _clean_generated_answer(cleaned)
+        if not cleaned:
+            return None
+        if _looks_incomplete_answer(cleaned):
+            retry, _retry_usage = await llm.generate(
+                question + "\nReturn one complete answer in no more than five short sentences. Do not stop mid-sentence.",
+                context_docs=context_docs,
+                language=response_language,
+                current_date=datetime.now(timezone.utc).date().isoformat(),
+                company_name="ZeniaOne",
+                intent=f"platform_{intent}",
+                stage="generation_retry",
+                is_voice=is_voice,
+                public_widget=True,
+            )
+            retry_cleaned = _clean_generated_answer(retry)
+            if retry_cleaned and not _looks_incomplete_answer(retry_cleaned):
+                return retry_cleaned
+            excerpt = await _platform_document_excerpt(intent, question)
+            return excerpt or cleaned
+        return cleaned
     except Exception:
         logger.debug("Platform documentation generation unavailable", exc_info=True)
         return None
