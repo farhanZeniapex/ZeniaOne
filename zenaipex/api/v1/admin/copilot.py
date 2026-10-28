@@ -1542,12 +1542,16 @@ async def _answer(
     # The platform identity is stable product knowledge, not a document-search
     # task. Keep this common question instant even when the RAG embedding model
     # is cold-starting on a free Render instance.
-    zeniOne_intro = (
-        "zeniaone" in q or "zenia one" in q
-    ) and (
-        "kya hai" in q or "kya he" in q or "kyu use" in q or
-        "why use" in q or "what is" in q or "purpose" in q
-    )
+    zeniaone_alias = any(term in q for term in (
+        "zeniaone", "zenia one", "zenia 1", "zenia1", "zenya one",
+        "xenia one", "xenia 1", "zenith 1",
+    ))
+    identity_phrase = any(term in q for term in (
+        "kya hai", "kya he", "kyu use", "why use", "what is", "purpose",
+        "tell me about", "ke bare me", "ke baare me", "ke bare mein",
+        "ke baare mein", "के बारे में", "बारे में", "बताओ", "बताइए",
+    ))
+    zeniOne_intro = zeniaone_alias and identity_phrase
     if zeniOne_intro:
         if lang == "hindi" and script != "latin":
             answer = "ZeniaOne एक enterprise AI Voice and Chat Agents platform है। इसका उपयोग AI agents बनाने, company knowledge से answers देने, web chat संभालने और inbound/outbound voice calls चलाने के लिए होता है।"

@@ -1439,12 +1439,15 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
           // Native Gemini Live speaks through its own audio stream. Clone
           // routes use the configured TTS voice for this greeting.
           let welcomeSettled = false;
+          // Clone TTS can take several seconds to return its first audio.
+          // Keep the greeting responsive with a browser voice fallback instead
+          // of leaving the voice panel silent for the full provider timeout.
           const welcomeTimer = window.setTimeout(() => {
             if (welcomeSettled || sessionTokenRef.current !== token || !mountedRef.current) return;
             welcomeSettled = true;
             setVoiceNotice("Voice provider is slow. Trying browser audio for the welcome message.");
             speakWithBrowserSynthesis(greeting, synthLang);
-          }, 6000);
+          }, 1800);
           speakPromiseRef.current = agentsApi.speak(companyId, agent.id, greeting);
           setVoiceState("connecting");
           speakPromiseRef.current
