@@ -32,6 +32,58 @@ BUSINESS_TIMEZONE = ZoneInfo("Asia/Kolkata")
 logger = logging.getLogger(__name__)
 
 
+def _question_intent(question: str) -> tuple[str, float]:
+    """Classify the request before any database, sync, RAG, or LLM work.
+
+    This is feature-based routing, not an exact-question allow-list. The
+    classifier deliberately gives setup/help intent priority when a sentence
+    also contains words such as “call”, “voice”, or “chat”.
+    """
+    q = re.sub(r"[^\w\s]", " ", question.lower())
+    q = re.sub(r"\s+", " ", q).strip()
+    scores = {"platform_help": 0, "live_data": 0, "knowledge": 0, "action": 0, "pricing": 0}
+
+    def hits(*terms: str) -> int:
+        return sum(1 for term in terms if term in q)
+
+    scores["platform_help"] += hits(
+        "how to use", "use kese", "use kaise", "kese use", "kaise use",
+        "kya process", "kya proses", "process", "proses", "setup", "configure",
+        "kaise ban", "kese ban", "agent kese", "agent kaise", "calling ke liye",
+        "voice agent", "call flow", "deploy", "steps", "mere kis kaam", "mere kis kam",
+        "kab use", "kaam aayega", "kam aayega",
+    )
+    scores["live_data"] += hits(
+        "aaj", "today", "yesterday", "kal", "live", "latest", "kitni", "kitne",
+        "count", "number of", "usage", "activity", "snapshot", "how many", "real customer",
+    )
+    scores["knowledge"] += hits(
+        "pdf", "document", "documents", "knowledge base", "faq", "manual", "policy",
+        "according to", "document me", "pdf me", "file me",
+    )
+    scores["action"] += hits(
+        "book", "booking", "create", "save", "update", "cancel", "reschedule",
+        "send", "delete", "appointment", "schedule",
+    )
+    scores["pricing"] += hits("pricing", "price", "cost", "plan", "plans", "kimat", "keemat", "paisa")
+
+    # Setup intent wins over live metrics when the user is asking how to build
+    # or use an agent, even if “call/chat/voice” appears in the same sentence.
+    if scores["platform_help"] and any(term in q for term in ("agent", "use", "process", "proses", "setup", "kaam", "ban")):
+        return "platform_help", min(0.99, 0.70 + scores["platform_help"] * 0.06)
+    if scores["pricing"]:
+        return "pricing", min(0.99, 0.72 + scores["pricing"] * 0.06)
+    if scores["action"] and scores["knowledge"]:
+        return "action", 0.74
+    if scores["live_data"]:
+        return "live_data", min(0.96, 0.62 + scores["live_data"] * 0.05)
+    if scores["knowledge"]:
+        return "knowledge", min(0.94, 0.64 + scores["knowledge"] * 0.06)
+    if scores["action"]:
+        return "action", min(0.90, 0.60 + scores["action"] * 0.06)
+    return "general", 0.40
+
+
 class CopilotRequest(BaseModel):
     question: str = Field(min_length=1, max_length=4000)
     company_id: Optional[str] = None
@@ -904,9 +956,17 @@ async def _answer(
     # Resolve stable product/workflow intent before live-data routing. Phrases
     # like “calling ke liye agent kaise banate hain” contain call words, but
     # they are setup questions—not requests for call metrics or sync data.
-    early_platform_how_to = _platform_how_to_answer(question, lang, script)
-    if early_platform_how_to:
-        return early_platform_how_to, [{"type": "capabilities", "verified": True, "domain": "product_workflow"}]
+    intent, intent_confidence = _question_intent(question)
+    if intent in {"platform_help", "pricing"}:
+        early_platform_how_to = _platform_how_to_answer(question, lang, script)
+        if early_platform_how_to:
+            return early_platform_how_to, [{
+                "type": "capabilities",
+                "verified": True,
+                "domain": "product_workflow" if intent == "platform_help" else "pricing",
+                "intent": intent,
+                "confidence": intent_confidence,
+            }]
 
     # Voice turns must not spend several seconds sending a greeting through
     # RAG/LLM. These answers are deterministic and intentionally short.
