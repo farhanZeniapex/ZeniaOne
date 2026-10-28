@@ -121,6 +121,35 @@ class TenantRAGPipeline:
             self._vs = NamespacedVectorStore(namespace=self.namespace)
         return self._vs
 
+    async def _ready_document_guard(self, docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Keep only chunks belonging to ready documents in this tenant KB."""
+        document_ids = {
+            str(doc.get("document_id") or doc.get("metadata", {}).get("document_id"))
+            for doc in docs
+            if doc.get("document_id") or doc.get("metadata", {}).get("document_id")
+        }
+        if not document_ids:
+            # Older vectors may not carry a document id. Preserve compatibility
+            # rather than silently removing every legacy result.
+            return docs
+        from core.database import col_documents
+        company_id = str(self.agent.get("company_id") or self.namespace)
+        knowledge_base_id = self.agent.get("knowledge_base_id")
+        ready_query = {
+            "company_id": company_id,
+            "status": "ready",
+        }
+        if knowledge_base_id:
+            ready_query["knowledge_base_id"] = str(knowledge_base_id)
+        ready_docs = await col_documents().find(ready_query, {"_id": 1}).to_list(length=10000)
+        ready_ids = {str(doc["_id"]) for doc in ready_docs}
+        guarded = [
+            doc for doc in docs
+            if str(doc.get("document_id") or doc.get("metadata", {}).get("document_id")) in ready_ids
+        ]
+        logger.info("[RAG_READY_GUARD] namespace=%s input=%s accepted=%s", self.namespace, len(docs), len(guarded))
+        return guarded
+
     def rag_enabled(self) -> bool:
         """Returns True if this agent has a knowledge base attached."""
         return bool(self.agent.get("knowledge_base_id"))
@@ -348,8 +377,9 @@ class TenantRAGPipeline:
             from ai.config import query_cache
             cached = query_cache.get(cache_key)
             if cached and (__import__("time").time() - cached["time"] < RAGConfig.cache_ttl_seconds):
+                guarded = await self._ready_document_guard(cached["results"])
                 self._last_candidates = cached["candidates"]
-                return cached["results"]
+                return guarded
 
             # Step 6: Negative cache — skip embedding + Pinecone for known-empty queries
             from ai.config import negative_cache
@@ -427,6 +457,7 @@ class TenantRAGPipeline:
             
             # Phase 12: Parent-Child Resolution (only fetch parents if we need broader context)
             final_results = await vs.resolve_parent_chunks(final_results)
+            final_results = await self._ready_document_guard(final_results)
             rerank_latency = __import__("time").time() - rerank_start
             
             self._last_candidates = results
