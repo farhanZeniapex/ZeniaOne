@@ -712,7 +712,6 @@ async def media_stream_websocket(websocket: WebSocket):
                 # parameters. Recover those already-created outbound calls by
                 # their CallSid so an answered call still gets its greeting.
                 if not agent_context and session["call_sid"]:
-                    from core.database import col_conversations
                     previous = await col_conversations().find_one({"call_sid": session["call_sid"]})
                     fallback_number = str((previous or {}).get("caller_to") or "")
                     if fallback_number:
