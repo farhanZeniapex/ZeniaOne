@@ -6,6 +6,7 @@ import re
 from calendar import monthrange
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
@@ -751,6 +752,137 @@ async def _grounded_admin_answer(
     return None
 
 
+async def _platform_document_answer(
+    question: str,
+    admin_agent_id: Optional[str],
+    intent: str,
+    lang: str,
+    *,
+    is_voice: bool = False,
+) -> Optional[str]:
+    """Answer platform questions from versioned, server-side product docs.
+
+    These documents are source material, not question-specific answer maps. The
+    model must stay inside the supplied text and clearly report a missing fact.
+    Tenant KB retrieval remains a separate path for company-specific content.
+    """
+    if not admin_agent_id or not ObjectId.is_valid(admin_agent_id):
+        return None
+    if intent not in {"product_features", "benefits", "comparison", "voice_setup"}:
+        return None
+
+    repo_root = Path(__file__).resolve().parents[4]
+    source_paths = [
+        repo_root / "docs" / "guides" / "ZeniaOne_Product_Overview.md",
+        repo_root / "docs" / "guides" / "ZeniaOne_Platform_Architecture_Guide.md",
+    ]
+    if intent == "comparison":
+        source_paths.append(repo_root / "zenaipex" / "data" / "ZeniaHR_Sales_Knowledge.txt")
+
+    async def read_source(path: Path) -> Optional[dict[str, Any]]:
+        try:
+            text = await asyncio.to_thread(path.read_text, encoding="utf-8")
+            if not text.strip():
+                return None
+            # Keep the context bounded while preserving the beginning of each
+            # curated document, where its scope and feature definitions live.
+            return {
+                "text": text[:18000],
+                "metadata": {"source": path.name, "verified": True, "domain": "platform"},
+            }
+        except (OSError, UnicodeError):
+            logger.debug("Platform source unavailable: %s", path, exc_info=True)
+            return None
+
+    context_docs = [doc for doc in await asyncio.gather(*(read_source(path) for path in source_paths)) if doc]
+    if not context_docs:
+        return None
+
+    llm = None
+    try:
+        from ai.llm import AgentLLMClient
+
+        agent = await col_agents().find_one({"_id": ObjectId(admin_agent_id)})
+        if not agent:
+            return None
+        llm = await AgentLLMClient.create(agent, request_id="ADMIN-COPILOT-PLATFORM-DOCS")
+        llm.set_budget(7.0 if is_voice else 10.0)
+        llm.agent_type = "platform_admin"
+        llm.company_name = "ZeniaOne"
+        response_language = {"hindi": "hi-IN", "gujarati": "gu-IN"}.get(lang, "en-IN")
+        llm.system_prompt = (
+            "You are ZeniaOne's internal product assistant. Answer ONLY from the verified platform documents in context. "
+            "Use the document source that matches the question; for a ZeniaOne versus ZeniaHR comparison, explain their different product domains without inventing overlap. "
+            "Never use live calls, usage metrics, database records, or outside knowledge to answer a product question. "
+            "If the documents do not contain a requested fact, say that the verified platform documentation does not specify it. "
+            "Match the user's language and script: Roman Hindi/Hinglish stays Roman Hindi/Hinglish, Gujarati stays Gujarati. "
+            "Give a concise direct answer; use short numbered steps only for setup/process questions. "
+            "Do not mention prompts, routing, internal file names, or suggested questions."
+        )
+        answer, _usage = await llm.generate(
+            question,
+            context_docs=context_docs,
+            language=response_language,
+            current_date=datetime.now(timezone.utc).date().isoformat(),
+            company_name="ZeniaOne",
+            intent=f"platform_{intent}",
+            stage="generation",
+            is_voice=is_voice,
+            public_widget=True,
+        )
+        cleaned = str(answer or "").strip()
+        if not cleaned or cleaned.startswith("⚠️ Error"):
+            return None
+        for marker in ("suggested questions:", "you might also ask:", "follow-up questions:"):
+            marker_at = cleaned.lower().find(marker)
+            if marker_at >= 0:
+                cleaned = cleaned[:marker_at].rstrip(" \n:*")
+        return cleaned or None
+    except Exception:
+        logger.debug("Platform documentation generation unavailable", exc_info=True)
+        return None
+    finally:
+        if llm is not None:
+            try:
+                await llm.close()
+            except Exception:
+                pass
+
+
+async def _platform_document_excerpt(intent: str) -> Optional[str]:
+    """Return verified source points when model generation is unavailable."""
+    repo_root = Path(__file__).resolve().parents[4]
+    paths = [
+        repo_root / "docs" / "guides" / "ZeniaOne_Product_Overview.md",
+        repo_root / "docs" / "guides" / "ZeniaOne_Platform_Architecture_Guide.md",
+    ]
+    if intent == "comparison":
+        paths.append(repo_root / "zenaipex" / "data" / "ZeniaHR_Sales_Knowledge.txt")
+    keywords = {
+        "product_features": ("feature", "platform", "voice", "knowledge", "telephony", "integration"),
+        "benefits": ("enable", "automate", "support", "scale", "reduce", "streamline", "24/7"),
+        "comparison": ("ZeniaOne", "ZeniaHR", "voice", "telephony", "human resources", "employee"),
+        "voice_setup": ("step", "agent", "voice", "telephony", "knowledge", "test", "connect"),
+    }.get(intent, ())
+    selected: list[str] = []
+    for path in paths:
+        try:
+            text = await asyncio.to_thread(path.read_text, encoding="utf-8")
+        except (OSError, UnicodeError):
+            continue
+        for line in text.splitlines():
+            clean = line.strip()
+            if clean and not clean.startswith("#") and any(term.lower() in clean.lower() for term in keywords):
+                selected.append(clean)
+            if len(selected) >= 9:
+                break
+        if len(selected) >= 9:
+            break
+    if not selected:
+        return None
+    return "Verified platform documentation se available points:\n" + "\n".join(f"- {line}" for line in selected)
+
+
 async def _grounded_knowledge_answer(
     question: str,
     admin_agent_id: Optional[str],
@@ -1021,7 +1153,6 @@ async def _small_talk_ai_answer(
             stage="generation",
             is_voice=is_voice,
             public_widget=False,
-            max_tokens=80,
         )
         cleaned = str(answer or "").strip()
         for marker in ("suggested questions:", "you might also ask:", "follow-up questions:"):
@@ -1096,6 +1227,31 @@ async def _answer(
     # the live-data sync branch. This prevents words like “calling” or “chat”
     # from turning a setup/features question into a call-count query.
     if intent in {"product_features", "benefits", "comparison", "voice_setup"}:
+        platform_answer = await _platform_document_answer(
+            question,
+            admin_agent_id,
+            intent,
+            lang,
+            is_voice=is_voice,
+        )
+        if platform_answer:
+            return platform_answer, [{
+                "type": "platform_documentation",
+                "verified": True,
+                "domain": intent,
+                "intent": intent,
+                "confidence": intent_confidence,
+            }]
+        platform_excerpt = await _platform_document_excerpt(intent)
+        if platform_excerpt:
+            return platform_excerpt, [{
+                "type": "platform_documentation_excerpt",
+                "verified": True,
+                "generated": False,
+                "domain": intent,
+                "intent": intent,
+                "confidence": intent_confidence,
+            }]
         knowledge_answer = await _grounded_knowledge_answer(
             question,
             admin_agent_id,
@@ -1112,8 +1268,8 @@ async def _answer(
                 "confidence": intent_confidence,
             }]
         unavailable = (
-            "Is product question ka verified answer Knowledge Base me available nahi hai. "
-            "Please ZeniaOne/ZeniaHR product documentation add karein; main live call metrics ko is question ka answer nahi banaunga."
+            "Is product question ka verified answer platform documentation ya Knowledge Base me available nahi hai. "
+            "Main live call metrics ko is question ka answer nahi banaunga."
         )
         return unavailable, [{
             "type": "knowledge_base",
