@@ -95,6 +95,12 @@ def _question_intent(question: str) -> tuple[str, float]:
     scores["small_talk"] += hits("hi", "hello", "hey", "namaste", "how are you", "how r u", "kese ho", "kaise ho", "kem cho")
     scores["small_talk"] += hits("good morning", "good evening", "good afternoon", "aaj mood", "mood kaisa", "how is your mood")
     scores["product_features"] += hits("feature", "features", "main feature", "capabilities", "what can it do", "kya kya kar", "suvidha")
+    # “Inbound/outbound calls” is a concept/definition question, not a
+    # request for call counts. Keep it out of the live-metrics route.
+    if any(term in q for term in ("inbound", "outbound")) and any(term in q for term in (
+        "what is", "what are", "meaning", "explain", "kya hai", "matlab",
+    )):
+        scores["platform_help"] += 3
     if "zeniapex" in q and not scores["pricing"] and not scores["live_data"]:
         scores["product_features"] += 1
     scores["benefits"] += hits("benefit", "benefits", "fayda", "faayda", "kis kaam", "mere kaam", "use case", "help me", "why use")
@@ -1152,6 +1158,13 @@ async def _grounded_knowledge_answer(
 def _platform_how_to_answer(question: str, lang: str, script: str) -> Optional[str]:
     """Answer common ZeniaOne usage questions without cold-start RAG/LLM work."""
     q = re.sub(r"[^\w\s]", "", question.lower()).strip()
+
+    if "inbound" in q and "outbound" in q:
+        if lang == "hindi" and script != "latin":
+            return "Inbound calls woh hoti hain jo customers aapke business number par karte hain. Outbound calls woh hoti hain jo AI agent customers ko khud karta hai, jaise follow-up, reminder ya support call."
+        if lang == "hindi":
+            return "Inbound calls woh hoti hain jo customers aapke business number par karte hain. Outbound calls woh hoti hain jo AI agent customers ko khud karta hai, jaise follow-up, reminder ya support call."
+        return "Inbound calls are calls customers make to your business number. Outbound calls are calls the AI agent places to customers, such as follow-ups, reminders, or support calls."
 
     # Stable product-architecture questions should not enter the expensive RAG
     # path. Apart from avoiding cold-start failures, these answers make it
