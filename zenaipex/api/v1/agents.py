@@ -1658,6 +1658,10 @@ async def voice_stream(
     is_processing = False
     processing_task = None
     current_ai_text = ""
+    # The browser keeps sending microphone PCM while clone audio is playing so
+    # barge-in remains possible. Marking assistant playback explicitly lets
+    # server STT discard speaker echo instead of creating a fake user turn.
+    assistant_output_active = False
     session_started_at = datetime.now(timezone.utc)
     session_failed = False
     
@@ -1778,6 +1782,9 @@ async def voice_stream(
                 alternative = (event.get("channel", {}).get("alternatives") or [{}])[0]
                 transcript = str(alternative.get("transcript") or "").strip()
                 if not transcript:
+                    continue
+                if assistant_output_active:
+                    logger.info("[VOICE_ECHO_DISCARD_SERVER] Ignored transcript during assistant playback: %r", transcript)
                     continue
                 is_final = bool(event.get("is_final"))
                 await websocket.send_json({
@@ -2229,6 +2236,10 @@ async def voice_stream(
                     text_data = json.loads(msg["text"])
                     if text_data.get("type") == "ping":
                         await websocket.send_json({"type": "pong"})
+                        continue
+                    if text_data.get("type") == "assistant_output":
+                        assistant_output_active = bool(text_data.get("active"))
+                        logger.info("[VOICE_ASSISTANT_OUTPUT] active=%s session=%s", assistant_output_active, voice_session_id)
                         continue
                     if text_data.get("type") == "barge_in":
                         logger.info("[VOICE_BARGE_IN_SERVER] Received barge-in signal from client")

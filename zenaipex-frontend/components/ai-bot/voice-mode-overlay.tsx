@@ -350,6 +350,10 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
     }
 
     stopAllAudioPlayback();
+
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "assistant_output", active: false }));
+    }
     console.log(`[VOICE] Audio stopped`);
 
     if (recognitionRef.current) {
@@ -437,6 +441,10 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
     }
     try {
       window.speechSynthesis.cancel();
+      assistantOutputActiveRef.current = true;
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "assistant_output", active: true }));
+      }
       setOutputVoice("browser");
       speakingTextRef.current = text;
       lastBotSpokenTextRef.current = text;
@@ -477,6 +485,9 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
         window.clearTimeout(startTimer);
         isProcessingRef.current = false;
         assistantOutputActiveRef.current = false;
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: "assistant_output", active: false }));
+        }
         speechEndedAtRef.current = Date.now();
         speakingTextRef.current = "";
         setTimeout(() => {
@@ -492,6 +503,9 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
         console.warn("[VOICE] Browser TTS playback error", e);
         isProcessingRef.current = false;
         assistantOutputActiveRef.current = false;
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: "assistant_output", active: false }));
+        }
         speechEndedAtRef.current = Date.now();
         speakingTextRef.current = "";
         setVoiceState(mediaStreamRef.current?.active ? "listening" : "idle");
@@ -502,6 +516,9 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
       console.error("[VOICE] Browser synthesis failed", err);
       isProcessingRef.current = false;
       assistantOutputActiveRef.current = false;
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "assistant_output", active: false }));
+      }
       speakingTextRef.current = "";
       setVoiceState("listening");
     }
@@ -798,6 +815,9 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
   const playPcmChunk = useCallback((base64: string) => {
     setOutputVoice(engineModeRef.current === "gemini_live" ? "gemini" : "clone");
     assistantOutputActiveRef.current = true;
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "assistant_output", active: true }));
+    }
     if (!pcmAudioContextRef.current) {
       pcmAudioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
       pcmNextStartTimeRef.current = pcmAudioContextRef.current.currentTime + 0.1;
@@ -852,6 +872,9 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
       pcmActiveSourcesRef.current = pcmActiveSourcesRef.current.filter(s => s !== source);
       if (ttsStreamDoneRef.current && pcmActiveSourcesRef.current.length === 0) {
         assistantOutputActiveRef.current = false;
+        if (wsRef.current?.readyState === WebSocket.OPEN) {
+          wsRef.current.send(JSON.stringify({ type: "assistant_output", active: false }));
+        }
         ttsStreamDoneRef.current = false;
         isProcessingRef.current = false;
         pcmChunksReceivedThisTurnRef.current = false;
@@ -872,6 +895,9 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
   // Direct High-Fidelity Neural Audio (MP3) Playout
   const playMp3Audio = useCallback(async (base64Str: string) => {
     assistantOutputActiveRef.current = true;
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "assistant_output", active: true }));
+    }
     pendingDecodesRef.current++;
     try {
       if (!pcmAudioContextRef.current) {
@@ -924,6 +950,9 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
         pcmActiveSourcesRef.current = pcmActiveSourcesRef.current.filter(s => s !== source);
         if (pcmActiveSourcesRef.current.length === 0) {
           assistantOutputActiveRef.current = false;
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type: "assistant_output", active: false }));
+          }
           ttsStreamDoneRef.current = false;
           isProcessingRef.current = false;
           pcmChunksReceivedThisTurnRef.current = false;
@@ -1011,6 +1040,11 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
         client_stt: engineModeRef.current === "pipeline",
         language_mode: langModeRef.current
       }));
+      // Cached/initial welcome audio may already be playing before the socket
+      // finishes connecting. Tell server STT to suppress that speaker echo.
+      if (assistantOutputActiveRef.current) {
+        ws.send(JSON.stringify({ type: "assistant_output", active: true }));
+      }
 
       // Gemini Live already receives microphone PCM and performs its own live
       // turn detection/transcription. Starting browser SpeechRecognition too
@@ -1351,6 +1385,9 @@ speech=${speechActiveRef.current ? 'YES' : 'NO'}`);
             } else if (pcmActiveSourcesRef.current.length === 0 && pendingDecodesRef.current === 0) {
               pcmRemainderRef.current = new Uint8Array(0);
               assistantOutputActiveRef.current = false;
+      if (wsRef.current?.readyState === WebSocket.OPEN) {
+        wsRef.current.send(JSON.stringify({ type: "assistant_output", active: false }));
+      }
               ttsStreamDoneRef.current = false;
               isProcessingRef.current = false;
               pcmChunksReceivedThisTurnRef.current = false;
