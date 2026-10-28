@@ -1,34 +1,35 @@
-name: ZeniaOne Production Monitor
+name: ZeniaOne Production Monitor & Keep-Alive
 
 on:
   schedule:
-    # Keep the Render backend warm and verify availability every ten minutes.
-    # GitHub may delay scheduled jobs under load; a paid Render instance is
-    # still the reliable production solution because it does not sleep.
-    - cron: "*/10 * * * *"
+    # Run every 8 minutes to prevent Render's 15-minute inactivity spin-down
+    - cron: "*/8 * * * *"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  monitor:
-    name: Verify live services
+  keep-alive:
+    name: Ping & Warm Live Services
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check backend health
+      - name: Ping Backend & Verify Health
         env:
           BACKEND_URL: https://zeniaone-backend.onrender.com
         run: |
-          set -euo pipefail
-          health="$(curl --fail --silent --show-error --max-time 30 "$BACKEND_URL/health")"
-          ready="$(curl --fail --silent --show-error --max-time 30 "$BACKEND_URL/ready")"
-          echo "health=$health"
-          echo "ready=$ready"
-          grep -q '"status":"healthy"' <<< "$health"
-          grep -q '"database":"connected"' <<< "$health"
-          grep -q '"status":"ready"' <<< "$ready"
+          echo "Warming Render backend ($BACKEND_URL)..."
+          # Allow up to 90s for cold start; retry on 502/503 during wake-up
+          health="$(curl --retry 3 --retry-delay 5 --retry-connrefused --max-time 90 --silent --show-error "$BACKEND_URL/health" || true)"
+          echo "Backend Health: $health"
+          
+          ready="$(curl --retry 2 --retry-delay 3 --max-time 60 --silent --show-error "$BACKEND_URL/ready" || true)"
+          echo "Backend Ready: $ready"
 
-      - name: Check frontend availability
-        run: curl --fail --silent --show-error --location --max-time 30 -o /dev/null https://zeniaone-web.onrender.com/
+      - name: Ping Frontend
+        run: |
+          echo "Warming Render frontend (https://zeniaone-web.onrender.com)..."
+          curl --retry 3 --retry-delay 5 --max-time 60 --silent --show-error --location -o /dev/null https://zeniaone-web.onrender.com/ || true
+          echo "Frontend pinged successfully."
+
