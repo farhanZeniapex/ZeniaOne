@@ -753,6 +753,64 @@ async def _grounded_knowledge_answer(
                 pass
 
 
+def _platform_how_to_answer(question: str, lang: str, script: str) -> Optional[str]:
+    """Answer common ZeniaOne usage questions without cold-start RAG/LLM work."""
+    q = re.sub(r"[^\w\s]", "", question.lower()).strip()
+    how_to = any(term in q for term in (
+        "kese use", "kaise use", "kese chal", "kaise chal", "kya process",
+        "kya proses", "use karna", "use karne", "how to use", "how do i use",
+        "how does it work", "process kya", "process batao", "steps batao",
+    ))
+    if not how_to:
+        return None
+    if lang == "hindi" and script != "latin":
+        return (
+            "ZeniaOne इस्तेमाल करने का basic process:\n\n"
+            "1. **Company setup:** Dashboard में अपनी company profile और settings पूरा करें।\n"
+            "2. **Knowledge Base:** FAQs, policies, PDFs या manuals upload करें।\n"
+            "3. **AI Agent:** AI Agents में नया agent बनाकर उसे Knowledge Base से connect करें।\n"
+            "4. **Agent instructions:** Greeting, language, role और response style configure करें।\n"
+            "5. **Test:** AI Playground या web chat में agent को test करें।\n"
+            "6. **Deploy:** Web Chat enable करें या phone channel में Twilio/Exotel connect करें।\n"
+            "7. **Monitor:** Conversations, calls, usage और failures dashboard से देखें।\n\n"
+            "Live data वाले सवालों के लिए agent authorized platform APIs और Knowledge Base से verified data लेता है।"
+        )
+    if lang == "hindi":
+        return (
+            "ZeniaOne use karne ka basic process:\n\n"
+            "1. **Company setup:** Dashboard me company profile aur settings complete karein.\n"
+            "2. **Knowledge Base:** FAQs, policies, PDFs ya manuals upload karein.\n"
+            "3. **AI Agent:** AI Agents me naya agent banakar use Knowledge Base se connect karein.\n"
+            "4. **Agent instructions:** Greeting, language, role aur response style configure karein.\n"
+            "5. **Test:** AI Playground ya web chat me agent test karein.\n"
+            "6. **Deploy:** Web Chat enable karein ya phone channel me Twilio/Exotel connect karein.\n"
+            "7. **Monitor:** Conversations, calls, usage aur failures dashboard se dekhein.\n\n"
+            "Live-data questions ke liye agent authorized platform APIs aur Knowledge Base se verified data leta hai."
+        )
+    if lang == "gujarati":
+        return (
+            "ZeniaOne vapravani basic process:\n\n"
+            "1. Company profile ane settings complete karo.\n"
+            "2. Knowledge Base ma FAQs, policies, PDFs ke manuals upload karo.\n"
+            "3. AI Agent banao ane tene Knowledge Base sathe connect karo.\n"
+            "4. Greeting, language, role ane response style configure karo.\n"
+            "5. AI Playground athva web chat ma test karo.\n"
+            "6. Web Chat enable karo athva Twilio/Exotel phone channel connect karo.\n"
+            "7. Dashboard mathi calls, conversations, usage ane failures monitor karo."
+        )
+    return (
+        "Basic ZeniaOne workflow:\n\n"
+        "1. Complete the company profile and settings.\n"
+        "2. Upload FAQs, policies, PDFs, manuals, or other verified documents to Knowledge Base.\n"
+        "3. Create an AI Agent and connect the Knowledge Base.\n"
+        "4. Configure the greeting, language, role, and response style.\n"
+        "5. Test the agent in AI Playground or Web Chat.\n"
+        "6. Deploy Web Chat or connect Twilio/Exotel for phone calls.\n"
+        "7. Monitor conversations, calls, usage, and failures from the dashboard.\n\n"
+        "For live-data questions, the agent uses authorized platform APIs and verified Knowledge Base data."
+    )
+
+
 async def _answer(
     question: str,
     admin_agent_id: Optional[str] = None,
@@ -888,6 +946,12 @@ async def _answer(
         else:
             answer = "ZeniaOne is an enterprise AI Voice and Chat Agents platform. It is used to build AI agents, answer from company knowledge, handle web chats, and run inbound and outbound voice calls."
         return answer, [{"type": "capabilities", "verified": True, "domain": "product_identity"}]
+
+    # Stable product workflow questions should not cold-start the embedding
+    # model or spend an LLM request on small hosted instances.
+    platform_how_to = _platform_how_to_answer(question, lang, script)
+    if platform_how_to:
+        return platform_how_to, [{"type": "capabilities", "verified": True, "domain": "product_workflow"}]
 
     # Telephony configuration is platform data, not a knowledge-base fact.
     # Answer Exotel-number questions from configured channels without exposing
