@@ -500,8 +500,14 @@ async def handle_gemini_live_session(
                 )
 
     except Exception as e:
-        logger.error(f"[GEMINI_LIVE_SESSION_ERR] Error during Live session: {e}")
+        # Keep provider credentials, URLs, and internal exception text out of
+        # the browser. The detailed reason remains in server logs for repair.
+        logger.exception("[GEMINI_LIVE_SESSION_ERR] Error during Live session: %s", type(e).__name__)
         try:
-            await client_ws.send_json({"type": "error", "message": f"Gemini Live session error: {str(e)}"})
+            await client_ws.send_json({
+                "type": "error",
+                "code": "voice_provider_unavailable",
+                "message": "Voice service temporarily unavailable. Please retry the voice session.",
+            })
         except Exception:
             pass
