@@ -883,6 +883,31 @@ async def _platform_document_excerpt(intent: str) -> Optional[str]:
     return "Verified platform documentation se available points:\n" + "\n".join(f"- {line}" for line in selected)
 
 
+async def _verified_kb_context(
+    context_docs: list[dict[str, Any]],
+    company_id: Any,
+    knowledge_base_id: Any,
+) -> list[dict[str, Any]]:
+    """Remove vector chunks whose Mongo document is no longer ready/current."""
+    document_ids = {
+        str(doc.get("document_id") or doc.get("metadata", {}).get("document_id"))
+        for doc in context_docs
+        if doc.get("document_id") or doc.get("metadata", {}).get("document_id")
+    }
+    if not document_ids:
+        return context_docs
+    ready_docs = await col_documents().find({
+        "company_id": str(company_id),
+        "knowledge_base_id": str(knowledge_base_id),
+        "status": "ready",
+    }, {"_id": 1}).to_list(length=10000)
+    ready_ids = {str(doc["_id"]) for doc in ready_docs}
+    return [
+        doc for doc in context_docs
+        if str(doc.get("document_id") or doc.get("metadata", {}).get("document_id")) in ready_ids
+    ]
+
+
 async def _grounded_knowledge_answer(
     question: str,
     admin_agent_id: Optional[str],
@@ -911,6 +936,7 @@ async def _grounded_knowledge_answer(
         if not rag.should_retrieve(question, response_language):
             return None
         context_docs = await rag.retrieve(question, top_k=8, request_id="ADMIN-COPILOT-KB")
+        context_docs = await _verified_kb_context(context_docs, company_id, knowledge_base_id)
         if not context_docs:
             return None
         llm = await AgentLLMClient.create(agent, request_id="ADMIN-COPILOT-KB-ANSWER")
