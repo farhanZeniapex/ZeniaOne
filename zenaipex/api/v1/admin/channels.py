@@ -8,6 +8,7 @@ from twilio.rest import Client
 import logging
 import time
 import re
+from html import escape
 
 logger = logging.getLogger(__name__)
 from core.config import settings
@@ -549,13 +550,31 @@ async def trigger_test_call(channel_id: str, body: TestCallRequest):
             
             twiml_url = f"{actual_webhook}/api/v1/webhook/twilio/twiml/{company_id}/{agent_id}/{channel_id_str}?{outbound_query}"
             status_webhook_url = f"{actual_webhook}/api/v1/webhook/twilio/status/{company_id}/{agent_id}/{channel_id_str}"
+            stream_base = str(actual_webhook).rstrip("/")
+            stream_base = stream_base.replace("https://", "wss://").replace("http://", "ws://")
+            stream_url = f"{stream_base}/api/v1/webhook/twilio/media-stream"
+            inline_twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="{escape(stream_url, quote=True)}">
+      <Parameter name="direction" value="outbound" />
+      <Parameter name="caller" value="{escape(dest_number, quote=True)}" />
+      <Parameter name="called_number" value="{escape(str(settings.twilio_default_phone_number or ""), quote=True)}" />
+      <Parameter name="contact_name" value="{escape(body.contact_name or "", quote=True)}" />
+      <Parameter name="topic" value="{escape(body.topic or "", quote=True)}" />
+      <Parameter name="system_prompt" value="{escape(body.system_prompt or "", quote=True)}" />
+      <Parameter name="skip_greeting" value="false" />
+    </Stream>
+  </Connect>
+</Response>'''
             
             logger.info("📡 Sending call request to Twilio...")
             call_sid = await twilio_provider.create_call(
                 to_phone=dest_number,
                 from_phone="system_default",
                 webhook_url=twiml_url,
-                metadata={"status_callback": status_webhook_url}
+                metadata={"status_callback": status_webhook_url},
+                twiml=inline_twiml,
             )
             
             if call_sid.startswith("error") or call_sid.startswith("mock_fail"):

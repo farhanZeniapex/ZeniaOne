@@ -18,7 +18,14 @@ class TwilioTelephonyProvider(TelephonyProvider):
         else:
             self.client = None
 
-    async def create_call(self, to_phone: str, from_phone: str, webhook_url: str, metadata: Optional[Dict[str, Any]] = None) -> str:
+    async def create_call(
+        self,
+        to_phone: str,
+        from_phone: str,
+        webhook_url: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        twiml: Optional[str] = None,
+    ) -> str:
         """Initiate an outbound call and return the Twilio CallSid."""
         if not self.client:
             logger.error("Twilio credentials not configured. Cannot make outbound call.")
@@ -30,9 +37,15 @@ class TwilioTelephonyProvider(TelephonyProvider):
             call_params = {
                 "to": to_phone,
                 "from_": from_phone if from_phone and from_phone != "system_default" else settings.twilio_default_phone_number,
-                "url": webhook_url,
                 "record": True,
             }
+            # Inline TwiML avoids a second provider-to-Render HTTP fetch for
+            # outbound test calls. The stream itself remains authenticated by
+            # the WebSocket signature handler.
+            if twiml:
+                call_params["twiml"] = twiml
+            else:
+                call_params["url"] = webhook_url
             if status_callback:
                 call_params["status_callback"] = status_callback
                 call_params["status_callback_event"] = ['initiated', 'ringing', 'answered', 'completed']
