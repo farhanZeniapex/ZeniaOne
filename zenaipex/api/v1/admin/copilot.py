@@ -937,6 +937,89 @@ async def _verified_kb_context(
     ]
 
 
+async def _document_status_answer(
+    question: str,
+    company_filter: dict[str, Any],
+    lang: str,
+) -> Optional[tuple[str, dict[str, Any]]]:
+    """Answer document inventory/status questions directly from MongoDB."""
+    q = question.lower()
+    count_question = any(term in q for term in (
+        "how many documents", "documents kitne", "documents kitni", "kitne documents",
+        "kitne document", "document count", "documents count", "knowledge base me kitne",
+        "knowledge base ma ketla", "total documents", "total document",
+    ))
+    failed_question = any(term in q for term in (
+        "failed document", "failed documents", "document failed", "documents failed",
+        "kaunsa document failed", "kaunse documents failed", "failed hai",
+    ))
+    if not count_question and not failed_question:
+        return None
+
+    query = {**company_filter, "status": {"$ne": "deleted"}}
+    docs = await col_documents().find(query, {"filename": 1, "status": 1}).to_list(length=10000)
+    failed = [str(doc.get("filename") or "unknown") for doc in docs if doc.get("status") == "failed"]
+    processing = sum(1 for doc in docs if doc.get("status") in {"processing", "pending"})
+    ready = sum(1 for doc in docs if doc.get("status") == "ready")
+
+    if failed_question:
+        if failed:
+            answer = "Failed documents: " + ", ".join(failed[:30])
+        else:
+            answer = "No failed Knowledge Base documents are recorded."
+        return answer, {"type": "documents", "verified": True, "metric": "failed_documents", "count": len(failed)}
+
+    if lang == "hindi":
+        answer = f"Knowledge Base me total {len(docs):,} documents hain: {ready:,} ready, {processing:,} processing/pending aur {len(failed):,} failed."
+    elif lang == "gujarati":
+        answer = f"Knowledge Base ma kul {len(docs):,} documents chhe: {ready:,} ready, {processing:,} processing/pending ane {len(failed):,} failed."
+    else:
+        answer = f"Knowledge Base contains {len(docs):,} documents: {ready:,} ready, {processing:,} processing/pending, and {len(failed):,} failed."
+    return answer, {"type": "documents", "verified": True, "metric": "document_inventory"}
+
+
+async def _document_text_fallback(
+    question: str,
+    company_filter: dict[str, Any],
+) -> Optional[tuple[str, dict[str, Any]]]:
+    """Return matching extracted source text when RAG answer generation fails."""
+    q = question.lower()
+    if not any(term in q for term in ("refund", "policy", "policies", "return", "cancellation")):
+        return None
+    docs = await col_documents().find(
+        {**company_filter, "status": "ready"},
+        {"filename": 1, "extracted_text": 1},
+    ).to_list(length=200)
+    if "refund" in q:
+        # “Return” appears in unrelated HR/payroll text (asset returns,
+        # statutory returns). A refund question must match refund language
+        # itself, otherwise the fallback would quote the wrong document.
+        query_terms = ["refund"]
+    else:
+        query_terms = [term for term in ("return", "cancellation", "policy") if term in q]
+    matches: list[tuple[str, str]] = []
+    for doc in docs:
+        text = str(doc.get("extracted_text") or "")
+        if not text:
+            continue
+        paragraphs = [re.sub(r"\s+", " ", part).strip() for part in re.split(r"\n\s*\n|(?<=[.!?])\s{2,}", text)]
+        for paragraph in paragraphs:
+            lower = paragraph.lower()
+            if any(term in lower for term in query_terms):
+                matches.append((str(doc.get("filename") or "document"), paragraph))
+    if not matches:
+        if "refund" in q:
+            return (
+                "Verified documents me exact refund/return policy text nahi mila.",
+                {"type": "knowledge_base_text", "verified": True, "matches": 0, "fact_found": False},
+            )
+        return None
+    lines = ["Verified document text:"]
+    for filename, paragraph in matches[:5]:
+        lines.append(f"[{filename}] {paragraph[:900]}")
+    return "\n".join(lines), {"type": "knowledge_base_text", "verified": True, "matches": len(matches)}
+
+
 async def _grounded_knowledge_answer(
     question: str,
     admin_agent_id: Optional[str],
@@ -1996,6 +2079,11 @@ async def _answer(
         sources.append({"type": "conversations", "period": label})
         return "\n".join(lines), sources
 
+    document_status = await _document_status_answer(question, company_filter, lang)
+    if document_status:
+        answer, source = document_status
+        return answer, [source]
+
     knowledge_answer = await _grounded_knowledge_answer(
         question,
         admin_agent_id,
@@ -2005,6 +2093,11 @@ async def _answer(
     )
     if knowledge_answer:
         return knowledge_answer, [{"type": "knowledge_base", "verified": True, "period": label}]
+
+    document_text = await _document_text_fallback(question, company_filter)
+    if document_text:
+        answer, source = document_text
+        return answer, [source]
 
     # Do not fall through to the live-metrics snapshot when a product/document
     # answer failed. That fallback can produce a valid-looking usage report for
