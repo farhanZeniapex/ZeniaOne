@@ -469,6 +469,7 @@ export default function AdminChannelDetailPage({
   const [isVerifying, setIsVerifying] = useState(false);
   const [isGeneratingUrls, setIsGeneratingUrls] = useState(false);
   const [verification, setVerification] = useState<any>(null);
+  const [showExotelSecrets, setShowExotelSecrets] = useState(false);
 
   const updateForm = (key: string, value: any) => {
     setEditForm((prev) => {
@@ -1426,12 +1427,28 @@ export default function AdminChannelDetailPage({
                   {isExotelChannel && (
                     <>
                       <label className="text-xs font-semibold text-slate-600">
-                        Exotel API key
-                        <input type="password" autoComplete="new-password" value={editForm.exotel_api_key} onChange={(e) => updateForm("exotel_api_key", e.target.value)} placeholder="Enter API key to rotate or replace" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900" />
+                        <span className="flex items-center justify-between gap-2">
+                          <span>Exotel API key</span>
+                          {channel.config?.provider_credentials_configured && <span className="text-[10px] font-bold text-emerald-700">Saved securely</span>}
+                        </span>
+                        <span className="relative mt-1 block">
+                          <input type={showExotelSecrets ? "text" : "password"} autoComplete="new-password" value={editForm.exotel_api_key} onChange={(e) => updateForm("exotel_api_key", e.target.value)} placeholder={channel.config?.provider_credentials_configured ? "Saved securely — enter a new key to replace" : "Enter API key"} className="w-full rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm font-mono text-slate-900" />
+                          <button type="button" aria-label={showExotelSecrets ? "Hide API key" : "Show API key"} onClick={() => setShowExotelSecrets((visible) => !visible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
+                            <Eye className="h-4 w-4" />
+                          </button>
+                        </span>
                       </label>
                       <label className="text-xs font-semibold text-slate-600">
-                        Exotel API token
-                        <input type="password" autoComplete="new-password" value={editForm.exotel_api_token} onChange={(e) => updateForm("exotel_api_token", e.target.value)} placeholder="Enter API token to rotate or replace" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900" />
+                        <span className="flex items-center justify-between gap-2">
+                          <span>Exotel API token</span>
+                          {channel.config?.provider_credentials_configured && <span className="text-[10px] font-bold text-emerald-700">Saved securely</span>}
+                        </span>
+                        <span className="relative mt-1 block">
+                          <input type={showExotelSecrets ? "text" : "password"} autoComplete="new-password" value={editForm.exotel_api_token} onChange={(e) => updateForm("exotel_api_token", e.target.value)} placeholder={channel.config?.provider_credentials_configured ? "Saved securely — enter a new token to replace" : "Enter API token"} className="w-full rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm font-mono text-slate-900" />
+                          <button type="button" aria-label={showExotelSecrets ? "Hide API token" : "Show API token"} onClick={() => setShowExotelSecrets((visible) => !visible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
+                            <Eye className="h-4 w-4" />
+                          </button>
+                        </span>
                       </label>
                     </>
                   )}
