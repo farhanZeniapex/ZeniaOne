@@ -285,12 +285,12 @@ async def generate_channel_callback_urls(channel_id: str):
     if channel.get("type") not in {"exotel", "exotel_voice"}:
         raise HTTPException(status_code=400, detail="Callback URLs are only available for Exotel channels")
 
-    from core.webhook_security import build_signed_callback_query
+    from core.webhook_security import build_signed_callback_query, get_exotel_webhook_secret
     company_id = str(channel.get("company_id"))
     agent_id = str(channel.get("agent_id") or "")
     channel_id_str = str(channel["_id"])
     callback_value = f"exotel:{company_id}:{agent_id}:{channel_id_str}"
-    callback_query = build_signed_callback_query(settings.exotel_webhook_secret, callback_value)
+    callback_query = build_signed_callback_query(get_exotel_webhook_secret(), callback_value)
     base_url = settings.app_base_url.rstrip("/")
     prefix = f"{base_url}/api/v1/webhook/exotel/advanced/{company_id}/{agent_id}"
     return {
@@ -795,7 +795,8 @@ async def trigger_test_call(channel_id: str, body: TestCallRequest):
             
             from core.webhook_security import build_signed_callback_query
             callback_value = f"exotel:{company_id}:{agent_id}:{channel_id_str}"
-            callback_query = build_signed_callback_query(settings.exotel_webhook_secret, callback_value)
+            from core.webhook_security import get_exotel_webhook_secret
+            callback_query = build_signed_callback_query(get_exotel_webhook_secret(), callback_value)
             webhook_url += f"?channel_id={channel_id_str}&{callback_query}"
             
             url = f"https://{exotel_subdomain}/v1/Accounts/{exotel_sid}/Calls/connect.json"

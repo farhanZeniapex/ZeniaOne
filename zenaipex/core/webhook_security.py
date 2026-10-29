@@ -7,6 +7,27 @@ from urllib.parse import urlencode
 from fastapi import HTTPException, Request
 
 
+def get_exotel_webhook_secret() -> str:
+    """Return the stable platform secret used to sign Exotel callbacks.
+
+    An explicit EXOTEL_WEBHOOK_SECRET remains supported. When it is omitted,
+    derive a stable secret from the required field-encryption key so every
+    channel can work without asking an end user to edit Render environment
+    variables.
+    """
+    from core.config import settings
+
+    if settings.exotel_webhook_secret:
+        return settings.exotel_webhook_secret
+    if settings.encryption_key:
+        return hmac.new(
+            settings.encryption_key.encode("utf-8"),
+            b"zeniaone:exotel-webhook:v1",
+            hashlib.sha256,
+        ).hexdigest()
+    return ""
+
+
 def build_signed_callback_query(secret: str, value: str, *, timestamp: int | None = None) -> str:
     """Create a short-lived query signature for providers that send no header."""
     ts = int(timestamp if timestamp is not None else time.time())

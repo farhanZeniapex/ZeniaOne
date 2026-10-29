@@ -5,6 +5,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from datetime import datetime, timedelta, timezone
 from core.dependencies import get_platform_admin
 from core.config import settings
+from core.webhook_security import get_exotel_webhook_secret
 from core.database import col_background_jobs, col_scheduled_calls, col_llm_requests, get_db_mode
 
 from services.live_monitoring import monitoring_manager
@@ -28,8 +29,8 @@ def configuration_gaps() -> list[dict]:
         gaps.append({"code": "sentry_not_configured", "severity": "info", "action": "Configure Sentry for error tracking."})
     if not settings.redis_url:
         gaps.append({"code": "redis_not_configured", "severity": "info", "action": "Configure shared Redis for multi-instance rate limits and cache."})
-    if settings.exotel_api_key and not settings.exotel_webhook_secret:
-        gaps.append({"code": "exotel_webhook_secret_missing", "severity": "warning", "action": "Set EXOTEL_WEBHOOK_SECRET before live Exotel traffic."})
+    if settings.exotel_api_key and not get_exotel_webhook_secret():
+        gaps.append({"code": "exotel_webhook_secret_missing", "severity": "warning", "action": "Configure the platform encryption key before live Exotel traffic."})
     return gaps
 
 

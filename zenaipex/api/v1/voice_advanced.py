@@ -13,6 +13,7 @@ from modules.entity_normalizer import normalize_entities
 from fastapi.responses import Response, JSONResponse
 from bson import ObjectId
 from core.config import settings
+from core.webhook_security import get_exotel_webhook_secret
 from services.live_monitoring import monitoring_manager
 from dotenv import load_dotenv
 import os
@@ -32,7 +33,7 @@ def _exotel_callback_value(company_id: str, agent_id: str, channel_id: str = "")
 def _exotel_stream_signature(company_id: str, agent_id: str, caller: str, called_number: str, call_sid: str) -> str:
     payload = "|".join((company_id, agent_id, caller, called_number, call_sid))
     return hmac.new(
-        (settings.exotel_webhook_secret or "").encode("utf-8"),
+        get_exotel_webhook_secret().encode("utf-8"),
         payload.encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()
@@ -81,7 +82,7 @@ async def exotel_voice_webhook(company_id: str, agent_id: str, request: Request)
     from core.webhook_security import require_hmac_webhook
     await require_hmac_webhook(
         request,
-        settings.exotel_webhook_secret,
+        get_exotel_webhook_secret(),
         provider="Exotel",
         signed_value=_exotel_callback_value(company_id, agent_id, request.query_params.get("channel_id", "")),
     )
@@ -172,7 +173,7 @@ async def exotel_voicebot_webhook(company_id: str, agent_id: str, request: Reque
     from core.webhook_security import require_hmac_webhook
     await require_hmac_webhook(
         request,
-        settings.exotel_webhook_secret,
+        get_exotel_webhook_secret(),
         provider="Exotel",
         signed_value=_exotel_callback_value(company_id, agent_id, request.query_params.get("channel_id", "")),
     )
@@ -225,7 +226,7 @@ async def exotel_recording_status(company_id: str, agent_id: str, request: Reque
     from core.webhook_security import require_hmac_webhook
     await require_hmac_webhook(
         request,
-        settings.exotel_webhook_secret,
+        get_exotel_webhook_secret(),
         provider="Exotel",
         signed_value=_exotel_callback_value(company_id, agent_id, request.query_params.get("channel_id", "")),
     )
@@ -1127,7 +1128,7 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
         require_hmac_value(
             f"{company_id}|{agent_id}|{caller}|{called_number}|{call_sid}",
             websocket.query_params.get("signature", ""),
-            settings.exotel_webhook_secret,
+            get_exotel_webhook_secret(),
             provider="Exotel",
         )
     except Exception as exc:
@@ -2007,7 +2008,7 @@ async def exotel_status_webhook(company_id: str, agent_id: str, request: Request
     from core.webhook_security import require_hmac_webhook
     await require_hmac_webhook(
         request,
-        settings.exotel_webhook_secret,
+        get_exotel_webhook_secret(),
         provider="Exotel",
         signed_value=_exotel_callback_value(company_id, agent_id, request.query_params.get("channel_id", "")),
     )
