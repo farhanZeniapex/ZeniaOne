@@ -179,8 +179,10 @@ async def get_channel_admin(channel_id: str):
     # non-sensitive integration metadata and a readiness flag.
     secret_keys = {"api_key", "api_token", "auth_token", "webhook_secret", "password"}
     safe_config = {key: value for key, value in config.items() if key.lower() not in secret_keys}
+    channel_credentials = channel.get("credentials") or {}
     safe_config["provider_credentials_configured"] = bool(
-        settings.exotel_account_sid and settings.exotel_api_key and settings.exotel_api_token
+        (channel_credentials.get("api_key_encrypted") and channel_credentials.get("api_token_encrypted"))
+        or (settings.exotel_account_sid and settings.exotel_api_key and settings.exotel_api_token)
     ) if channel.get("type") in {"exotel", "exotel_voice"} else True
 
     return {
@@ -219,6 +221,10 @@ async def verify_channel_admin(channel_id: str):
     add_check("Phone number", bool(str(channel.get("phone_number") or "").strip()), "Saved provider number")
 
     if is_exotel:
+        from core.security import decrypt_secret
+        channel_credentials = channel.get("credentials") or {}
+        api_key = decrypt_secret(channel_credentials.get("api_key_encrypted", "")) or settings.exotel_api_key
+        api_token = decrypt_secret(channel_credentials.get("api_token_encrypted", "")) or settings.exotel_api_token
         account_sid = str(config.get("exotel_account_sid") or settings.exotel_account_sid or "").strip()
         flow_id = str(config.get("exotel_flow_id") or "").strip()
         voicebot_url = str(config.get("voicebot_url") or "").strip()
@@ -227,7 +233,7 @@ async def verify_channel_admin(channel_id: str):
         add_check("Exotel flow ID", bool(flow_id), flow_id or "Missing")
         add_check("Voicebot callback URL", voicebot_url.startswith("https://"), "HTTPS URL required")
         add_check("Status callback URL", status_url.startswith("https://"), "HTTPS URL required")
-        creds_ok = bool(settings.exotel_account_sid and settings.exotel_api_key and settings.exotel_api_token)
+        creds_ok = bool(account_sid and api_key and api_token)
         add_check("Backend credentials", creds_ok, "Render credentials configured" if creds_ok else "Render Exotel credentials missing")
 
         provider_ok = False
@@ -235,9 +241,9 @@ async def verify_channel_admin(channel_id: str):
         if creds_ok:
             try:
                 import httpx
-                url = f"https://{settings.exotel_subdomain}/v1/Accounts/{settings.exotel_account_sid}.json"
+                url = f"https://{settings.exotel_subdomain}/v1/Accounts/{account_sid}.json"
                 async with httpx.AsyncClient(timeout=8.0) as client:
-                    response = await client.get(url, auth=(settings.exotel_api_key, settings.exotel_api_token))
+                    response = await client.get(url, auth=(api_key, api_token))
                 provider_ok = response.status_code == 200
                 provider_detail = "Exotel account reachable" if provider_ok else f"Exotel returned HTTP {response.status_code}"
             except Exception as exc:
@@ -753,9 +759,12 @@ async def trigger_test_call(channel_id: str, body: TestCallRequest):
                 from fastapi import HTTPException
                 raise HTTPException(status_code=400, detail="Exotel channel phone number is required")
             
-            exotel_sid = settings.exotel_account_sid
-            exotel_key = settings.exotel_api_key
-            exotel_token = settings.exotel_api_token
+            from core.security import decrypt_secret
+            channel_credentials = channel.get("credentials") or {}
+            channel_config = channel.get("config") or {}
+            exotel_sid = str(channel_config.get("exotel_account_sid") or settings.exotel_account_sid or "")
+            exotel_key = decrypt_secret(channel_credentials.get("api_key_encrypted", "")) or settings.exotel_api_key
+            exotel_token = decrypt_secret(channel_credentials.get("api_token_encrypted", "")) or settings.exotel_api_token
             exotel_subdomain = settings.exotel_subdomain
             if not all((exotel_sid, exotel_key, exotel_token)):
                 raise HTTPException(status_code=503, detail="Exotel credentials are not configured")

@@ -451,6 +451,8 @@ export default function AdminChannelDetailPage({
     agent_id: "",
     is_active: true,
     exotel_account_sid: "",
+    exotel_api_key: "",
+    exotel_api_token: "",
     exotel_flow_id: "",
     voicebot_url: "",
     status_url: "",
@@ -496,6 +498,8 @@ export default function AdminChannelDetailPage({
         agent_id: channel.agent_id || "",
         is_active: channel.is_active ?? true,
         exotel_account_sid: channel.config?.exotel_account_sid || "",
+        exotel_api_key: "",
+        exotel_api_token: "",
         exotel_flow_id: channel.config?.exotel_flow_id || "",
         voicebot_url: channel.config?.voicebot_url || "",
         status_url: channel.config?.status_url || "",
@@ -530,6 +534,8 @@ export default function AdminChannelDetailPage({
               recording_enabled: editForm.recording_enabled,
               recording_channels: editForm.recording_channels,
             },
+            ...(editForm.exotel_api_key.trim() ? { exotel_api_key: editForm.exotel_api_key.trim() } : {}),
+            ...(editForm.exotel_api_token.trim() ? { exotel_api_token: editForm.exotel_api_token.trim() } : {}),
           }),
         },
       );
@@ -614,6 +620,8 @@ export default function AdminChannelDetailPage({
             agent_id: chanRes.agent_id || "",
             is_active: chanRes.is_active ?? true,
             exotel_account_sid: chanRes.config?.exotel_account_sid || "",
+            exotel_api_key: "",
+            exotel_api_token: "",
             exotel_flow_id: chanRes.config?.exotel_flow_id || "",
             voicebot_url: chanRes.config?.voicebot_url || "",
             status_url: chanRes.config?.status_url || "",
@@ -1410,6 +1418,18 @@ export default function AdminChannelDetailPage({
                     {providerName} account / subdomain ID
                     <input value={editForm.exotel_account_sid} onChange={(e) => updateForm("exotel_account_sid", e.target.value)} placeholder="zeniaone3" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900" />
                   </label>
+                  {isExotelChannel && (
+                    <>
+                      <label className="text-xs font-semibold text-slate-600">
+                        Exotel API key
+                        <input type="password" autoComplete="new-password" value={editForm.exotel_api_key} onChange={(e) => updateForm("exotel_api_key", e.target.value)} placeholder="Enter API key to rotate or replace" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900" />
+                      </label>
+                      <label className="text-xs font-semibold text-slate-600">
+                        Exotel API token
+                        <input type="password" autoComplete="new-password" value={editForm.exotel_api_token} onChange={(e) => updateForm("exotel_api_token", e.target.value)} placeholder="Enter API token to rotate or replace" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900" />
+                      </label>
+                    </>
+                  )}
                   <label className="text-xs font-semibold text-slate-600">
                     {isExotelChannel ? "Exotel flow ID" : "Webhook / stream mode"}
                     <input value={editForm.exotel_flow_id} onChange={(e) => updateForm("exotel_flow_id", e.target.value)} placeholder={isExotelChannel ? "1369877" : "WebSocket Stream"} disabled={!isExotelChannel} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900 disabled:bg-slate-50 disabled:text-slate-400" />
@@ -1434,7 +1454,7 @@ export default function AdminChannelDetailPage({
                     </select>
                   </label>
                   <div className="md:col-span-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                    API keys, API tokens, and webhook secrets are never shown in the browser. Backend credentials are securely read from the Render environment.
+                    API keys, API tokens, and webhook secrets are never shown after saving. They are encrypted in the backend database; Render credentials are used only as a fallback.
                   </div>
                   <div className={`md:col-span-2 rounded-lg border px-3 py-2 text-xs font-semibold ${channel.config?.provider_credentials_configured ? "border-emerald-100 bg-emerald-50 text-emerald-800" : "border-rose-100 bg-rose-50 text-rose-800"}`}>
                     {channel.config?.provider_credentials_configured ? "Backend provider credentials configured" : "Backend provider credentials missing — add Exotel credentials in Render Environment"}

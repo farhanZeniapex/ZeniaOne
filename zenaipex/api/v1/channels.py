@@ -99,7 +99,20 @@ async def update_channel(
     if not ctx.is_admin:
         raise InsufficientPermissionsError("Requires admin privileges")
 
-    channel = await channel_service.update_channel(company_id, channel_id, body.dict(exclude_unset=True))
+    updates = body.dict(exclude_unset=True)
+    exotel_api_key = updates.pop("exotel_api_key", None)
+    exotel_api_token = updates.pop("exotel_api_token", None)
+    if exotel_api_key or exotel_api_token:
+        from core.database import col_channels
+        from core.security import encrypt_secret
+        existing = await col_channels().find_one({"_id": ObjectId(channel_id), "company_id": company_id})
+        credentials = dict((existing or {}).get("credentials") or {})
+        if exotel_api_key:
+            credentials["api_key_encrypted"] = encrypt_secret(str(exotel_api_key).strip())
+        if exotel_api_token:
+            credentials["api_token_encrypted"] = encrypt_secret(str(exotel_api_token).strip())
+        updates["credentials"] = credentials
+    channel = await channel_service.update_channel(company_id, channel_id, updates)
     if not channel:
         raise NotFoundError("Channel")
     return _fmt(channel)

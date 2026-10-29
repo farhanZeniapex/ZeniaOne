@@ -50,6 +50,8 @@ class ChannelUpdate(BaseModel):
     twilio_auth_token: Optional[str] = None
     is_active: Optional[bool] = None
     config: Optional[Dict[str, Any]] = None
+    exotel_api_key: Optional[str] = None
+    exotel_api_token: Optional[str] = None
 
 
 class Channel(BaseModel):
