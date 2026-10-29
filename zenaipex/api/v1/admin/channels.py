@@ -180,9 +180,16 @@ async def get_channel_admin(channel_id: str):
     secret_keys = {"api_key", "api_token", "auth_token", "webhook_secret", "password"}
     safe_config = {key: value for key, value in config.items() if key.lower() not in secret_keys}
     channel_credentials = channel.get("credentials") or {}
+    configured_account_sid = str(config.get("exotel_account_sid") or "").strip()
+    channel_credentials_configured = bool(
+        channel_credentials.get("api_key_encrypted") and channel_credentials.get("api_token_encrypted")
+    )
+    render_credentials_match = bool(
+        settings.exotel_account_sid and settings.exotel_api_key and settings.exotel_api_token
+        and (not configured_account_sid or configured_account_sid == settings.exotel_account_sid)
+    )
     safe_config["provider_credentials_configured"] = bool(
-        (channel_credentials.get("api_key_encrypted") and channel_credentials.get("api_token_encrypted"))
-        or (settings.exotel_account_sid and settings.exotel_api_key and settings.exotel_api_token)
+        channel_credentials_configured or render_credentials_match
     ) if channel.get("type") in {"exotel", "exotel_voice"} else True
 
     return {
@@ -223,8 +230,8 @@ async def verify_channel_admin(channel_id: str):
     if is_exotel:
         from core.security import decrypt_secret
         channel_credentials = channel.get("credentials") or {}
-        api_key = decrypt_secret(channel_credentials.get("api_key_encrypted", "")) or settings.exotel_api_key
-        api_token = decrypt_secret(channel_credentials.get("api_token_encrypted", "")) or settings.exotel_api_token
+        api_key = decrypt_secret(channel_credentials.get("api_key_encrypted", ""))
+        api_token = decrypt_secret(channel_credentials.get("api_token_encrypted", ""))
         account_sid = str(config.get("exotel_account_sid") or settings.exotel_account_sid or "").strip()
         flow_id = str(config.get("exotel_flow_id") or "").strip()
         voicebot_url = str(config.get("voicebot_url") or "").strip()
@@ -233,8 +240,17 @@ async def verify_channel_admin(channel_id: str):
         add_check("Exotel flow ID", bool(flow_id), flow_id or "Missing")
         add_check("Voicebot callback URL", voicebot_url.startswith("https://"), "HTTPS URL required")
         add_check("Status callback URL", status_url.startswith("https://"), "HTTPS URL required")
+        using_channel_credentials = bool(api_key and api_token)
+        if not using_channel_credentials and account_sid == settings.exotel_account_sid:
+            api_key = settings.exotel_api_key
+            api_token = settings.exotel_api_token
         creds_ok = bool(account_sid and api_key and api_token)
-        add_check("Backend credentials", creds_ok, "Render credentials configured" if creds_ok else "Render Exotel credentials missing")
+        credential_detail = (
+            "Encrypted channel credentials configured" if using_channel_credentials else
+            "Render fallback credentials configured" if account_sid == settings.exotel_account_sid else
+            f"Credentials for {account_sid} are required; Render fallback is {settings.exotel_account_sid or 'not configured'}"
+        )
+        add_check("Backend credentials", creds_ok, credential_detail)
 
         provider_ok = False
         provider_detail = "Not checked"
