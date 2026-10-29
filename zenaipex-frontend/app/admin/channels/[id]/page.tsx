@@ -1471,7 +1471,7 @@ export default function AdminChannelDetailPage({
 
             {isVoice && (
               <div className="lg:col-span-2 lg:order-[20] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                     <Server className="w-4 h-4 mr-2 text-emerald-700" /> {providerName} Integration
                   </h3>
@@ -1479,9 +1479,9 @@ export default function AdminChannelDetailPage({
                     Edit & save from here
                   </span>
                 </div>
-                <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex items-center justify-between mb-2">
+                <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    <div className="flex items-center justify-between mb-1.5">
                       <div>
                         <p className="text-sm font-bold text-slate-900">Integration readiness</p>
                         <p className="text-xs text-slate-500">{completedIntegrations} of {integrationChecks.length} required checks complete</p>
@@ -1491,7 +1491,7 @@ export default function AdminChannelDetailPage({
                     <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
                       <div className={`h-full rounded-full ${integrationPercent === 100 ? "bg-emerald-500" : "bg-amber-500"}`} style={{ width: `${integrationPercent}%` }} />
                     </div>
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    <div className="mt-2 grid grid-cols-2 xl:grid-cols-4 gap-x-3 gap-y-1">
                       {integrationChecks.map(([label, complete]) => (
                         <div key={label} className={`text-xs flex items-center gap-1.5 ${complete ? "text-emerald-700" : "text-amber-700"}`}>
                           {complete ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
@@ -1500,20 +1500,20 @@ export default function AdminChannelDetailPage({
                       ))}
                     </div>
                     {missingIntegrations.length > 0 && (
-                      <p className="mt-3 text-xs text-amber-800">Missing: {missingIntegrations.join(", ")}</p>
+                      <p className="mt-2 text-xs text-amber-800">Missing: {missingIntegrations.join(", ")}</p>
                     )}
                   </div>
                   <label className="text-xs font-semibold text-slate-600">
                     Channel name
-                    <input value={editForm.name} onChange={(e) => updateForm("name", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900" />
+                    <input value={editForm.name} onChange={(e) => updateForm("name", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900" />
                   </label>
                   <label className="text-xs font-semibold text-slate-600">
                     ExoPhone / caller ID
-                    <input value={editForm.phone_number} onChange={(e) => updateForm("phone_number", e.target.value)} placeholder="+919513886363" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900" />
+                    <input value={editForm.phone_number} onChange={(e) => updateForm("phone_number", e.target.value)} placeholder="+919513886363" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-mono text-slate-900" />
                   </label>
                   <label className="text-xs font-semibold text-slate-600">
                     {providerName} account / subdomain ID
-                    <input value={editForm.exotel_account_sid} onChange={(e) => updateForm("exotel_account_sid", e.target.value)} placeholder="zeniaone3" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900" />
+                    <input value={editForm.exotel_account_sid} onChange={(e) => updateForm("exotel_account_sid", e.target.value)} placeholder="zeniaone3" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900" />
                   </label>
                   {isExotelChannel && (
                     <>
@@ -1523,7 +1523,7 @@ export default function AdminChannelDetailPage({
                           {channel.config?.provider_credentials_configured && <span className="text-[10px] font-bold text-emerald-700">Saved securely</span>}
                         </span>
                         <span className="relative mt-1 block">
-                          <input type={showExotelSecrets ? "text" : "password"} autoComplete="new-password" value={editForm.exotel_api_key} onChange={(e) => updateForm("exotel_api_key", e.target.value)} placeholder={channel.config?.provider_credentials_configured ? "Saved securely — enter a new key to replace" : "Enter API key"} className="w-full rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm font-mono text-slate-900" />
+                          <input type={showExotelSecrets ? "text" : "password"} autoComplete="new-password" value={editForm.exotel_api_key} onChange={(e) => updateForm("exotel_api_key", e.target.value)} placeholder={channel.config?.provider_credentials_configured ? "Saved securely — enter a new key to replace" : "Enter API key"} className="w-full rounded-lg border border-slate-200 px-3 py-1.5 pr-10 text-sm font-mono text-slate-900" />
                           <button type="button" aria-label={showExotelSecrets ? "Hide API key" : "Show API key"} onClick={() => setShowExotelSecrets((visible) => !visible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
                             <Eye className="h-4 w-4" />
                           </button>
@@ -1535,7 +1535,7 @@ export default function AdminChannelDetailPage({
                           {channel.config?.provider_credentials_configured && <span className="text-[10px] font-bold text-emerald-700">Saved securely</span>}
                         </span>
                         <span className="relative mt-1 block">
-                          <input type={showExotelSecrets ? "text" : "password"} autoComplete="new-password" value={editForm.exotel_api_token} onChange={(e) => updateForm("exotel_api_token", e.target.value)} placeholder={channel.config?.provider_credentials_configured ? "Saved securely — enter a new token to replace" : "Enter API token"} className="w-full rounded-lg border border-slate-200 px-3 py-2 pr-10 text-sm font-mono text-slate-900" />
+                          <input type={showExotelSecrets ? "text" : "password"} autoComplete="new-password" value={editForm.exotel_api_token} onChange={(e) => updateForm("exotel_api_token", e.target.value)} placeholder={channel.config?.provider_credentials_configured ? "Saved securely — enter a new token to replace" : "Enter API token"} className="w-full rounded-lg border border-slate-200 px-3 py-1.5 pr-10 text-sm font-mono text-slate-900" />
                           <button type="button" aria-label={showExotelSecrets ? "Hide API token" : "Show API token"} onClick={() => setShowExotelSecrets((visible) => !visible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
                             <Eye className="h-4 w-4" />
                           </button>
@@ -1545,15 +1545,15 @@ export default function AdminChannelDetailPage({
                   )}
                   <label className="text-xs font-semibold text-slate-600">
                     {isExotelChannel ? "Exotel flow ID" : "Webhook / stream mode"}
-                    <input value={editForm.exotel_flow_id} onChange={(e) => updateForm("exotel_flow_id", e.target.value)} placeholder={isExotelChannel ? "1369877" : "WebSocket Stream"} disabled={!isExotelChannel} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900 disabled:bg-slate-50 disabled:text-slate-400" />
+                    <input value={editForm.exotel_flow_id} onChange={(e) => updateForm("exotel_flow_id", e.target.value)} placeholder={isExotelChannel ? "1369877" : "WebSocket Stream"} disabled={!isExotelChannel} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-mono text-slate-900 disabled:bg-slate-50 disabled:text-slate-400" />
                   </label>
-                  <label className="text-xs font-semibold text-slate-600 md:col-span-2">
+                  <label className="text-xs font-semibold text-slate-600">
                     Voicebot callback URL
-                    <input value={editForm.voicebot_url} onChange={(e) => updateForm("voicebot_url", e.target.value)} placeholder="https://zeniaone-backend.onrender.com/.../voicebot?..." className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900" />
+                    <input value={editForm.voicebot_url} onChange={(e) => updateForm("voicebot_url", e.target.value)} placeholder="https://zeniaone-backend.onrender.com/.../voicebot?..." className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-mono text-slate-900" />
                   </label>
-                  <label className="text-xs font-semibold text-slate-600 md:col-span-2">
+                  <label className="text-xs font-semibold text-slate-600">
                     Status callback URL
-                    <input value={editForm.status_url} onChange={(e) => updateForm("status_url", e.target.value)} placeholder="https://zeniaone-backend.onrender.com/.../status?..." className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900" />
+                    <input value={editForm.status_url} onChange={(e) => updateForm("status_url", e.target.value)} placeholder="https://zeniaone-backend.onrender.com/.../status?..." className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-mono text-slate-900" />
                   </label>
                   <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
                     <input type="checkbox" checked={editForm.recording_enabled} onChange={(e) => updateForm("recording_enabled", e.target.checked)} />
@@ -1561,15 +1561,15 @@ export default function AdminChannelDetailPage({
                   </label>
                   <label className="text-xs font-semibold text-slate-600">
                     Recording channels
-                    <select value={editForm.recording_channels} onChange={(e) => updateForm("recording_channels", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900">
+                    <select value={editForm.recording_channels} onChange={(e) => updateForm("recording_channels", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-900">
                       <option value="dual">Dual channel</option>
                       <option value="single">Single channel</option>
                     </select>
                   </label>
-                  <div className="md:col-span-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                     API keys, API tokens, and webhook secrets are never shown after saving. They are encrypted in the backend database; Render credentials are used only as a fallback.
                   </div>
-                  <div className={`md:col-span-2 rounded-lg border px-3 py-2 text-xs font-semibold ${channel.config?.provider_credentials_configured ? "border-emerald-100 bg-emerald-50 text-emerald-800" : "border-rose-100 bg-rose-50 text-rose-800"}`}>
+                  <div className={`rounded-lg border px-3 py-2 text-xs font-semibold ${channel.config?.provider_credentials_configured ? "border-emerald-100 bg-emerald-50 text-emerald-800" : "border-rose-100 bg-rose-50 text-rose-800"}`}>
                     {channel.config?.provider_credentials_configured
                       ? "Provider credentials configured for this channel"
                       : isExotelChannel
