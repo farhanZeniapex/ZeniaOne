@@ -1852,7 +1852,7 @@ export default function AdminChannelDetailPage({
                 </div>
               </div>
 
-              <div className="lg:col-span-1 lg:order-[35] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="lg:col-span-1 lg:order-[35] lg:mt-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                     <Settings className="w-4 h-4 mr-2 text-slate-500" /> Call
