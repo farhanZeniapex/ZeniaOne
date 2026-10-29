@@ -465,6 +465,7 @@ export default function AdminChannelDetailPage({
     text: string;
   } | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [isGeneratingUrls, setIsGeneratingUrls] = useState(false);
   const [verification, setVerification] = useState<any>(null);
 
   const updateForm = (key: string, value: any) => {
@@ -569,6 +570,20 @@ export default function AdminChannelDetailPage({
       setVerification({ valid: false, checks: [{ name: "Verification request", ok: false, detail: error.message || "Verification failed" }] });
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const handleGenerateCallbackUrls = async () => {
+    setIsGeneratingUrls(true);
+    try {
+      const result = await fetchApi<any>(`/admin/channels/${channelId}/callback-urls`, { method: "POST" });
+      updateForm("voicebot_url", result.voicebot_url || "");
+      updateForm("status_url", result.status_url || "");
+      setSaveMessage({ type: "success", text: "Signed callback URLs generated. Save Integration to persist them." });
+    } catch (error: any) {
+      setSaveMessage({ type: "error", text: error.message || "Unable to generate callback URLs." });
+    } finally {
+      setIsGeneratingUrls(false);
     }
   };
 
@@ -1425,6 +1440,12 @@ export default function AdminChannelDetailPage({
                     {channel.config?.provider_credentials_configured ? "Backend provider credentials configured" : "Backend provider credentials missing — add Exotel credentials in Render Environment"}
                   </div>
                   <div className="md:col-span-2 flex flex-wrap items-center gap-2 pt-1">
+                    {isExotelChannel && (
+                      <button onClick={handleGenerateCallbackUrls} disabled={isGeneratingUrls} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 disabled:opacity-50">
+                        {isGeneratingUrls ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
+                        Generate Callback URLs
+                      </button>
+                    )}
                     <button onClick={handleSaveConfig} disabled={isSaving || !hasChanges} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
                       {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                       Save Integration
