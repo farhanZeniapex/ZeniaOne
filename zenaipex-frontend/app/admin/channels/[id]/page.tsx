@@ -474,7 +474,8 @@ export default function AdminChannelDetailPage({
     setEditForm((prev) => {
       const next = { ...prev, [key]: value };
       setHasChanges(
-        next.name !== (channel?.name || "") ||
+        Boolean(next.exotel_api_key?.trim() || next.exotel_api_token?.trim()) ||
+          next.name !== (channel?.name || "") ||
           next.phone_number !== (channel?.phone_number || "") ||
         next.agent_id !== (channel?.agent_id || "") ||
           next.is_active !== (channel?.is_active ?? true) ||
@@ -554,6 +555,10 @@ export default function AdminChannelDetailPage({
           type: "success",
           text: "Configuration saved successfully.",
         });
+        // Credentials are write-only. Clear them after the encrypted save so
+        // they cannot remain visible in the form or be accidentally resent.
+        setEditForm((current) => ({ ...current, exotel_api_key: "", exotel_api_token: "" }));
+        setVerification(null);
         setTimeout(() => setSaveMessage(null), 3000);
       }
     } catch (e: any) {
