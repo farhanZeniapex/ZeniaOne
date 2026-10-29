@@ -887,6 +887,8 @@ export default function AdminChannelDetailPage({
 
   const recordings = conversations.filter((c) => c.recording_url);
   const latestRecording = recordings.length > 0 ? recordings[0] : null;
+  const isExotelChannel = channel.type === "exotel_voice" || channel.type === "exotel";
+  const providerName = isExotelChannel ? "Exotel" : "Twilio";
 
   return (
     <div className={org.page}>
@@ -1314,7 +1316,7 @@ export default function AdminChannelDetailPage({
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
-                    <Server className="w-4 h-4 mr-2 text-emerald-700" /> Provider Integration
+                    <Server className="w-4 h-4 mr-2 text-emerald-700" /> {providerName} Integration
                   </h3>
                   <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
                     Edit & save from here
@@ -1330,12 +1332,12 @@ export default function AdminChannelDetailPage({
                     <input value={editForm.phone_number} onChange={(e) => updateForm("phone_number", e.target.value)} placeholder="+919513886363" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900" />
                   </label>
                   <label className="text-xs font-semibold text-slate-600">
-                    Exotel account / subdomain ID
+                    {providerName} account / subdomain ID
                     <input value={editForm.exotel_account_sid} onChange={(e) => updateForm("exotel_account_sid", e.target.value)} placeholder="zeniaone3" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900" />
                   </label>
                   <label className="text-xs font-semibold text-slate-600">
-                    Exotel flow ID
-                    <input value={editForm.exotel_flow_id} onChange={(e) => updateForm("exotel_flow_id", e.target.value)} placeholder="1369877" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900" />
+                    {isExotelChannel ? "Exotel flow ID" : "Webhook / stream mode"}
+                    <input value={editForm.exotel_flow_id} onChange={(e) => updateForm("exotel_flow_id", e.target.value)} placeholder={isExotelChannel ? "1369877" : "WebSocket Stream"} disabled={!isExotelChannel} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900 disabled:bg-slate-50 disabled:text-slate-400" />
                   </label>
                   <label className="text-xs font-semibold text-slate-600 md:col-span-2">
                     Voicebot callback URL
