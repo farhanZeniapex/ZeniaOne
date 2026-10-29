@@ -889,6 +889,24 @@ export default function AdminChannelDetailPage({
   const latestRecording = recordings.length > 0 ? recordings[0] : null;
   const isExotelChannel = channel.type === "exotel_voice" || channel.type === "exotel";
   const providerName = isExotelChannel ? "Exotel" : "Twilio";
+  const integrationChecks: Array<[string, boolean]> = isExotelChannel
+    ? [
+        ["Channel name", Boolean(editForm.name.trim())],
+        ["ExoPhone / caller ID", Boolean(editForm.phone_number.trim())],
+        ["Exotel account ID", Boolean(editForm.exotel_account_sid.trim())],
+        ["Exotel flow ID", Boolean(editForm.exotel_flow_id.trim())],
+        ["Voicebot callback URL", Boolean(editForm.voicebot_url.trim())],
+        ["Status callback URL", Boolean(editForm.status_url.trim())],
+        ["Backend credentials", Boolean(channel.config?.provider_credentials_configured)],
+      ]
+    : [
+        ["Channel name", Boolean(editForm.name.trim())],
+        ["Caller ID", Boolean(editForm.phone_number.trim())],
+        ["Backend credentials", Boolean(channel.config?.provider_credentials_configured)],
+      ];
+  const completedIntegrations = integrationChecks.filter(([, complete]) => complete).length;
+  const integrationPercent = Math.round((completedIntegrations / integrationChecks.length) * 100);
+  const missingIntegrations = integrationChecks.filter(([, complete]) => !complete).map(([label]) => label);
 
   return (
     <div className={org.page}>
@@ -1323,6 +1341,29 @@ export default function AdminChannelDetailPage({
                   </span>
                 </div>
                 <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <p className="text-sm font-bold text-slate-900">Integration readiness</p>
+                        <p className="text-xs text-slate-500">{completedIntegrations} of {integrationChecks.length} required checks complete</p>
+                      </div>
+                      <span className={`text-sm font-extrabold ${integrationPercent === 100 ? "text-emerald-700" : "text-amber-700"}`}>{integrationPercent}%</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                      <div className={`h-full rounded-full ${integrationPercent === 100 ? "bg-emerald-500" : "bg-amber-500"}`} style={{ width: `${integrationPercent}%` }} />
+                    </div>
+                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                      {integrationChecks.map(([label, complete]) => (
+                        <div key={label} className={`text-xs flex items-center gap-1.5 ${complete ? "text-emerald-700" : "text-amber-700"}`}>
+                          {complete ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                          <span>{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {missingIntegrations.length > 0 && (
+                      <p className="mt-3 text-xs text-amber-800">Missing: {missingIntegrations.join(", ")}</p>
+                    )}
+                  </div>
                   <label className="text-xs font-semibold text-slate-600">
                     Channel name
                     <input value={editForm.name} onChange={(e) => updateForm("name", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900" />
