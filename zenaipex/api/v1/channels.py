@@ -19,6 +19,7 @@ router = APIRouter(tags=["Channels"])
 
 
 def _fmt(doc: dict) -> dict:
+    config = doc.get("config") or {}
     return {
         "id": str(doc["_id"]),
         "company_id": doc["company_id"],
@@ -29,6 +30,7 @@ def _fmt(doc: dict) -> dict:
         "public_identifier": doc.get("public_identifier"),
         "has_custom_twilio": bool(doc.get("twilio_account_sid")),
         "is_active": doc.get("is_active", True),
+        "config": config,
         "created_at": doc.get("created_at"),
         "updated_at": doc.get("updated_at"),
     }

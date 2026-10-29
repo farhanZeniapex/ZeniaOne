@@ -86,6 +86,7 @@ class ChannelResponse(BaseModel):
     type: str
     phone_number: Optional[str] = None
     public_identifier: Optional[str] = None
+    config: Dict[str, Any] = Field(default_factory=dict)
     has_custom_twilio: bool = False    # True if company provided own creds
     is_active: bool
     created_at: datetime

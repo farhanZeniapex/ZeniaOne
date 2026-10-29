@@ -444,7 +444,18 @@ export default function AdminChannelDetailPage({
   const [callMessages, setCallMessages] = useState<any[]>([]);
 
   // Config State
-  const [editForm, setEditForm] = useState({ agent_id: "", is_active: true });
+  const [editForm, setEditForm] = useState({
+    name: "",
+    phone_number: "",
+    agent_id: "",
+    is_active: true,
+    exotel_account_sid: "",
+    exotel_flow_id: "",
+    voicebot_url: "",
+    status_url: "",
+    recording_enabled: true,
+    recording_channels: "dual",
+  });
   const [hasChanges, setHasChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{
@@ -456,8 +467,16 @@ export default function AdminChannelDetailPage({
     setEditForm((prev) => {
       const next = { ...prev, [key]: value };
       setHasChanges(
+        next.name !== (channel?.name || "") ||
+          next.phone_number !== (channel?.phone_number || "") ||
         next.agent_id !== (channel?.agent_id || "") ||
-          next.is_active !== (channel?.is_active ?? true),
+          next.is_active !== (channel?.is_active ?? true) ||
+          next.exotel_account_sid !== (channel?.config?.exotel_account_sid || "") ||
+          next.exotel_flow_id !== (channel?.config?.exotel_flow_id || "") ||
+          next.voicebot_url !== (channel?.config?.voicebot_url || "") ||
+          next.status_url !== (channel?.config?.status_url || "") ||
+          next.recording_enabled !== (channel?.config?.recording_enabled ?? true) ||
+          next.recording_channels !== (channel?.config?.recording_channels || "dual"),
       );
       return next;
     });
@@ -466,8 +485,16 @@ export default function AdminChannelDetailPage({
   const cancelEdits = () => {
     if (channel) {
       setEditForm({
+        name: channel.name || "",
+        phone_number: channel.phone_number || "",
         agent_id: channel.agent_id || "",
         is_active: channel.is_active ?? true,
+        exotel_account_sid: channel.config?.exotel_account_sid || "",
+        exotel_flow_id: channel.config?.exotel_flow_id || "",
+        voicebot_url: channel.config?.voicebot_url || "",
+        status_url: channel.config?.status_url || "",
+        recording_enabled: channel.config?.recording_enabled ?? true,
+        recording_channels: channel.config?.recording_channels || "dual",
       });
       setHasChanges(false);
       setSaveMessage(null);
@@ -483,16 +510,30 @@ export default function AdminChannelDetailPage({
         {
           method: "PATCH",
           body: JSON.stringify({
+            name: editForm.name,
+            phone_number: editForm.phone_number || undefined,
             agent_id: editForm.agent_id,
             is_active: editForm.is_active,
+            config: {
+              ...(channel?.config || {}),
+              exotel_account_sid: editForm.exotel_account_sid,
+              exotel_flow_id: editForm.exotel_flow_id,
+              voicebot_url: editForm.voicebot_url,
+              status_url: editForm.status_url,
+              recording_enabled: editForm.recording_enabled,
+              recording_channels: editForm.recording_channels,
+            },
           }),
         },
       );
       if (res.id) {
         setChannel({
           ...channel,
+          name: res.name,
+          phone_number: res.phone_number,
           agent_id: res.agent_id,
           is_active: res.is_active,
+          config: res.config || channel.config,
         });
         setHasChanges(false);
         setSaveMessage({
@@ -531,8 +572,16 @@ export default function AdminChannelDetailPage({
         setChannel(chanRes);
         if (!hasChanges) {
           setEditForm({
+            name: chanRes.name || "",
+            phone_number: chanRes.phone_number || "",
             agent_id: chanRes.agent_id || "",
             is_active: chanRes.is_active ?? true,
+            exotel_account_sid: chanRes.config?.exotel_account_sid || "",
+            exotel_flow_id: chanRes.config?.exotel_flow_id || "",
+            voicebot_url: chanRes.config?.voicebot_url || "",
+            status_url: chanRes.config?.status_url || "",
+            recording_enabled: chanRes.config?.recording_enabled ?? true,
+            recording_channels: chanRes.config?.recording_channels || "dual",
           });
         }
 
@@ -1257,6 +1306,62 @@ export default function AdminChannelDetailPage({
                 </div>
               </div>
             </div>
+
+            {isVoice && (
+              <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
+                    <Server className="w-4 h-4 mr-2 text-emerald-700" /> Provider Integration
+                  </h3>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Edit & save from here
+                  </span>
+                </div>
+                <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <label className="text-xs font-semibold text-slate-600">
+                    Channel name
+                    <input value={editForm.name} onChange={(e) => updateForm("name", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900" />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">
+                    ExoPhone / caller ID
+                    <input value={editForm.phone_number} onChange={(e) => updateForm("phone_number", e.target.value)} placeholder="+919513886363" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900" />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Exotel account / subdomain ID
+                    <input value={editForm.exotel_account_sid} onChange={(e) => updateForm("exotel_account_sid", e.target.value)} placeholder="zeniaone3" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900" />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Exotel flow ID
+                    <input value={editForm.exotel_flow_id} onChange={(e) => updateForm("exotel_flow_id", e.target.value)} placeholder="1369877" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900" />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600 md:col-span-2">
+                    Voicebot callback URL
+                    <input value={editForm.voicebot_url} onChange={(e) => updateForm("voicebot_url", e.target.value)} placeholder="https://zeniaone-backend.onrender.com/.../voicebot?..." className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900" />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600 md:col-span-2">
+                    Status callback URL
+                    <input value={editForm.status_url} onChange={(e) => updateForm("status_url", e.target.value)} placeholder="https://zeniaone-backend.onrender.com/.../status?..." className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono text-slate-900" />
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-slate-600">
+                    <input type="checkbox" checked={editForm.recording_enabled} onChange={(e) => updateForm("recording_enabled", e.target.checked)} />
+                    Call recording enabled
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">
+                    Recording channels
+                    <select value={editForm.recording_channels} onChange={(e) => updateForm("recording_channels", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900">
+                      <option value="dual">Dual channel</option>
+                      <option value="single">Single channel</option>
+                    </select>
+                  </label>
+                  <div className="md:col-span-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    API key, API token aur webhook secret browser me nahi dikhaye jaate. Backend credentials Render environment se securely read hote hain.
+                  </div>
+                  <div className={`md:col-span-2 rounded-lg border px-3 py-2 text-xs font-semibold ${channel.config?.provider_credentials_configured ? "border-emerald-100 bg-emerald-50 text-emerald-800" : "border-rose-100 bg-rose-50 text-rose-800"}`}>
+                    {channel.config?.provider_credentials_configured ? "Backend provider credentials configured" : "Backend provider credentials missing — add Exotel credentials in Render Environment"}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">

@@ -174,6 +174,15 @@ async def get_channel_admin(channel_id: str):
     if not isinstance(allowed_domains, list):
         allowed_domains = ["Any (Not strict)"]
         
+    config = channel.get("config") or {}
+    # Never return provider secrets to the browser. The UI receives only
+    # non-sensitive integration metadata and a readiness flag.
+    secret_keys = {"api_key", "api_token", "auth_token", "webhook_secret", "password"}
+    safe_config = {key: value for key, value in config.items() if key.lower() not in secret_keys}
+    safe_config["provider_credentials_configured"] = bool(
+        settings.exotel_account_sid and settings.exotel_api_key and settings.exotel_api_token
+    ) if channel.get("type") in {"exotel", "exotel_voice"} else True
+
     return {
         "id": str(channel["_id"]),
         "company_id": channel["company_id"],
@@ -187,6 +196,7 @@ async def get_channel_admin(channel_id: str):
         "updated_at": channel.get("updated_at"),
         "company_numbers": company_numbers,
         "allowed_domains": allowed_domains
+        ,"config": safe_config
     }
 
 @router.get("/channels/{channel_id}/conversations", summary="Get conversations for a channel")
