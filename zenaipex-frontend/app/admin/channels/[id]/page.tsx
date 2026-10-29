@@ -1470,7 +1470,7 @@ export default function AdminChannelDetailPage({
             </div>
 
             {isVoice && (
-              <div className="lg:col-span-2 lg:order-[20] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="lg:col-span-1 lg:order-[20] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                     <Server className="w-4 h-4 mr-2 text-emerald-700" /> {providerName} Integration
@@ -1479,8 +1479,8 @@ export default function AdminChannelDetailPage({
                     Edit & save from here
                   </span>
                 </div>
-                <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-                  <div className="md:col-span-2 xl:col-span-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="md:col-span-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div className="flex items-center justify-between mb-1.5">
                       <div>
                         <p className="text-sm font-bold text-slate-900">Integration readiness</p>
@@ -1491,7 +1491,7 @@ export default function AdminChannelDetailPage({
                     <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
                       <div className={`h-full rounded-full ${integrationPercent === 100 ? "bg-emerald-500" : "bg-amber-500"}`} style={{ width: `${integrationPercent}%` }} />
                     </div>
-                    <div className="mt-2 grid grid-cols-2 xl:grid-cols-4 gap-x-3 gap-y-1">
+                    <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">
                       {integrationChecks.map(([label, complete]) => (
                         <div key={label} className={`text-xs flex items-center gap-1.5 ${complete ? "text-emerald-700" : "text-amber-700"}`}>
                           {complete ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
@@ -1547,11 +1547,11 @@ export default function AdminChannelDetailPage({
                     {isExotelChannel ? "Exotel flow ID" : "Webhook / stream mode"}
                     <input value={editForm.exotel_flow_id} onChange={(e) => updateForm("exotel_flow_id", e.target.value)} placeholder={isExotelChannel ? "1369877" : "WebSocket Stream"} disabled={!isExotelChannel} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-mono text-slate-900 disabled:bg-slate-50 disabled:text-slate-400" />
                   </label>
-                  <label className="xl:col-span-2 text-xs font-semibold text-slate-600 min-w-0">
+                  <label className="md:col-span-2 text-xs font-semibold text-slate-600 min-w-0">
                     Voicebot callback URL
                     <input value={editForm.voicebot_url} onChange={(e) => updateForm("voicebot_url", e.target.value)} placeholder="https://zeniaone-backend.onrender.com/.../voicebot?..." className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-mono text-slate-900" />
                   </label>
-                  <label className="xl:col-span-2 text-xs font-semibold text-slate-600 min-w-0">
+                  <label className="md:col-span-2 text-xs font-semibold text-slate-600 min-w-0">
                     Status callback URL
                     <input value={editForm.status_url} onChange={(e) => updateForm("status_url", e.target.value)} placeholder="https://zeniaone-backend.onrender.com/.../status?..." className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-mono text-slate-900" />
                   </label>
@@ -1566,17 +1566,17 @@ export default function AdminChannelDetailPage({
                       <option value="single">Single channel</option>
                     </select>
                   </label>
-                  <div className="xl:col-span-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <div className="md:col-span-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-800">
                     API keys, API tokens, and webhook secrets are never shown after saving. They are encrypted in the backend database; Render credentials are used only as a fallback.
                   </div>
-                  <div className={`xl:col-span-2 rounded-lg border px-3 py-2 text-xs font-semibold ${channel.config?.provider_credentials_configured ? "border-emerald-100 bg-emerald-50 text-emerald-800" : "border-rose-100 bg-rose-50 text-rose-800"}`}>
+                  <div className={`md:col-span-2 rounded-lg border px-3 py-2 text-xs font-semibold ${channel.config?.provider_credentials_configured ? "border-emerald-100 bg-emerald-50 text-emerald-800" : "border-rose-100 bg-rose-50 text-rose-800"}`}>
                     {channel.config?.provider_credentials_configured
                       ? "Provider credentials configured for this channel"
                       : isExotelChannel
                         ? "Channel credentials missing — enter this Exotel account API key and API token, then save"
                         : "Backend provider credentials missing — configure the provider credentials"}
                   </div>
-                  <div className="md:col-span-2 xl:col-span-4 flex flex-wrap items-center gap-2 pt-1">
+                  <div className="md:col-span-2 flex flex-wrap items-center gap-2 pt-1">
                     {isExotelChannel && (
                       <button onClick={handleGenerateCallbackUrls} disabled={isGeneratingUrls} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-300 bg-indigo-50 px-4 py-2 text-xs font-bold text-indigo-700 disabled:opacity-50">
                         {isGeneratingUrls ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Zap className="h-3.5 w-3.5" />}
@@ -1598,7 +1598,7 @@ export default function AdminChannelDetailPage({
                     )}
                   </div>
                   {verification?.checks?.length > 0 && (
-                    <div className="md:col-span-2 xl:col-span-4 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1">
+                    <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1">
                       {verification.checks.map((check: any) => (
                         <div key={check.name} className={`flex items-center justify-between gap-3 text-xs ${check.ok ? "text-emerald-700" : "text-rose-700"}`}>
                           <span className="font-semibold">{check.ok ? "✓" : "!"} {check.name}</span>
@@ -1611,7 +1611,7 @@ export default function AdminChannelDetailPage({
               </div>
             )}
 
-            <div className="lg:col-span-2 lg:order-[30] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="lg:col-span-1 lg:order-[30] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                   <Zap className="w-4 h-4 mr-2 text-emerald-700" /> AI
@@ -1689,7 +1689,7 @@ export default function AdminChannelDetailPage({
               </div>
             </div>
 
-            <div className="lg:col-span-2 lg:order-[40] grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="lg:col-span-1 lg:order-[40] grid grid-cols-1 gap-4">
               <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
@@ -1828,7 +1828,7 @@ export default function AdminChannelDetailPage({
             </div>
 
             {/* MERGED: Recent Activity + Latest Recording */}
-            <div className="lg:col-span-2 lg:order-[50] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="lg:col-span-1 lg:order-[50] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                   <History className="w-4 h-4 mr-2 text-slate-500" /> Recent
