@@ -1897,7 +1897,7 @@ export default function AdminChannelDetailPage({
             </div>
           </div>
 
-          <div className="lg:col-span-1 lg:order-[15] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="lg:col-span-1 lg:order-[15] grid grid-cols-1 md:grid-cols-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="bg-white overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
@@ -1947,7 +1947,7 @@ export default function AdminChannelDetailPage({
             </div>
 
             {/* MERGED: Recent Activity + Latest Recording */}
-            <div className="border-t border-slate-100 bg-white overflow-hidden">
+            <div className="border-t border-slate-100 bg-white overflow-hidden md:border-l md:border-t-0">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                   <History className="w-4 h-4 mr-2 text-slate-500" /> Recent
