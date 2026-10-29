@@ -56,6 +56,40 @@ import { SmartSelect } from "@/components/ui/smart-select";
 import { Drawer } from "@/components/ui/drawer";
 import LiveCallsPage from "../../live-calls/page";
 import org from "../../organization.module.css";
+
+const VOICE_MODES = [
+  {
+    id: "gemini_clone",
+    title: "Gemini + Clone Voice",
+    description: "Gemini Live captures speech, Google Gemini generates the answer, and Sarvam speaks with your cloned voice.",
+    flow: "Gemini Live → Google Gemini → Sarvam Clone TTS",
+    voiceEngine: "pipeline",
+    stt: "gemini_live",
+    llm: "gemini",
+    tts: "sarvam_clone",
+  },
+  {
+    id: "classic",
+    title: "Classic Deepgram + Groq",
+    description: "The predictable pipeline: Deepgram speech recognition, Groq reasoning, and the selected voice output.",
+    flow: "Deepgram → Groq → Sarvam Clone TTS",
+    voiceEngine: "pipeline",
+    stt: "deepgram",
+    llm: "groq",
+    tts: "sarvam_clone",
+  },
+  {
+    id: "gemini_s2s",
+    title: "Gemini Live S2S · Browser + Phone",
+    description: "Gemini's native real-time voice-to-voice mode for browser voice and Exotel calls. The selected clone voice is bypassed in this mode.",
+    flow: "Microphone / Phone → Gemini Live → Gemini native audio",
+    voiceEngine: "gemini_live",
+    stt: "gemini_live",
+    llm: "gemini",
+    tts: "sarvam_clone",
+  },
+] as const;
+
 const LiveCountdown = ({
   runDate,
   isPassed,
@@ -478,6 +512,7 @@ export default function AdminChannelDetailPage({
   const [routingDraft, setRoutingDraft] = useState<any>(null);
   const [routingDirty, setRoutingDirty] = useState(false);
   const [routingSaving, setRoutingSaving] = useState(false);
+  const [voiceModeApplying, setVoiceModeApplying] = useState(false);
 
   useEffect(() => {
     const agent = agentsData[editForm.agent_id];
@@ -559,6 +594,61 @@ export default function AdminChannelDetailPage({
       setAiConfigMessage(error.message || "Unable to save provider routing.");
     } finally {
       setRoutingSaving(false);
+    }
+  };
+
+  const resolveProviderId = (aliases: string[], fallback: string) => {
+    const provider = (runtimeRouting?.providers || []).find((item: any) => {
+      const haystack = `${item.id || ""} ${item.name || ""}`.toLowerCase();
+      return aliases.some((alias) => haystack.includes(alias));
+    });
+    return provider?.id || fallback;
+  };
+
+  const applyVoiceMode = async (mode: (typeof VOICE_MODES)[number]) => {
+    if (!editForm.agent_id || !aiConfigDraft) {
+      setAiConfigMessage("Select an AI agent before applying a voice mode.");
+      return;
+    }
+    setVoiceModeApplying(true);
+    setAiConfigMessage(null);
+    try {
+      const nextConfig = { ...aiConfigDraft, voice_engine: mode.voiceEngine };
+      const languages = Array.from(new Set<string>((nextConfig.supported_languages || []) as string[]));
+      const savedAgent = await fetchApi<any>(`/companies/${companyId}/agents/${editForm.agent_id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ ...nextConfig, supported_languages: languages }),
+      });
+      setAgentsData((prev: any) => ({ ...prev, [editForm.agent_id]: savedAgent }));
+      setAiConfigDraft(nextConfig);
+      setAiConfigDirty(false);
+
+      const currentRouting = routingDraft || runtimeRouting?.routing || {};
+      const nextRouting = JSON.parse(JSON.stringify(currentRouting));
+      const stt = resolveProviderId([mode.stt], mode.stt);
+      const llm = resolveProviderId([mode.llm], mode.llm);
+      const tts = resolveProviderId([mode.tts], mode.tts);
+      ["phone_voice", "browser_voice"].forEach((surface) => {
+        nextRouting[surface] = {
+          ...(nextRouting[surface] || {}),
+          stt: [stt],
+          llm: [llm],
+          tts: [tts],
+        };
+      });
+      if (nextRouting.text_chat) nextRouting.text_chat = { ...nextRouting.text_chat, llm: [llm] };
+      const result = await fetchApi<any>("/admin/providers/runtime/routing", {
+        method: "PUT",
+        body: JSON.stringify({ routing: nextRouting }),
+      });
+      setRuntimeRouting((prev: any) => ({ ...(prev || {}), routing: result.routing }));
+      setRoutingDraft(result.routing);
+      setRoutingDirty(false);
+      setAiConfigMessage(`${mode.title} applied. New calls and voice sessions will use this mode.`);
+    } catch (error: any) {
+      setAiConfigMessage(error.message || "Unable to apply voice mode.");
+    } finally {
+      setVoiceModeApplying(false);
     }
   };
 
@@ -1682,8 +1772,31 @@ export default function AdminChannelDetailPage({
                 ) : <p className="text-sm text-slate-400">Select an AI agent to configure its language, model and voice.</p>}
 
                 <div className="border-t border-slate-100 pt-5">
-                  <div className="flex items-center justify-between mb-3"><div><p className="text-xs font-bold uppercase tracking-wider text-slate-700">AI Provider Routing</p><p className="text-xs text-slate-500 mt-1">Dynamic provider inventory · primary first, fallback next</p></div><button type="button" onClick={saveProviderRouting} disabled={routingSaving || !routingDirty} className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 disabled:opacity-50">{routingSaving ? "Saving…" : "Save routing"}</button></div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">{Object.entries(routingDraft || {}).flatMap(([surface, stages]: [string, any]) => Object.entries(stages || {}).map(([stage, selectedRaw]: [string, any]) => { const available = (runtimeRouting?.providers || []).filter((provider: any) => (provider.roles || []).some((role: string) => role.toLowerCase().startsWith(stage))); const selected = Array.isArray(selectedRaw) ? selectedRaw : []; return <div key={`${surface}-${stage}`} className="rounded-lg border border-slate-200 p-3"><p className="text-xs font-bold uppercase text-slate-600 mb-2">{surface.replaceAll("_", " ")} · {stage}</p><div className="space-y-2">{[0, 1].map((index) => <select key={index} value={selected[index] || ""} onChange={(e) => { const next = [...selected]; next[index] = e.target.value; setRoutingDraft((prev: any) => ({ ...prev, [surface]: { ...(prev?.[surface] || {}), [stage]: Array.from(new Set(next.filter(Boolean))) } })); setRoutingDirty(true); }} className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs"><option value="">{index === 0 ? "Select primary provider" : "Select fallback provider"}</option>{available.map((provider: any) => <option key={provider.id} value={provider.id}>{provider.name}{provider.configured ? " · configured" : " · unavailable"}</option>)}</select>)}</div><p className="mt-2 text-[10px] text-slate-400">Current: {selected.join(" → ") || "Not configured"}</p></div> }))}</div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-700">Voice Operating Modes</p>
+                      <p className="text-xs text-slate-500 mt-1">Choose one complete voice flow; provider routing updates automatically.</p>
+                    </div>
+                    {voiceModeApplying && <Loader2 className="h-4 w-4 animate-spin text-emerald-700" />}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {VOICE_MODES.map((mode) => {
+                      const activeMode = mode.id === (aiConfigDraft?.voice_engine === "gemini_live" ? "gemini_s2s" : routingDraft?.phone_voice?.llm?.[0] === "groq" ? "classic" : "gemini_clone");
+                      return (
+                        <div key={mode.id} className={`rounded-xl border p-3 transition-colors ${activeMode ? "border-emerald-400 bg-emerald-50/60 ring-1 ring-emerald-200" : "border-slate-200 bg-white"}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-bold text-slate-900">{mode.title}</p>
+                            {activeMode && <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">Selected</span>}
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-slate-600">{mode.description}</p>
+                          <p className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5 text-[11px] font-semibold text-slate-700">{mode.flow}</p>
+                          <button type="button" onClick={() => applyVoiceMode(mode)} disabled={voiceModeApplying || activeMode} className={`mt-3 w-full rounded-lg px-3 py-2 text-xs font-bold ${activeMode ? "cursor-default bg-emerald-100 text-emerald-700" : "bg-slate-900 text-white hover:bg-slate-800"}`}>
+                            {activeMode ? "Active profile" : "Use this profile"}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
                 {aiConfigMessage && <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">{aiConfigMessage}</p>}
               </div>
