@@ -274,6 +274,7 @@ export default function AdminChannelDetailPage({
   const [companiesMap, setCompaniesMap] = useState<Record<string, string>>({});
   const [agentsMap, setAgentsMap] = useState<Record<string, string>>({});
   const [agentsData, setAgentsData] = useState<Record<string, any>>({});
+  const [runtimeRouting, setRuntimeRouting] = useState<any>(null);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -560,7 +561,7 @@ export default function AdminChannelDetailPage({
 
     const loadData = async () => {
       try {
-        const [chanRes, convRes, anRes, compRes, agentRes] = await Promise.all([
+        const [chanRes, convRes, anRes, compRes, agentRes, routingRes] = await Promise.all([
           fetchApi<any>(`/admin/channels/${channelId}`),
           fetchApi<any>(`/admin/channels/${channelId}/conversations?limit=500`),
           fetchApi<any>(`/admin/channels/${channelId}/analytics`).catch(
@@ -568,8 +569,10 @@ export default function AdminChannelDetailPage({
           ),
           fetchApi<any>(`/admin/companies`),
           fetchApi<any>(`/admin/agents`),
+          fetchApi<any>(`/admin/providers/runtime`).catch(() => null),
         ]);
         setChannel(chanRes);
+        setRuntimeRouting(routingRes);
         if (!hasChanges) {
           setEditForm({
             name: chanRes.name || "",
@@ -1415,7 +1418,8 @@ export default function AdminChannelDetailPage({
                     Speech Recognition (STT)
                   </p>
                   <p className="font-semibold text-slate-900 text-sm bg-slate-50 px-2.5 py-1.5 rounded border border-slate-100 inline-block">
-                    Deepgram
+                    {(runtimeRouting?.routing?.phone_voice?.stt || [])
+                      .join(" → ") || "Runtime routing unavailable"}
                   </p>
                 </div>
                 <div>
@@ -1423,8 +1427,8 @@ export default function AdminChannelDetailPage({
                     AI Model (LLM)
                   </p>
                   <p className="font-semibold text-slate-900 text-sm bg-slate-50 px-2.5 py-1.5 rounded border border-slate-100 inline-block">
-                    {agentsData[editForm.agent_id]?.llm_model ||
-                      "Not configured"}
+                    {(runtimeRouting?.routing?.phone_voice?.llm || []).join(" → ") ||
+                      agentsData[editForm.agent_id]?.llm_model || "Not configured"}
                   </p>
                 </div>
                 <div>
@@ -1432,8 +1436,8 @@ export default function AdminChannelDetailPage({
                     Voice Synthesis (TTS)
                   </p>
                   <p className="font-semibold text-slate-900 text-sm bg-slate-50 px-2.5 py-1.5 rounded border border-slate-100 inline-block capitalize">
-                    {agentsData[editForm.agent_id]?.tts_voice ||
-                      "Not configured"}
+                    {(runtimeRouting?.routing?.phone_voice?.tts || []).join(" → ") ||
+                      agentsData[editForm.agent_id]?.tts_voice || "Not configured"}
                   </p>
                 </div>
               </div>
