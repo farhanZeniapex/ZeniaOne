@@ -123,6 +123,10 @@ class AgentUpdate(BaseModel):
     tts_model: Optional[str] = None
     voice_engine: Optional[str] = None
     gemini_voice: Optional[str] = None
+    voice_speed: Optional[float] = Field(default=None, ge=0.5, le=2.0)
+    voice_volume: Optional[float] = Field(default=None, ge=0.0, le=2.0)
+    voice_clarity: Optional[int] = Field(default=None, ge=0, le=100)
+    voice_stability: Optional[int] = Field(default=None, ge=0, le=100)
     llm_model: Optional[str] = None
     llm_max_tokens: Optional[int] = None
     llm_temperature: Optional[float] = None

@@ -470,6 +470,97 @@ export default function AdminChannelDetailPage({
   const [isGeneratingUrls, setIsGeneratingUrls] = useState(false);
   const [verification, setVerification] = useState<any>(null);
   const [showExotelSecrets, setShowExotelSecrets] = useState(false);
+  const [aiConfigDraft, setAiConfigDraft] = useState<any>(null);
+  const [aiConfigDirty, setAiConfigDirty] = useState(false);
+  const [aiConfigSaving, setAiConfigSaving] = useState(false);
+  const [aiConfigMessage, setAiConfigMessage] = useState<string | null>(null);
+  const [languageInput, setLanguageInput] = useState("");
+  const [routingDraft, setRoutingDraft] = useState<any>(null);
+  const [routingDirty, setRoutingDirty] = useState(false);
+  const [routingSaving, setRoutingSaving] = useState(false);
+
+  useEffect(() => {
+    const agent = agentsData[editForm.agent_id];
+    if (!agent || aiConfigDirty) return;
+    setAiConfigDraft({
+      default_language: agent.default_language || agent.supported_languages?.[0] || "en-IN",
+      supported_languages: agent.supported_languages || [agent.default_language || "en-IN"],
+      voice_engine: agent.voice_engine || "pipeline",
+      gemini_voice: agent.gemini_voice || "Aoede",
+      voice_speed: agent.voice_speed ?? 1,
+      voice_volume: agent.voice_volume ?? 1,
+      voice_clarity: agent.voice_clarity ?? 94,
+      voice_stability: agent.voice_stability ?? 85,
+      tts_voice: agent.tts_voice || "anushka",
+      tts_model: agent.tts_model || "bulbul:v3",
+      llm_model: agent.llm_model || "sarvam-105b",
+      llm_max_tokens: agent.llm_max_tokens || 1200,
+      llm_temperature: agent.llm_temperature ?? 0.3,
+      max_conversation_turns: agent.max_conversation_turns || 20,
+      silence_timeout_ms: agent.silence_timeout_ms || 800,
+      force_process_timeout_sec: agent.force_process_timeout_sec || 8,
+      enable_background_audio: agent.enable_background_audio ?? true,
+    });
+  }, [agentsData, editForm.agent_id, aiConfigDirty]);
+
+  useEffect(() => {
+    if (!runtimeRouting || routingDirty) return;
+    setRoutingDraft(JSON.parse(JSON.stringify(runtimeRouting.routing || {})));
+  }, [runtimeRouting, routingDirty]);
+
+  const updateAiConfig = (key: string, value: any) => {
+    setAiConfigDraft((prev: any) => ({ ...prev, [key]: value }));
+    setAiConfigDirty(true);
+  };
+
+  const saveAiConfiguration = async () => {
+    const agentId = editForm.agent_id;
+    if (!agentId || !aiConfigDraft) return;
+    const languages = Array.from(new Set<string>((aiConfigDraft.supported_languages || []) as string[]));
+    if (!languages.length || !languages.every((code: string) => /^[a-z]{2,3}(?:-[A-Z]{2})?$/.test(code))) {
+      setAiConfigMessage("Add at least one valid BCP-47 language code, for example en-IN or hi-IN.");
+      return;
+    }
+    if (!languages.includes(aiConfigDraft.default_language)) {
+      setAiConfigMessage("Default language must be included in supported languages.");
+      return;
+    }
+    setAiConfigSaving(true);
+    setAiConfigMessage(null);
+    try {
+      const saved = await fetchApi<any>(`/companies/${companyId}/agents/${agentId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ ...aiConfigDraft, supported_languages: languages }),
+      });
+      setAgentsData((prev: any) => ({ ...prev, [agentId]: saved }));
+      setAiConfigDraft((prev: any) => ({ ...prev, supported_languages: languages }));
+      setAiConfigDirty(false);
+      setAiConfigMessage("AI configuration saved. It will apply to the next call/session.");
+    } catch (error: any) {
+      setAiConfigMessage(error.message || "Unable to save AI configuration.");
+    } finally {
+      setAiConfigSaving(false);
+    }
+  };
+
+  const saveProviderRouting = async () => {
+    if (!routingDraft) return;
+    setRoutingSaving(true);
+    try {
+      const result = await fetchApi<any>("/admin/providers/runtime/routing", {
+        method: "PUT",
+        body: JSON.stringify({ routing: routingDraft }),
+      });
+      setRuntimeRouting((prev: any) => ({ ...(prev || {}), routing: result.routing }));
+      setRoutingDraft(result.routing);
+      setRoutingDirty(false);
+      setAiConfigMessage("Provider routing saved. New calls will use the updated order.");
+    } catch (error: any) {
+      setAiConfigMessage(error.message || "Unable to save provider routing.");
+    } finally {
+      setRoutingSaving(false);
+    }
+  };
 
   const updateForm = (key: string, value: any) => {
     setEditForm((prev) => {
@@ -1524,10 +1615,11 @@ export default function AdminChannelDetailPage({
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                   <Zap className="w-4 h-4 mr-2 text-emerald-700" /> AI
-                  Configuration
+                  Configuration & Routing
                 </h3>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Editable · validated</span>
               </div>
-              <div className="p-5 grid grid-cols-2 gap-y-6 gap-x-6">
+              <div className="p-5 space-y-5">
                 <div className="col-span-2 sm:col-span-1">
                   <label className="block text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1.5">
                     AI Agent
@@ -1542,58 +1634,58 @@ export default function AdminChannelDetailPage({
                     )}
                   />
                 </div>
-                <div className="col-span-2 sm:col-span-1">
-                  <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1.5">
-                    Supported Languages
-                  </p>
-                  <div className="flex flex-wrap gap-1 mt-0.5">
-                    {agentsData[editForm.agent_id]?.default_language ? (
-                      <span className="px-2 py-1 bg-slate-50 text-[11px] font-bold rounded border border-slate-200 text-slate-600">
-                        {agentsData[editForm.agent_id].default_language ===
-                        "en-IN"
-                          ? "English (India)"
-                          : agentsData[editForm.agent_id].default_language ===
-                              "hi-IN"
-                            ? "Hindi"
-                            : agentsData[editForm.agent_id].default_language ===
-                                "gu-IN"
-                              ? "Gujarati"
-                              : agentsData[editForm.agent_id].default_language}
-                      </span>
-                    ) : (
-                      <span className="text-sm font-medium text-slate-400">
-                        No language configured
-                      </span>
-                    )}
-                  </div>
+                {aiConfigDraft ? (
+                  <>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <label className="text-xs font-semibold text-slate-600">
+                        Default language
+                        <select value={aiConfigDraft.default_language} onChange={(e) => updateAiConfig("default_language", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900">
+                          {(aiConfigDraft.supported_languages || []).map((code: string) => <option key={code} value={code}>{code}</option>)}
+                        </select>
+                      </label>
+                      <label className="text-xs font-semibold text-slate-600">
+                        Voice engine
+                        <select value={aiConfigDraft.voice_engine} onChange={(e) => updateAiConfig("voice_engine", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900">
+                          <option value="pipeline">Pipeline</option><option value="gemini_live">Gemini Live</option><option value="gemini_clone">Gemini Clone</option>
+                        </select>
+                      </label>
+                      <label className="text-xs font-semibold text-slate-600">
+                        Gemini voice
+                        <input value={aiConfigDraft.gemini_voice} onChange={(e) => updateAiConfig("gemini_voice", e.target.value)} placeholder="Aoede" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900" />
+                      </label>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex items-center justify-between mb-2"><span className="text-xs font-bold text-slate-700">Supported languages</span><span className="text-[10px] text-slate-400">BCP-47 codes</span></div>
+                      <div className="flex flex-wrap gap-2 mb-3">{(aiConfigDraft.supported_languages || []).map((code: string) => <button type="button" key={code} onClick={() => updateAiConfig("supported_languages", (aiConfigDraft.supported_languages || []).filter((item: string) => item !== code || item === aiConfigDraft.default_language))} className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">{code} ×</button>)}</div>
+                      <div className="flex gap-2"><input value={languageInput} onChange={(e) => setLanguageInput(e.target.value)} placeholder="Add language, e.g. hi-IN" className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" /><button type="button" onClick={() => { const value = languageInput.trim(); if (value && ! (aiConfigDraft.supported_languages || []).includes(value)) { updateAiConfig("supported_languages", [...(aiConfigDraft.supported_languages || []), value]); setLanguageInput(""); } }} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Add</button></div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <label className="text-xs font-semibold text-slate-600">LLM model<input value={aiConfigDraft.llm_model} onChange={(e) => updateAiConfig("llm_model", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+                      <label className="text-xs font-semibold text-slate-600">LLM max tokens<input type="number" min="100" max="4096" value={aiConfigDraft.llm_max_tokens} onChange={(e) => updateAiConfig("llm_max_tokens", Number(e.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+                      <label className="text-xs font-semibold text-slate-600">Temperature<input type="number" min="0" max="2" step="0.1" value={aiConfigDraft.llm_temperature} onChange={(e) => updateAiConfig("llm_temperature", Number(e.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+                      <label className="text-xs font-semibold text-slate-600">TTS voice<input value={aiConfigDraft.tts_voice} onChange={(e) => updateAiConfig("tts_voice", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <label className="text-xs font-semibold text-slate-600">Voice speed<input type="number" min="0.5" max="2" step="0.1" value={aiConfigDraft.voice_speed} onChange={(e) => updateAiConfig("voice_speed", Number(e.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+                      <label className="text-xs font-semibold text-slate-600">Voice volume<input type="number" min="0" max="2" step="0.1" value={aiConfigDraft.voice_volume} onChange={(e) => updateAiConfig("voice_volume", Number(e.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+                      <label className="text-xs font-semibold text-slate-600">Voice clarity<input type="number" min="0" max="100" value={aiConfigDraft.voice_clarity} onChange={(e) => updateAiConfig("voice_clarity", Number(e.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+                      <label className="text-xs font-semibold text-slate-600">Voice stability<input type="number" min="0" max="100" value={aiConfigDraft.voice_stability} onChange={(e) => updateAiConfig("voice_stability", Number(e.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                      <label className="text-xs font-semibold text-slate-600">TTS model<input value={aiConfigDraft.tts_model} onChange={(e) => updateAiConfig("tts_model", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+                      <label className="text-xs font-semibold text-slate-600">Max turns<input type="number" min="1" max="100" value={aiConfigDraft.max_conversation_turns} onChange={(e) => updateAiConfig("max_conversation_turns", Number(e.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+                      <label className="text-xs font-semibold text-slate-600">Silence timeout (ms)<input type="number" min="200" max="5000" value={aiConfigDraft.silence_timeout_ms} onChange={(e) => updateAiConfig("silence_timeout_ms", Number(e.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
+                      <label className="flex items-center gap-2 pt-5 text-xs font-semibold text-slate-600"><input type="checkbox" checked={aiConfigDraft.enable_background_audio} onChange={(e) => updateAiConfig("enable_background_audio", e.target.checked)} />Background audio</label>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={saveAiConfiguration} disabled={aiConfigSaving || !aiConfigDirty} className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{aiConfigSaving ? "Saving…" : "Save AI configuration"}</button>{aiConfigDirty && <span className="text-xs text-amber-700">Unsaved AI changes</span>}</div>
+                  </>
+                ) : <p className="text-sm text-slate-400">Select an AI agent to configure its language, model and voice.</p>}
+
+                <div className="border-t border-slate-100 pt-5">
+                  <div className="flex items-center justify-between mb-3"><div><p className="text-xs font-bold uppercase tracking-wider text-slate-700">AI Provider Routing</p><p className="text-xs text-slate-500 mt-1">Dynamic provider inventory · primary first, fallback next</p></div><button type="button" onClick={saveProviderRouting} disabled={routingSaving || !routingDirty} className="rounded-lg border border-indigo-300 bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 disabled:opacity-50">{routingSaving ? "Saving…" : "Save routing"}</button></div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">{Object.entries(routingDraft || {}).flatMap(([surface, stages]: [string, any]) => Object.entries(stages || {}).map(([stage, selectedRaw]: [string, any]) => { const available = (runtimeRouting?.providers || []).filter((provider: any) => (provider.roles || []).some((role: string) => role.toLowerCase().startsWith(stage))); const selected = Array.isArray(selectedRaw) ? selectedRaw : []; return <div key={`${surface}-${stage}`} className="rounded-lg border border-slate-200 p-3"><p className="text-xs font-bold uppercase text-slate-600 mb-2">{surface.replaceAll("_", " ")} · {stage}</p><div className="space-y-2">{[0, 1].map((index) => <select key={index} value={selected[index] || ""} onChange={(e) => { const next = [...selected]; next[index] = e.target.value; setRoutingDraft((prev: any) => ({ ...prev, [surface]: { ...(prev?.[surface] || {}), [stage]: Array.from(new Set(next.filter(Boolean))) } })); setRoutingDirty(true); }} className="w-full rounded-lg border border-slate-200 px-2 py-2 text-xs"><option value="">{index === 0 ? "Select primary provider" : "Select fallback provider"}</option>{available.map((provider: any) => <option key={provider.id} value={provider.id}>{provider.name}{provider.configured ? " · configured" : " · unavailable"}</option>)}</select>)}</div><p className="mt-2 text-[10px] text-slate-400">Current: {selected.join(" → ") || "Not configured"}</p></div> }))}</div>
                 </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1.5">
-                    Speech Recognition (STT)
-                  </p>
-                  <p className="font-semibold text-slate-900 text-sm bg-slate-50 px-2.5 py-1.5 rounded border border-slate-100 inline-block">
-                    {(runtimeRouting?.routing?.phone_voice?.stt || [])
-                      .join(" → ") || "Runtime routing unavailable"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1.5">
-                    AI Model (LLM)
-                  </p>
-                  <p className="font-semibold text-slate-900 text-sm bg-slate-50 px-2.5 py-1.5 rounded border border-slate-100 inline-block">
-                    {(runtimeRouting?.routing?.phone_voice?.llm || []).join(" → ") ||
-                      agentsData[editForm.agent_id]?.llm_model || "Not configured"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider mb-1.5">
-                    Voice Synthesis (TTS)
-                  </p>
-                  <p className="font-semibold text-slate-900 text-sm bg-slate-50 px-2.5 py-1.5 rounded border border-slate-100 inline-block capitalize">
-                    {(runtimeRouting?.routing?.phone_voice?.tts || []).join(" → ") ||
-                      agentsData[editForm.agent_id]?.tts_voice || "Not configured"}
-                  </p>
-                </div>
+                {aiConfigMessage && <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">{aiConfigMessage}</p>}
               </div>
             </div>
 
