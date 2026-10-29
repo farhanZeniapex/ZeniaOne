@@ -553,32 +553,12 @@ async def trigger_test_call(channel_id: str, body: TestCallRequest):
             stream_base = str(actual_webhook).rstrip("/")
             stream_base = stream_base.replace("https://", "wss://").replace("http://", "ws://")
             stream_url = f"{stream_base}/api/v1/webhook/twilio/media-stream"
-            # Ask Twilio to report stream-started/stopped/error events for
-            # inline TwiML too. Without this callback, a call can complete
-            # with a recording but no Media WebSocket and no diagnostic signal.
-            stream_status_url = f"{actual_webhook}/api/v1/webhook/twilio/stream-status/{company_id}/{agent_id}/{channel_id_str}"
-            inline_twiml = f'''<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Connect>
-    <Stream url="{escape(stream_url, quote=True)}" statusCallback="{escape(stream_status_url, quote=True)}" statusCallbackMethod="POST">
-      <Parameter name="direction" value="outbound" />
-      <Parameter name="caller" value="{escape(dest_number, quote=True)}" />
-      <Parameter name="called_number" value="{escape(str(settings.twilio_default_phone_number or ""), quote=True)}" />
-      <Parameter name="contact_name" value="{escape(body.contact_name or "", quote=True)}" />
-      <Parameter name="topic" value="{escape(body.topic or "", quote=True)}" />
-      <Parameter name="system_prompt" value="{escape(body.system_prompt or "", quote=True)}" />
-      <Parameter name="skip_greeting" value="false" />
-    </Stream>
-  </Connect>
-</Response>'''
-            
             logger.info("📡 Sending call request to Twilio...")
             call_sid = await twilio_provider.create_call(
                 to_phone=dest_number,
                 from_phone="system_default",
                 webhook_url=twiml_url,
                 metadata={"status_callback": status_webhook_url},
-                twiml=inline_twiml,
             )
             
             if call_sid.startswith("error") or call_sid.startswith("mock_fail"):
