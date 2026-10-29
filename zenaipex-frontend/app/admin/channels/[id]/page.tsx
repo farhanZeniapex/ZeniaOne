@@ -1803,8 +1803,8 @@ export default function AdminChannelDetailPage({
               </div>
             </div>
 
-            <div className="lg:contents">
-              <div className="lg:col-span-1 lg:order-[25] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="lg:col-span-1 lg:order-[25] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="bg-white overflow-hidden">
                 <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                     <Database className="w-4 h-4 mr-2 text-emerald-700" />{" "}
@@ -1854,7 +1854,7 @@ export default function AdminChannelDetailPage({
                 </div>
               </div>
 
-              <div className="lg:col-span-1 lg:order-[35] lg:mt-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="border-t border-slate-100 bg-white overflow-hidden">
                 <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                     <Settings className="w-4 h-4 mr-2 text-slate-500" /> Call
@@ -1897,8 +1897,8 @@ export default function AdminChannelDetailPage({
             </div>
           </div>
 
-          <div className="lg:contents">
-            <div className="lg:col-span-1 lg:order-[15] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="lg:col-span-1 lg:order-[15] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="bg-white overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                   <Activity className="w-4 h-4 mr-2 text-emerald-700" /> Channel
@@ -1947,7 +1947,7 @@ export default function AdminChannelDetailPage({
             </div>
 
             {/* MERGED: Recent Activity + Latest Recording */}
-            <div className="lg:col-span-2 lg:order-[40] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="border-t border-slate-100 bg-white overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                   <History className="w-4 h-4 mr-2 text-slate-500" /> Recent
