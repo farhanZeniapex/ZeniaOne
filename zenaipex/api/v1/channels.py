@@ -9,6 +9,7 @@ DELETE /api/v1/companies/{id}/channels/{cid}
 """
 from fastapi import APIRouter, Depends, Path, Query
 from typing import Optional
+from bson import ObjectId
 
 from core.dependencies import get_auth_context, AuthContext
 from core.exceptions import NotFoundError, InsufficientPermissionsError
