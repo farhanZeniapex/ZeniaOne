@@ -199,6 +199,60 @@ async def get_channel_admin(channel_id: str):
         ,"config": safe_config
     }
 
+
+@router.post("/channels/{channel_id}/verify", summary="Verify provider channel configuration")
+async def verify_channel_admin(channel_id: str):
+    """Validate saved channel metadata and provider credentials without exposing secrets."""
+    channel = await col_channels().find_one({"_id": ObjectId(channel_id)})
+    if not channel:
+        raise NotFoundError("Channel")
+
+    config = channel.get("config") or {}
+    channel_type = channel.get("type")
+    is_exotel = channel_type in {"exotel", "exotel_voice"}
+    checks = []
+
+    def add_check(name: str, ok: bool, detail: str):
+        checks.append({"name": name, "ok": bool(ok), "detail": detail})
+
+    add_check("Channel name", bool(str(channel.get("name") or "").strip()), "Saved channel name")
+    add_check("Phone number", bool(str(channel.get("phone_number") or "").strip()), "Saved provider number")
+
+    if is_exotel:
+        account_sid = str(config.get("exotel_account_sid") or settings.exotel_account_sid or "").strip()
+        flow_id = str(config.get("exotel_flow_id") or "").strip()
+        voicebot_url = str(config.get("voicebot_url") or "").strip()
+        status_url = str(config.get("status_url") or "").strip()
+        add_check("Exotel account ID", bool(account_sid), account_sid or "Missing")
+        add_check("Exotel flow ID", bool(flow_id), flow_id or "Missing")
+        add_check("Voicebot callback URL", voicebot_url.startswith("https://"), "HTTPS URL required")
+        add_check("Status callback URL", status_url.startswith("https://"), "HTTPS URL required")
+        creds_ok = bool(settings.exotel_account_sid and settings.exotel_api_key and settings.exotel_api_token)
+        add_check("Backend credentials", creds_ok, "Render credentials configured" if creds_ok else "Render Exotel credentials missing")
+
+        provider_ok = False
+        provider_detail = "Not checked"
+        if creds_ok:
+            try:
+                import httpx
+                url = f"https://{settings.exotel_subdomain}/v1/Accounts/{settings.exotel_account_sid}.json"
+                async with httpx.AsyncClient(timeout=8.0) as client:
+                    response = await client.get(url, auth=(settings.exotel_api_key, settings.exotel_api_token))
+                provider_ok = response.status_code == 200
+                provider_detail = "Exotel account reachable" if provider_ok else f"Exotel returned HTTP {response.status_code}"
+            except Exception as exc:
+                provider_detail = "Provider request failed"
+        add_check("Provider reachability", provider_ok, provider_detail)
+    else:
+        creds_ok = bool(settings.twilio_account_sid and settings.twilio_auth_token)
+        add_check("Backend credentials", creds_ok, "Render credentials configured" if creds_ok else "Render Twilio credentials missing")
+
+    return {
+        "valid": all(item["ok"] for item in checks),
+        "provider": "Exotel" if is_exotel else "Twilio",
+        "checks": checks,
+    }
+
 @router.get("/channels/{channel_id}/conversations", summary="Get conversations for a channel")
 async def get_channel_conversations(channel_id: str, limit: int = 50):
     channel = await col_channels().find_one({"_id": ObjectId(channel_id)})

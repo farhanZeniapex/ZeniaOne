@@ -463,6 +463,8 @@ export default function AdminChannelDetailPage({
     type: "success" | "error";
     text: string;
   } | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verification, setVerification] = useState<any>(null);
 
   const updateForm = (key: string, value: any) => {
     setEditForm((prev) => {
@@ -550,6 +552,19 @@ export default function AdminChannelDetailPage({
       });
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleVerifyConfig = async () => {
+    setIsVerifying(true);
+    setVerification(null);
+    try {
+      const result = await fetchApi<any>(`/admin/channels/${channelId}/verify`, { method: "POST" });
+      setVerification(result);
+    } catch (error: any) {
+      setVerification({ valid: false, checks: [{ name: "Verification request", ok: false, detail: error.message || "Verification failed" }] });
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -1405,6 +1420,31 @@ export default function AdminChannelDetailPage({
                   <div className={`md:col-span-2 rounded-lg border px-3 py-2 text-xs font-semibold ${channel.config?.provider_credentials_configured ? "border-emerald-100 bg-emerald-50 text-emerald-800" : "border-rose-100 bg-rose-50 text-rose-800"}`}>
                     {channel.config?.provider_credentials_configured ? "Backend provider credentials configured" : "Backend provider credentials missing — add Exotel credentials in Render Environment"}
                   </div>
+                  <div className="md:col-span-2 flex flex-wrap items-center gap-2 pt-1">
+                    <button onClick={handleSaveConfig} disabled={isSaving || !hasChanges} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50">
+                      {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                      Save Integration
+                    </button>
+                    <button onClick={handleVerifyConfig} disabled={isVerifying} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">
+                      {isVerifying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />}
+                      Verify Connection
+                    </button>
+                    {verification && (
+                      <span className={`text-xs font-bold ${verification.valid ? "text-emerald-700" : "text-rose-700"}`}>
+                        {verification.valid ? "Configuration verified" : "Verification needs attention"}
+                      </span>
+                    )}
+                  </div>
+                  {verification?.checks?.length > 0 && (
+                    <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1">
+                      {verification.checks.map((check: any) => (
+                        <div key={check.name} className={`flex items-center justify-between gap-3 text-xs ${check.ok ? "text-emerald-700" : "text-rose-700"}`}>
+                          <span className="font-semibold">{check.ok ? "✓" : "!"} {check.name}</span>
+                          <span className="text-right text-slate-500">{check.detail}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
