@@ -458,6 +458,7 @@ export default function AdminChannelDetailPage({
     recording_channels: "dual",
   });
   const [hasChanges, setHasChanges] = useState(false);
+  const hasChangesRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<{
     type: "success" | "error";
@@ -481,6 +482,7 @@ export default function AdminChannelDetailPage({
           next.recording_enabled !== (channel?.config?.recording_enabled ?? true) ||
           next.recording_channels !== (channel?.config?.recording_channels || "dual"),
       );
+      hasChangesRef.current = true;
       return next;
     });
   };
@@ -500,6 +502,7 @@ export default function AdminChannelDetailPage({
         recording_channels: channel.config?.recording_channels || "dual",
       });
       setHasChanges(false);
+      hasChangesRef.current = false;
       setSaveMessage(null);
     }
   };
@@ -539,6 +542,7 @@ export default function AdminChannelDetailPage({
           config: res.config || channel.config,
         });
         setHasChanges(false);
+        hasChangesRef.current = false;
         setSaveMessage({
           type: "success",
           text: "Configuration saved successfully.",
@@ -588,7 +592,7 @@ export default function AdminChannelDetailPage({
         ]);
         setChannel(chanRes);
         setRuntimeRouting(routingRes);
-        if (!hasChanges) {
+        if (!hasChangesRef.current) {
           setEditForm({
             name: chanRes.name || "",
             phone_number: chanRes.phone_number || "",
