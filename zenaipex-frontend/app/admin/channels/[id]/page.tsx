@@ -1457,7 +1457,11 @@ export default function AdminChannelDetailPage({
                     API keys, API tokens, and webhook secrets are never shown after saving. They are encrypted in the backend database; Render credentials are used only as a fallback.
                   </div>
                   <div className={`md:col-span-2 rounded-lg border px-3 py-2 text-xs font-semibold ${channel.config?.provider_credentials_configured ? "border-emerald-100 bg-emerald-50 text-emerald-800" : "border-rose-100 bg-rose-50 text-rose-800"}`}>
-                    {channel.config?.provider_credentials_configured ? "Backend provider credentials configured" : "Backend provider credentials missing — add Exotel credentials in Render Environment"}
+                    {channel.config?.provider_credentials_configured
+                      ? "Provider credentials configured for this channel"
+                      : isExotelChannel
+                        ? "Channel credentials missing — enter this Exotel account API key and API token, then save"
+                        : "Backend provider credentials missing — configure the provider credentials"}
                   </div>
                   <div className="md:col-span-2 flex flex-wrap items-center gap-2 pt-1">
                     {isExotelChannel && (
