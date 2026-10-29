@@ -89,6 +89,7 @@ class AgentCreate(BaseModel):
     silence_timeout_ms: int = Field(default=800, ge=200, le=5000)
     force_process_timeout_sec: float = Field(default=8.0, ge=3.0, le=30.0)
     enable_background_audio: bool = Field(default=True)
+    barge_in_enabled: bool = Field(default=True, description="Allow callers to interrupt the assistant while it is speaking")
 
     sales_config: Optional[SalesConfig] = Field(default_factory=SalesConfig)
 
@@ -137,6 +138,7 @@ class AgentUpdate(BaseModel):
     silence_timeout_ms: Optional[int] = None
     force_process_timeout_sec: Optional[float] = None
     enable_background_audio: Optional[bool] = None
+    barge_in_enabled: Optional[bool] = None
     status: Optional[AgentStatus] = None
     sales_config: Optional[SalesConfig] = None
 
@@ -165,6 +167,7 @@ class Agent(BaseModel):
     silence_timeout_ms: int = 800
     force_process_timeout_sec: float = 8.0
     enable_background_audio: bool = True
+    barge_in_enabled: bool = True
     status: AgentStatus = AgentStatus.DRAFT
     created_at: datetime
     updated_at: datetime

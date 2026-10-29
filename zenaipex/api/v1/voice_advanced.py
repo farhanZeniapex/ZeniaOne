@@ -1802,7 +1802,7 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
                                 # Pure backchannels (e.g. "haan", "yes sir", "okay", "ji") do NOT cancel AI speech
                                 is_meaningful_speech = len(transcript.split()) >= 2 and not is_backchannel(transcript)
                                 
-                                if not cancel_event.is_set() and is_meaningful_speech:
+                                if agent_doc.get("barge_in_enabled", True) and not cancel_event.is_set() and is_meaningful_speech:
                                     if greeting_protect[0]:
                                         logger.info(f"[BARGE_IN] interim_user_speech=\"{transcript}\"")
                                         logger.info("[BARGE_IN] ai_speaking=true")

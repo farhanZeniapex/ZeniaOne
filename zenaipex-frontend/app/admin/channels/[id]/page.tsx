@@ -535,6 +535,7 @@ export default function AdminChannelDetailPage({
       silence_timeout_ms: agent.silence_timeout_ms || 800,
       force_process_timeout_sec: agent.force_process_timeout_sec || 8,
       enable_background_audio: agent.enable_background_audio ?? true,
+      barge_in_enabled: agent.barge_in_enabled ?? true,
     });
   }, [agentsData, editForm.agent_id, aiConfigDirty]);
 
@@ -1809,6 +1810,7 @@ export default function AdminChannelDetailPage({
                     <Database className="w-4 h-4 mr-2 text-emerald-700" />{" "}
                     Knowledge & RAG
                   </h3>
+                  <button type="button" onClick={() => router.push("/admin/knowledge")} className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 hover:text-indigo-900">Manage</button>
                 </div>
                 <div className="p-5 space-y-4">
                   <div className="flex items-center justify-between">
@@ -1869,9 +1871,9 @@ export default function AdminChannelDetailPage({
                         Callers can interrupt the AI
                       </p>
                     </div>
-                    <span className="text-[10px] font-bold tracking-wider uppercase text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
-                      Enabled
-                    </span>
+                    <button type="button" onClick={() => updateAiConfig("barge_in_enabled", !(aiConfigDraft?.barge_in_enabled ?? true))} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${aiConfigDraft?.barge_in_enabled ?? true ? "bg-emerald-500" : "bg-slate-300"}`} aria-label="Toggle barge-in">
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${aiConfigDraft?.barge_in_enabled ?? true ? "translate-x-6" : "translate-x-1"}`} />
+                    </button>
                   </div>
                   <div className="flex items-center justify-between">
                     <div>
@@ -1882,9 +1884,13 @@ export default function AdminChannelDetailPage({
                         Dual-channel stereo audio
                       </p>
                     </div>
-                    <span className="text-[10px] font-bold tracking-wider uppercase text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-md">
-                      Enabled
-                    </span>
+                    <button type="button" onClick={() => updateForm("recording_enabled", !editForm.recording_enabled)} className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${editForm.recording_enabled ? "bg-emerald-500" : "bg-slate-300"}`} aria-label="Toggle call recording">
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editForm.recording_enabled ? "translate-x-6" : "translate-x-1"}`} />
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                    <button type="button" onClick={saveAiConfiguration} disabled={aiConfigSaving || !aiConfigDirty} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Save AI behavior</button>
+                    <button type="button" onClick={handleSaveConfig} disabled={isSaving || !hasChanges} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">Save recording</button>
                   </div>
                 </div>
               </div>

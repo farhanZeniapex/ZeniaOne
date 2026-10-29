@@ -74,6 +74,7 @@ def _fmt_agent(doc: dict) -> dict:
         "silence_timeout_ms": doc.get("silence_timeout_ms", 800),
         "force_process_timeout_sec": doc.get("force_process_timeout_sec", 8.0),
         "enable_background_audio": doc.get("enable_background_audio", True),
+        "barge_in_enabled": doc.get("barge_in_enabled", True),
         "status": doc.get("status", "draft"),
         "created_at": doc.get("created_at"),
         "updated_at": doc.get("updated_at"),
@@ -1793,7 +1794,7 @@ async def voice_stream(
                     "is_final": is_final,
                     "source": "gemini_live_transcribe",
                 })
-                if not is_final and is_processing and looks_like_user_barge_in(transcript):
+                if agent_doc.get("barge_in_enabled", True) and not is_final and is_processing and looks_like_user_barge_in(transcript):
                     logger.info("[VOICE_GEMINI_BARGE_IN] interim_user_transcript=%r", transcript)
                     if processing_task and not processing_task.done():
                         processing_task.cancel()
