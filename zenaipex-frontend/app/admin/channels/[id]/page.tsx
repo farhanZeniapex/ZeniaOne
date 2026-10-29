@@ -1783,14 +1783,14 @@ export default function AdminChannelDetailPage({
                     {VOICE_MODES.map((mode) => {
                       const activeMode = mode.id === (aiConfigDraft?.voice_engine === "gemini_live" ? "gemini_s2s" : routingDraft?.phone_voice?.llm?.[0] === "groq" ? "classic" : "gemini_clone");
                       return (
-                        <div key={mode.id} className={`rounded-xl border p-3 transition-colors ${activeMode ? "border-emerald-400 bg-emerald-50/60 ring-1 ring-emerald-200" : "border-slate-200 bg-white"}`}>
+                        <div key={mode.id} className={`flex h-full flex-col rounded-xl border p-3 transition-colors ${activeMode ? "border-emerald-400 bg-emerald-50/60 ring-1 ring-emerald-200" : "border-slate-200 bg-white"}`}>
                           <div className="flex items-start justify-between gap-2">
                             <p className="text-sm font-bold text-slate-900">{mode.title}</p>
                             {activeMode && <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">Selected</span>}
                           </div>
                           <p className="mt-2 text-xs leading-5 text-slate-600">{mode.description}</p>
                           <p className="mt-2 rounded-lg bg-slate-50 px-2 py-1.5 text-[11px] font-semibold text-slate-700">{mode.flow}</p>
-                          <button type="button" onClick={() => applyVoiceMode(mode)} disabled={voiceModeApplying || activeMode} className={`mt-3 w-full rounded-lg px-3 py-2 text-xs font-bold ${activeMode ? "cursor-default bg-emerald-100 text-emerald-700" : "bg-slate-900 text-white hover:bg-slate-800"}`}>
+                          <button type="button" onClick={() => applyVoiceMode(mode)} disabled={voiceModeApplying || activeMode} className={`mt-auto pt-3 w-full rounded-lg px-3 py-2 text-xs font-bold ${activeMode ? "cursor-default bg-emerald-100 text-emerald-700" : "bg-slate-900 text-white hover:bg-slate-800"}`}>
                             {activeMode ? "Active profile" : "Use this profile"}
                           </button>
                         </div>
