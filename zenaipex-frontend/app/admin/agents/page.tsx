@@ -348,6 +348,17 @@ export default function AdminAgentsPage() {
         tone: "Cloned Voice",
         description: cv.description || "Custom cloned voice",
       })),
+      ...GEMINI_VOICES.map((voice) => ({
+        id: voice.id,
+        name: voice.name,
+        gender: "Female" as const,
+        provider: "Google Gemini Live",
+        enabled: true,
+        sampleText: `Hello, this is ${voice.name}, a ${voice.tone.toLowerCase()} Gemini Live voice.`,
+        tone: voice.tone,
+        description: voice.description,
+        isGemini: true,
+      })),
     ];
   }, [customVoices]);
 
@@ -1809,6 +1820,13 @@ export default function AdminAgentsPage() {
                                       group: `${v.gender} Voice Personas`,
                                       description: v.tone,
                                       badge: v.gender,
+                                    })),
+                                    ...GEMINI_VOICES.map((v) => ({
+                                      value: v.id,
+                                      label: v.name,
+                                      group: `Gemini Live Voices (${GEMINI_VOICES.length})`,
+                                      description: v.tone,
+                                      badge: "Gemini",
                                     })),
                                   ]}
                                   menuWidth={320}
