@@ -253,6 +253,10 @@ async def handle_exotel_gemini_live_session(
                     call_sid=call_sid,
                     caller_phone=caller_phone,
                     caller_to=caller_to,
+                    direction=direction,
+                    from_phone=caller_to if direction == "outbound" else caller_phone,
+                    to_phone=caller_phone if direction == "outbound" else caller_to,
+                    destination_phone=caller_phone if direction == "outbound" else caller_to,
                     channel_id=channel_id,
                 )
                 conversation_id = str(conv["_id"])

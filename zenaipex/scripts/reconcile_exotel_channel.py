@@ -130,10 +130,25 @@ def run(args: argparse.Namespace) -> None:
     for call in provider_calls:
         sid = call["Sid"]
         doc = existing_by_sid.get(sid)
+            provider_direction = (
+                "outbound"
+                if str(call.get("Direction") or "").lower().startswith("outbound")
+                else "inbound"
+            )
+            # Older Exotel webhook rows were created without direction and
+            # defaulted to inbound. For verified outbound calls, the legacy
+            # fields contain the customer in caller_phone and our ExoPhone in
+            # caller_to, so also populate normalized endpoint fields.
+            endpoint_update = {
+                "direction": provider_direction,
+                "from_phone": doc.get("caller_to") if provider_direction == "outbound" else doc.get("caller_phone"),
+                "to_phone": doc.get("caller_phone") if provider_direction == "outbound" else doc.get("caller_to"),
+                "destination_phone": doc.get("caller_phone") if provider_direction == "outbound" else doc.get("caller_to"),
+            }
         if doc:
             db.conversations.update_one(
                 {"_id": doc["_id"], "company_id": company_id, "call_sid": sid},
-                {"$set": {"channel_id": channel_id, "caller_to": number}},
+                {"$set": {"channel_id": channel_id, "caller_to": number, **endpoint_update}},
             )
             continue
         started = provider_time(call.get("DateCreated"))

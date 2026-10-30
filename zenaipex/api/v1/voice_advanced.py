@@ -1458,7 +1458,11 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
                                 call_sid=call_sid,
                                 caller_phone=caller_phone,
                                 caller_to=caller_to,
-                                channel_id=channel_id
+                                channel_id=channel_id,
+                                direction=str(websocket.query_params.get("direction") or "inbound").lower(),
+                                from_phone=caller_to if str(websocket.query_params.get("direction") or "inbound").lower() == "outbound" else caller_phone,
+                                to_phone=caller_phone if str(websocket.query_params.get("direction") or "inbound").lower() == "outbound" else caller_to,
+                                destination_phone=caller_phone if str(websocket.query_params.get("direction") or "inbound").lower() == "outbound" else caller_to,
                             )
                             conversation_id = str(conv_doc["_id"])
                             company_id = str(conv_doc.get("company_id", company_id)) # Use true company ID from DB

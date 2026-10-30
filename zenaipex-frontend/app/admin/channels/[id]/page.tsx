@@ -2547,8 +2547,8 @@ export default function AdminChannelDetailPage({
                                     {conv.direction === "outbound"
                                       ? conv.to_phone ||
                                         conv.destination_phone ||
-                                        conv.caller_to ||
                                         conv.caller_phone ||
+                                        conv.caller_to ||
                                         "Unknown"
                                       : conv.caller_phone || "Unknown"}
                                   </span>
