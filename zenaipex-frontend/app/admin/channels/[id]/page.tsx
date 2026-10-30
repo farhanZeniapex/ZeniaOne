@@ -46,7 +46,7 @@ import {
   Search,
   AlertTriangle,
   Sparkles,
-  RotateCcw,
+  RotateCcw, Edit2,
   CircleX,
 } from "lucide-react";
 import { format, formatDistanceToNow, isToday, isYesterday } from "date-fns";
@@ -54,6 +54,7 @@ import { LiveCallMonitor } from "@/components/ui/live-call-monitor";
 import { FilterSelect } from "@/components/ui/filter-select";
 import { SmartSelect } from "@/components/ui/smart-select";
 import { Drawer } from "@/components/ui/drawer";
+import { Modal } from "@/components/ui/modal";
 import LiveCallsPage from "../../live-calls/page";
 import org from "../../organization.module.css";
 
@@ -513,6 +514,7 @@ export default function AdminChannelDetailPage({
   const [routingDirty, setRoutingDirty] = useState(false);
   const [routingSaving, setRoutingSaving] = useState(false);
   const [voiceModeApplying, setVoiceModeApplying] = useState(false);
+  const [isEditChannelModalOpen, setIsEditChannelModalOpen] = useState(false);
 
   useEffect(() => {
     const agent = agentsData[editForm.agent_id];
@@ -1172,6 +1174,14 @@ export default function AdminChannelDetailPage({
           <div>
             <h1 className={`${org.title} flex items-center gap-3 flex-wrap`}>
               {channel.name}
+              <button
+                type="button"
+                onClick={() => setIsEditChannelModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-xs transition cursor-pointer"
+              >
+                <Edit2 className="w-3.5 h-3.5 text-slate-500" />
+                Edit
+              </button>
               {channel.is_active ? (
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold border border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm uppercase tracking-wide">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>{" "}
@@ -1347,6 +1357,7 @@ export default function AdminChannelDetailPage({
               View Live Call
             </button>
           </div>
+
         </div>
       )}
 
@@ -1569,7 +1580,7 @@ export default function AdminChannelDetailPage({
             </div>
 
             {isVoice && (
-              <div className="lg:col-span-1 lg:order-[20] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="lg:col-span-1 lg:order-[50] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                     <Server className="w-4 h-4 mr-2 text-emerald-700" /> {providerName} Integration
@@ -1710,7 +1721,7 @@ export default function AdminChannelDetailPage({
               </div>
             )}
 
-            <div className="lg:col-span-1 lg:order-[20] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="lg:col-span-1 lg:order-[60] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                   <Zap className="w-4 h-4 mr-2 text-emerald-700" /> AI
@@ -1905,7 +1916,7 @@ export default function AdminChannelDetailPage({
             </div>
           </div>
 
-          <div className="lg:col-span-1 lg:order-[15] grid grid-cols-1 md:grid-cols-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="lg:col-span-1 lg:order-[20] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="bg-white overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
@@ -1954,64 +1965,36 @@ export default function AdminChannelDetailPage({
               </div>
             </div>
 
-            {/* MERGED: Recent Activity + Latest Recording */}
-            <div className="border-t border-slate-100 bg-white overflow-hidden md:border-l md:border-t-0">
-              <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
-                  <History className="w-4 h-4 mr-2 text-slate-500" /> Recent
-                  Activity
-                </h3>
-              </div>
-              <div className="p-0 divide-y divide-slate-100">
-                {conversations.slice(0, 4).map((conv, idx) => (
-                  <div
-                    key={conv.id || idx}
-                    className="p-4 hover:bg-slate-50 transition-colors"
-                  >
-                    <div
-                      className="flex justify-between items-start mb-1 cursor-pointer"
-                      onClick={() => openCallDetails(conv)}
-                    >
-                      <p className="text-sm font-bold text-slate-900 capitalize">
-                        Call{" "}
-                        {conv.status
-                          ? conv.status.replace("-", " ")
-                          : "Unknown"}
-                      </p>
-                      <span className="text-[10px] font-semibold text-slate-400">
-                        {conv.created_at
-                          ? format(
-                              new Date(conv.created_at),
-                              "dd MMM yyyy, hh:mm a",
-                            )
-                          : "Unknown"}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 mb-2">
-                      Contact:{" "}
-                      <span className="font-mono text-slate-700">
-                        {conv.caller_phone || "Unknown"}
-                      </span>{" "}
-                      &bull; {formatSecs(conv.duration_seconds)}
-                    </p>
+          </div>
 
-                    {/* Integrated Recording Action */}
-                    {conv.recording_url && (
-                      <button
-                        onClick={() => openCallDetails(conv)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-md text-[10px] font-bold tracking-wider uppercase transition-colors border border-indigo-100"
-                      >
-                        <Play className="w-3 h-3" /> Play Recording
-                      </button>
-                    )}
-                  </div>
-                ))}
-                {conversations.length === 0 && (
-                  <div className="p-6 text-center text-sm text-slate-500">
-                    No recent activity.
-                  </div>
-                )}
-              </div>
+          <div className="lg:col-span-2 lg:order-[40] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-5 py-3">
+              <h3 className="flex items-center text-sm font-bold uppercase tracking-wider text-slate-900">
+                <History className="mr-2 h-4 w-4 text-slate-500" /> Recent Activity
+              </h3>
+              <button type="button" onClick={() => setActiveTab("history")} className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 hover:text-indigo-900">
+                View all history
+              </button>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {conversations.slice(0, 4).map((conv, idx) => (
+                <button type="button" key={conv.id || idx} onClick={() => openCallDetails(conv)} className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-slate-50">
+                  <span className="min-w-0">
+                    <span className="block truncate text-xs font-bold capitalize text-slate-900">
+                      {conv.direction === "outbound" ? "Outbound" : "Inbound"} · {conv.status ? conv.status.replace("-", " ") : "Unknown"}
+                    </span>
+                    <span className="mt-0.5 block truncate font-mono text-[11px] text-slate-500">
+                      {conv.contact_name ? `${conv.contact_name} · ` : ""}{conv.to_phone || conv.caller_phone || "Unknown"}
+                    </span>
+                  </span>
+                  <span className="text-[11px] font-semibold text-slate-500">{formatSecs(conv.duration_seconds)}</span>
+                  <span className="hidden text-[11px] font-medium text-slate-400 sm:block">
+                    {conv.created_at ? format(new Date(conv.created_at), "dd MMM, hh:mm a") : "Unknown"}
+                  </span>
+                  {conv.recording_url ? <span className="rounded-md bg-indigo-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-indigo-700">Recording</span> : <span className="text-[10px] font-semibold text-slate-400">No audio</span>}
+                </button>
+              ))}
+              {conversations.length === 0 && <div className="px-5 py-5 text-center text-sm text-slate-500">No recent activity.</div>}
             </div>
           </div>
         </div>
@@ -3742,6 +3725,84 @@ export default function AdminChannelDetailPage({
           }}
         />
       )}
+
+      {/* QUICK EDIT CHANNEL MODAL */}
+      <Modal
+        open={isEditChannelModalOpen}
+        onClose={() => setIsEditChannelModalOpen(false)}
+        title="Edit Channel Configuration"
+        description="Update channel name, assigned phone number, agent persona, and operational status."
+      >
+        <div className="p-6 space-y-4">
+          <div>
+            <label className="text-xs font-bold text-slate-700 block mb-1.5">Channel Name</label>
+            <input
+              type="text"
+              value={editForm.name}
+              onChange={(e) => updateForm("name", e.target.value)}
+              placeholder="e.g. Exotel Voice - ZeniaOne2"
+              className="w-full px-3 py-2 text-sm font-semibold rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-700 block mb-1.5">Phone Number</label>
+            <input
+              type="text"
+              value={editForm.phone_number}
+              onChange={(e) => updateForm("phone_number", e.target.value)}
+              placeholder="e.g. 919513886363"
+              className="w-full px-3 py-2 text-sm font-mono font-semibold rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+          <div>
+            <label className="text-xs font-bold text-slate-700 block mb-1.5">Assigned Agent</label>
+            <select
+              value={editForm.agent_id}
+              onChange={(e) => updateForm("agent_id", e.target.value)}
+              className="w-full px-3 py-2 text-sm font-semibold rounded-xl border border-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 bg-white"
+            >
+              {Object.keys(agentsData).map((id) => (
+                <option key={id} value={id}>
+                  {agentsData[id]?.name || id}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center justify-between pt-2">
+            <span className="text-xs font-bold text-slate-700">Channel Status</span>
+            <button
+              type="button"
+              onClick={() => updateForm("is_active", !editForm.is_active)}
+              className={`px-3 py-1 rounded-full text-xs font-bold border transition ${
+                editForm.is_active ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200"
+              }`}
+            >
+              {editForm.is_active ? "Active" : "Inactive"}
+            </button>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setIsEditChannelModalOpen(false)}
+              className="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 rounded-xl border border-slate-200"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={isSaving || !editForm.name.trim()}
+              onClick={async () => {
+                await handleSaveConfig();
+                setIsEditChannelModalOpen(false);
+              }}
+              className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition shadow-xs disabled:opacity-50 cursor-pointer"
+            >
+              {isSaving ? "Saving…" : "Save Changes"}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
