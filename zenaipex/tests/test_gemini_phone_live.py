@@ -215,6 +215,17 @@ async def test_three_voice_profiles_routing_logic():
     assert is_native_p3 is True
 
 
+def test_all_30_gemini_prebuilt_voices_resolve_from_tts_voice():
+    from modules.gemini_phone_live import _selected_voice
+    from modules.gemini_live import PREBUILT_VOICES
+
+    assert len(PREBUILT_VOICES) == 30
+    for voice_id, expected_name in PREBUILT_VOICES.items():
+        agent = {"tts_voice": voice_id}
+        assert _selected_voice(agent) == expected_name
+
+
+
 @pytest.mark.asyncio
 async def test_knowledge_result_timeout_falls_back_to_core():
     """If RAG retrieval times out, _knowledge_result must quickly return core company facts without raising."""

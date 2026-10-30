@@ -59,7 +59,12 @@ def _is_farewell_utterance(user_text: str, ai_text: str) -> bool:
 
 
 def _selected_voice(agent: dict) -> str:
-    configured = str(agent.get("gemini_voice") or agent.get("live_voice") or "").lower()
+    configured = str(
+        agent.get("gemini_voice")
+        or agent.get("live_voice")
+        or agent.get("tts_voice")
+        or ""
+    ).strip().lower()
     selected = PREBUILT_VOICES.get(configured)
     if selected:
         return selected

@@ -21,11 +21,38 @@ GEMINI_LIVE_MODEL = "gemini-3.1-flash-live-preview"
 GEMINI_WS_URL_TEMPLATE = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key={api_key}"
 
 PREBUILT_VOICES = {
-    "aoede": "Aoede",     # Expressive female
-    "puck": "Puck",       # Conversational male
-    "charon": "Charon",   # Deep male
-    "fenrir": "Fenrir",   # Confident male
-    "kore": "Kore",       # Balanced female
+    # 16 Gemini Male voices
+    "puck": "Puck",
+    "charon": "Charon",
+    "fenrir": "Fenrir",
+    "orus": "Orus",
+    "enceladus": "Enceladus",
+    "iapetus": "Iapetus",
+    "umbriel": "Umbriel",
+    "algenib": "Algenib",
+    "rasalgethi": "Rasalgethi",
+    "achernar": "Achernar",
+    "alnilam": "Alnilam",
+    "schedar": "Schedar",
+    "gacrux": "Gacrux",
+    "achird": "Achird",
+    "zubenelgenubi": "Zubenelgenubi",
+    "sadaltager": "Sadaltager",
+    # 14 Gemini Female voices
+    "zephyr": "Zephyr",
+    "kore": "Kore",
+    "leda": "Leda",
+    "aoede": "Aoede",
+    "callirrhoe": "Callirrhoe",
+    "autonoe": "Autonoe",
+    "algieba": "Algieba",
+    "despina": "Despina",
+    "erinome": "Erinome",
+    "laomedeia": "Laomedeia",
+    "pulcherrima": "Pulcherrima",
+    "vindemiatrix": "Vindemiatrix",
+    "sadachbia": "Sadachbia",
+    "sulafat": "Sulafat",
 }
 
 
@@ -75,7 +102,12 @@ async def handle_gemini_live_session(
     active_language_instruction = language_instructions.get(str(language_mode).lower(), language_instructions["hinglish"])
 
     # Pick best prebuilt voice according to agent preference or gender
-    configured_voice = (agent.get("gemini_voice") or agent.get("live_voice") or "").lower()
+    configured_voice = str(
+        agent.get("gemini_voice")
+        or agent.get("live_voice")
+        or agent.get("tts_voice")
+        or ""
+    ).strip().lower()
     selected_voice = PREBUILT_VOICES.get(configured_voice)
     if not selected_voice:
         # Check gender or name
