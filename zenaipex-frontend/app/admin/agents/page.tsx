@@ -143,6 +143,27 @@ const GEMINI_VOICES = GEMINI_VOICES_DATA.map(([name, tone, gender]) => ({
   description: `Gemini Live native ${gender.toLowerCase()} voice with a ${tone.toLowerCase()} delivery.`,
 }));
 
+const AZURE_VOICES = [
+  ["hi-IN-AaravNeural", "Aarav", "Hindi (India)", "Male"],
+  ["hi-IN-AnanyaNeural", "Ananya", "Hindi (India)", "Female"],
+  ["hi-IN-AartiNeural", "Aarti", "Hindi (India)", "Female"],
+  ["hi-IN-ArjunNeural", "Arjun", "Hindi (India)", "Male"],
+  ["hi-IN-KavyaNeural", "Kavya", "Hindi (India)", "Female"],
+  ["hi-IN-KunalNeural", "Kunal", "Hindi (India)", "Male"],
+  ["hi-IN-RehaanNeural", "Rehaan", "Hindi (India)", "Male"],
+  ["hi-IN-SwaraNeural", "Swara", "Hindi (India)", "Female"],
+  ["hi-IN-MadhurNeural", "Madhur", "Hindi (India)", "Male"],
+  ["gu-IN-DhwaniNeural", "Dhwani", "Gujarati (India)", "Female"],
+  ["gu-IN-NiranjanNeural", "Niranjan", "Gujarati (India)", "Male"],
+].map(([id, name, language, gender]) => ({
+  id,
+  name,
+  language,
+  gender: gender as "Male" | "Female",
+  tone: "Azure Standard Neural",
+  description: `Azure standard neural ${gender.toLowerCase()} voice for ${language}. Free F0 quota eligible; Azure key required for live synthesis.`,
+}));
+
 function CompanyLogo({
   companyId,
   companyName,
@@ -191,7 +212,7 @@ export default function AdminAgentsPage() {
   >({});
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<
-    "workforce" | "voices" | "gemini_voices" | "custom_voices"
+    "workforce" | "voices" | "gemini_voices" | "azure_voices" | "custom_voices"
   >("workforce");
   const [isVoiceStudioOpen, setIsVoiceStudioOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -495,6 +516,11 @@ export default function AdminAgentsPage() {
         if (voiceFilter === "archived") return !!v.is_archived;
         return true;
       })
+      .filter((v) => {
+        if (genderFilter === "all") return true;
+        const vGender = v.gender || "Female";
+        return vGender.toLowerCase() === genderFilter.toLowerCase();
+      })
       .filter(
         (v) =>
           search === "" || v.name?.toLowerCase().includes(search.toLowerCase()),
@@ -519,7 +545,7 @@ export default function AdminAgentsPage() {
     }
 
     return result;
-  }, [customVoices, typeFilter, voiceFilter, search, sortBy]);
+  }, [customVoices, typeFilter, voiceFilter, search, sortBy, genderFilter]);
 
   // Voice Preview Play / Stop Handler with Calibrated Speed, Volume Boost & Instant Zero-Lag Playback
   const handlePlayVoicePreview = async (voice: Voice, agentObj?: any) => {
@@ -1380,7 +1406,8 @@ export default function AdminAgentsPage() {
     return VOICES[0];
   };
 
-  const totalVoiceCount = VOICES.length + GEMINI_VOICES.length + customVoices.length;
+  const totalVoiceCount =
+    VOICES.length + GEMINI_VOICES.length + AZURE_VOICES.length + customVoices.length;
 
   const voiceTypeOptions =
     activeTab === "voices"
@@ -1393,6 +1420,11 @@ export default function AdminAgentsPage() {
             { value: "all", label: "All Types" },
             { value: "gemini", label: "Gemini" },
           ]
+        : activeTab === "azure_voices"
+          ? [
+              { value: "all", label: "All Types" },
+              { value: "azure", label: "Azure F0" },
+            ]
         : activeTab === "custom_voices"
           ? [
               { value: "all", label: "All Types" },
@@ -1408,6 +1440,10 @@ export default function AdminAgentsPage() {
     .filter(
       (voice) =>
         typeFilter === "all" || typeFilter === "platform",
+    )
+    .filter(
+      (voice) =>
+        genderFilter === "all" || voice.gender === genderFilter,
     )
     .filter(
       (voice) =>
@@ -1445,6 +1481,23 @@ export default function AdminAgentsPage() {
           : 0,
     );
 
+  const orderedAzureVoices = [...AZURE_VOICES]
+    .filter((voice) => typeFilter === "all" || typeFilter === "azure")
+    .filter(
+      (voice) =>
+        !search.trim() ||
+        `${voice.name} ${voice.id} ${voice.language} ${voice.gender}`
+          .toLowerCase()
+          .includes(search.trim().toLowerCase()),
+    )
+    .sort((a, b) =>
+      sortBy === "az"
+        ? a.name.localeCompare(b.name)
+        : sortBy === "oldest"
+          ? b.name.localeCompare(a.name)
+          : 0,
+    );
+
   return (
     <div className={org.page}>
       {/* Toast Notification */}
@@ -1459,152 +1512,73 @@ export default function AdminAgentsPage() {
         />
       )}
 
-      <div className={org.pageHeader}>
-        <div>
-          <span className={org.eyebrow}>
-            <ShieldCheck size={14} /> AI WORKFORCE
-          </span>
-          <h1 className={org.title}>AI agents & voice studio</h1>
-          <p className={org.subtitle}>
-            Manage customer agents, voice personas and model configuration
-            across tenants.
-          </p>
+      {/* ─────────────────── SLEEK COMPACT KPI BAR ─────────────────── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-xs backdrop-blur-sm transition-all hover:border-emerald-300 hover:shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
+            <Bot className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-lg font-black tracking-tight text-slate-900">{agents.length}</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Agents</span>
+            </div>
+            <p className="truncate text-[11px] text-slate-500 font-medium">
+              {agents.filter((a) => a.status === "active").length} active deployed
+            </p>
+          </div>
         </div>
-        <div className={org.toolbar}>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={loadAgents}
-            disabled={isLoading}
-            className="gap-2 border-slate-200 bg-white text-slate-700"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`}
-            />{" "}
-            Refresh Registry
-          </Button>
+
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-xs backdrop-blur-sm transition-all hover:border-emerald-300 hover:shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 border border-teal-100">
+            <Building2 className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-lg font-black tracking-tight text-slate-900">{uniqueCompanies.length}</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Workspaces</span>
+            </div>
+            <p className="truncate text-[11px] text-slate-500 font-medium">
+              Distinct enterprise tenants
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-xs backdrop-blur-sm transition-all hover:border-emerald-300 hover:shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 border border-blue-100">
+            <Mic className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-lg font-black tracking-tight text-slate-900">{totalVoiceCount}</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Voices</span>
+            </div>
+            <p className="truncate text-[11px] text-slate-500 font-medium">
+              {VOICES.length} platform · {GEMINI_VOICES.length} Gemini · {AZURE_VOICES.length} Azure · {customVoices.length} cloned
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-xs backdrop-blur-sm transition-all hover:border-emerald-300 hover:shadow-sm">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-lg font-black tracking-tight text-slate-900">
+                {attentionCount ? `${attentionCount} Review` : "All Healthy"}
+              </span>
+            </div>
+            <p className="truncate text-[11px] text-slate-500 font-medium">
+              {attentionCount ? "Agents need review" : "Active & operational"}
+            </p>
+          </div>
         </div>
       </div>
 
-      <details className={`${org.architecture} group`}>
-        <summary>
-          <Radio size={16} /> Advanced signal flow{" "}
-          <ChevronDown className="ml-auto h-4 w-4 transition-transform group-open:rotate-180" />
-        </summary>
-        <div className={org.architectureBody}>
-          {/* Voice Generation Card */}
-          <div className={org.architectureItem}>
-            <div className="flex items-center justify-between gap-2 mb-1.5">
-              <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-                <Mic className="h-3.5 w-3.5" /> Voice Audio Output (TTS)
-              </span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Active
-              </span>
-            </div>
-            <div className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <span>Sarvam AI · Bulbul:v3</span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-              {totalVoiceCount} voices available: {VOICES.length} platform, {GEMINI_VOICES.length} Gemini Live, and {customVoices.length} cloned.
-            </p>
-          </div>
-
-          {/* Intelligence / Brain Card */}
-          <div className={org.architectureItem}>
-            <div className="flex items-center justify-between gap-2 mb-1.5">
-              <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-                <Cpu className="h-3.5 w-3.5" /> Intelligence & Reasoning (LLM)
-              </span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Multi-Model
-              </span>
-            </div>
-            <div className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <span>Sarvam-105b</span>
-              <span className="text-xs font-normal text-slate-500">
-                · Fallback: Gemini / Groq
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-              Orchestrated multi-turn conversational intelligence with dynamic
-              persona grammar enforcement.
-            </p>
-          </div>
-
-          {/* Speech-to-Text Recognition */}
-          <div className={org.architectureItem}>
-            <div className="flex items-center justify-between gap-2 mb-1.5">
-              <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5">
-                <Radio className="h-3.5 w-3.5" /> Audio Hearing & STT
-              </span>
-              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                Dual-Stream
-              </span>
-            </div>
-            <div className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <span>Sarvam Saarika v2.5</span>
-              <span className="text-xs font-normal text-slate-500">
-                + Web Speech (en-IN)
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-              Acoustic echo cancellation with instant sub-second user barge-in
-              interruption.
-            </p>
-          </div>
-        </div>
-      </details>
-
-      {/* ─────────────────── STATS SUMMARY TILES ─────────────────── */}
-      <div className={org.metrics}>
-        <div className={org.metric}>
-          <span className={org.metricIcon}>
-            <Bot size={17} />
-          </span>
-          <span className={org.metricLabel}>Platform workforce</span>
-          <strong className={org.metricValue}>{agents.length}</strong>
-          <span className={org.metricSub}>
-            {agents.filter((a) => a.status === "active").length} active voice
-            agents deployed
-          </span>
-        </div>
-        <div className={org.metric}>
-          <span className={org.metricIcon}>
-            <Building2 size={17} />
-          </span>
-          <span className={org.metricLabel}>Client workspaces</span>
-          <strong className={org.metricValue}>{uniqueCompanies.length}</strong>
-          <span className={org.metricSub}>Distinct enterprise workspaces</span>
-        </div>
-        <div className={org.metric}>
-          <span className={org.metricIcon}>
-            <Mic size={17} />
-          </span>
-          <span className={org.metricLabel}>Voice catalog</span>
-          <strong className={org.metricValue}>{totalVoiceCount} voices</strong>
-          <span className={org.metricSub}>
-            {VOICES.length} platform · {GEMINI_VOICES.length} Gemini · {customVoices.length} cloned
-          </span>
-        </div>
-        <div className={org.metric}>
-          <span className={org.metricIcon}>
-            <CheckCircle2 size={17} />
-          </span>
-          <span className={org.metricLabel}>System health</span>
-          <strong className={org.metricValue}>
-            {attentionCount ? `${attentionCount} review` : "Healthy"}
-          </strong>
-          <span className={org.metricSub}>
-            {attentionCount
-              ? "Agents need attention"
-              : `${agents.filter((a) => a.status === "active").length} active agents`}
-          </span>
-        </div>
-      </div>
-
-      {/* ─────────────────── TAB CONTROLS & MASTER NAVIGATION ─────────────────── */}
+      {/* ─────────────────── UNIFIED NAVIGATION & COMMAND BAR ─────────────────── */}
       <div className={org.surface}>
+        {/* Row 1: Section Tabs & Global Search */}
         <div className={org.directoryToolbar}>
           <div
             className={org.sectionTabs}
@@ -1628,7 +1602,7 @@ export default function AdminAgentsPage() {
             >
               <Sparkles className="h-4 w-4" />
               Voice Selection
-              <span className={org.tabCount}>11</span>
+              <span className={org.tabCount}>{VOICES.length}</span>
             </button>
 
             <button
@@ -1639,6 +1613,16 @@ export default function AdminAgentsPage() {
               <Sparkles className="h-4 w-4" />
               Gemini Voices
               <span className={org.tabCount}>{GEMINI_VOICES.length}</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("azure_voices")}
+              aria-pressed={activeTab === "azure_voices"}
+              className={org.sectionTab}
+            >
+              <Sparkles className="h-4 w-4" />
+              Azure Voices
+              <span className={org.tabCount}>{AZURE_VOICES.length}</span>
             </button>
 
             <button
@@ -1673,58 +1657,318 @@ export default function AdminAgentsPage() {
             )}
           </div>
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/50 px-4 py-2.5">
-          <span className="mr-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            Voice tools
-          </span>
-          <div className="flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white p-1 shadow-sm">
-            <SmartSelect
-              value={typeFilter}
-              onChange={setTypeFilter}
-              searchable={false}
-              className="w-24 [&>button]:h-8 [&>button]:border-transparent [&>button]:bg-transparent [&>button]:px-2 [&>button]:shadow-none [&>button]:text-[11px] [&>button]:hover:border-transparent [&>button]:hover:shadow-none"
-              options={voiceTypeOptions}
-            />
-            <div className="h-4 w-px bg-slate-200" />
-            <SmartSelect
-              value={voiceFilter}
-              onChange={setVoiceFilter}
-              searchable={false}
-              className="w-24 [&>button]:h-8 [&>button]:border-transparent [&>button]:bg-transparent [&>button]:px-2 [&>button]:shadow-none [&>button]:text-[11px] [&>button]:hover:border-transparent [&>button]:hover:shadow-none"
-              options={[
-                { value: "active", label: "Active" },
-                { value: "archived", label: "Archived" },
-                { value: "all", label: "All Status" },
-              ]}
-            />
-            <div className="h-4 w-px bg-slate-200" />
-            <SmartSelect
-              value={sortBy}
-              onChange={setSortBy}
-              searchable={false}
-              className="w-24 [&>button]:h-8 [&>button]:border-transparent [&>button]:bg-transparent [&>button]:px-2 [&>button]:shadow-none [&>button]:text-[11px] [&>button]:hover:border-transparent [&>button]:hover:shadow-none"
-              options={[
-                { value: "newest", label: "Newest" },
-                { value: "oldest", label: "Oldest" },
-                { value: "az", label: "A-Z" },
-              ]}
-            />
+
+        {/* Row 2: Unified Command & Filter Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/60 px-4 py-2.5">
+          {/* Left: Dynamic Segmented Pills based on activeTab */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {activeTab === "gemini_voices" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setGeminiGenderFilter("all")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    geminiGenderFilter === "all"
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-100"
+                  }`}
+                >
+                  All ({GEMINI_VOICES.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGeminiGenderFilter("Male")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    geminiGenderFilter === "Male"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200/80 hover:text-blue-700 hover:border-blue-200"
+                  }`}
+                >
+                  <span>♂ Male</span>
+                  <span className="text-[10px] opacity-80 font-semibold">
+                    ({GEMINI_VOICES.filter((v) => v.gender === "Male").length})
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGeminiGenderFilter("Female")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    geminiGenderFilter === "Female"
+                      ? "bg-purple-600 text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200/80 hover:text-purple-700 hover:border-purple-200"
+                  }`}
+                >
+                  <span>♀ Female</span>
+                  <span className="text-[10px] opacity-80 font-semibold">
+                    ({GEMINI_VOICES.filter((v) => v.gender === "Female").length})
+                  </span>
+                </button>
+              </>
+            )}
+
+            {activeTab === "voices" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setGenderFilter("all")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    genderFilter === "all"
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-100"
+                  }`}
+                >
+                  All Personas ({VOICES.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGenderFilter("Male")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    genderFilter === "Male"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200/80 hover:text-blue-700 hover:border-blue-200"
+                  }`}
+                >
+                  <span>♂ Male</span>
+                  <span className="text-[10px] opacity-80 font-semibold">
+                    ({VOICES.filter((v) => v.gender === "Male").length})
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGenderFilter("Female")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    genderFilter === "Female"
+                      ? "bg-purple-600 text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200/80 hover:text-purple-700 hover:border-purple-200"
+                  }`}
+                >
+                  <span>♀ Female</span>
+                  <span className="text-[10px] opacity-80 font-semibold">
+                    ({VOICES.filter((v) => v.gender === "Female").length})
+                  </span>
+                </button>
+              </>
+            )}
+
+            {activeTab === "workforce" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => { setQuickFilter("all"); setGenderFilter("all"); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    quickFilter === "all"
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-100"
+                  }`}
+                >
+                  All ({agents.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setQuickFilter("male"); setGenderFilter("Male"); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    quickFilter === "male"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200/80 hover:text-blue-700 hover:border-blue-200"
+                  }`}
+                >
+                  <span>♂ Male</span>
+                  <span className="text-[10px] opacity-80 font-semibold">
+                    ({agents.filter((a) => (platformVoices.find((v) => v.id.toLowerCase() === (a.tts_voice || "").toLowerCase()) || getVoiceById(a.tts_voice)).gender === "Male").length})
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setQuickFilter("female"); setGenderFilter("Female"); }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    quickFilter === "female"
+                      ? "bg-purple-600 text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200/80 hover:text-purple-700 hover:border-purple-200"
+                  }`}
+                >
+                  <span>♀ Female</span>
+                  <span className="text-[10px] opacity-80 font-semibold">
+                    ({agents.filter((a) => (platformVoices.find((v) => v.id.toLowerCase() === (a.tts_voice || "").toLowerCase()) || getVoiceById(a.tts_voice)).gender === "Female").length})
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuickFilter("internal")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    quickFilter === "internal"
+                      ? "bg-emerald-700 text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200/80 hover:text-emerald-700 hover:border-emerald-200"
+                  }`}
+                >
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  <span>Internal</span>
+                </button>
+              </>
+            )}
+
+            {activeTab === "custom_voices" && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGenderFilter("all");
+                    setVoiceFilter("all");
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    genderFilter === "all" && voiceFilter === "all"
+                      ? "bg-slate-900 text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-100"
+                  }`}
+                >
+                  All ({customVoices.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGenderFilter("Male");
+                    setVoiceFilter("all");
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    genderFilter === "Male"
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200/80 hover:text-blue-700 hover:border-blue-200"
+                  }`}
+                >
+                  <span>♂ Male</span>
+                  <span className="text-[10px] opacity-80 font-semibold">
+                    ({customVoices.filter((v) => (v.gender || "Female").toLowerCase() === "male").length})
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGenderFilter("Female");
+                    setVoiceFilter("all");
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    genderFilter === "Female"
+                      ? "bg-purple-600 text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200/80 hover:text-purple-700 hover:border-purple-200"
+                  }`}
+                >
+                  <span>♀ Female</span>
+                  <span className="text-[10px] opacity-80 font-semibold">
+                    ({customVoices.filter((v) => (v.gender || "Female").toLowerCase() === "female").length})
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGenderFilter("all");
+                    setVoiceFilter("active");
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                    voiceFilter === "active" && genderFilter === "all"
+                      ? "bg-emerald-700 text-white shadow-sm"
+                      : "bg-white text-slate-600 border border-slate-200/80 hover:text-emerald-700 hover:border-emerald-200"
+                  }`}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  <span>Active</span>
+                  <span className="text-[10px] opacity-80 font-semibold">
+                    ({customVoices.filter((v) => !v.is_archived).length})
+                  </span>
+                </button>
+              </>
+            )}
           </div>
-          <div className="flex items-center rounded-xl border border-slate-200/80 bg-white p-1 shadow-sm">
-            <button
-              onClick={() => setViewMode("list")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors ${viewMode === "list" ? "border border-slate-200/60 bg-slate-50 text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-              title="List View"
+
+          {/* Right: Dropdowns, View Switcher, Clone Button, Refresh */}
+          <div className="flex items-center gap-2 flex-wrap ml-auto">
+            {activeTab === "workforce" && (
+              <SmartSelect
+                value={companyFilter}
+                onChange={setCompanyFilter}
+                searchPlaceholder="Search company…"
+                className="w-36 [&>button]:h-8 [&>button]:text-[11px]"
+                options={[
+                  { value: "all", label: `All Companies (${uniqueCompanies.length})` },
+                  ...uniqueCompanies.map((c) => ({ value: c.id, label: c.name })),
+                ]}
+              />
+            )}
+
+            {/* Dropdowns */}
+            <div className="flex items-center gap-1 rounded-xl border border-slate-200/80 bg-white p-1 shadow-xs">
+              <SmartSelect
+                value={voiceFilter}
+                onChange={setVoiceFilter}
+                searchable={false}
+                className="w-24 [&>button]:h-7 [&>button]:border-transparent [&>button]:bg-transparent [&>button]:px-2 [&>button]:shadow-none [&>button]:text-[11px]"
+                options={[
+                  { value: "all", label: "All Status" },
+                  { value: "active", label: "Active" },
+                  { value: "archived", label: "Archived" },
+                ]}
+              />
+              <div className="h-3.5 w-px bg-slate-200" />
+              <SmartSelect
+                value={sortBy}
+                onChange={setSortBy}
+                searchable={false}
+                className="w-24 [&>button]:h-7 [&>button]:border-transparent [&>button]:bg-transparent [&>button]:px-2 [&>button]:shadow-none [&>button]:text-[11px]"
+                options={[
+                  { value: "newest", label: "Newest" },
+                  { value: "oldest", label: "Oldest" },
+                  { value: "az", label: "A-Z" },
+                ]}
+              />
+            </div>
+
+            {/* List / Grid toggle */}
+            <div className="flex items-center rounded-xl border border-slate-200/80 bg-white p-1 shadow-xs">
+              <button
+                onClick={() => setViewMode("list")}
+                className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all ${
+                  viewMode === "list"
+                    ? "bg-slate-100 text-slate-900 shadow-xs"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+                title="List View"
+              >
+                <List className="h-3.5 w-3.5" /> List
+              </button>
+              <button
+                onClick={() => setViewMode("grid")}
+                className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-[11px] font-bold transition-all ${
+                  viewMode === "grid"
+                    ? "bg-slate-100 text-slate-900 shadow-xs"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+                title="Grid View"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" /> Grid
+              </button>
+            </div>
+
+            {/* Clone Custom Voice CTA Button */}
+            <Button
+              onClick={() => {
+                setIsVoiceStudioOpen(true);
+              }}
+              size="sm"
+              className="bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl h-8 px-3 text-xs font-bold shadow-xs gap-1.5"
             >
-              <List className="h-4 w-4" /> List
-            </button>
-            <button
-              onClick={() => setViewMode("grid")}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors ${viewMode === "grid" ? "border border-slate-200/60 bg-slate-50 text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
-              title="Grid View"
+              <Mic className="h-3.5 w-3.5" />
+              <span>Clone Voice</span>
+            </Button>
+
+            {/* Refresh Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={loadAgents}
+              disabled={isLoading}
+              className="h-8 px-2.5 rounded-xl border-slate-200 bg-white text-slate-600 hover:text-slate-900 hover:bg-slate-50 shadow-xs"
+              title="Refresh platform data"
             >
-              <LayoutGrid className="h-4 w-4" /> Grid
-            </button>
+              <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            </Button>
           </div>
         </div>
       </div>
@@ -1732,116 +1976,6 @@ export default function AdminAgentsPage() {
       {/* ─────────────────── TAB 1: ENTERPRISE WORKFORCE DIRECTORY ─────────────────── */}
       {activeTab === "workforce" && (
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden space-y-0">
-          {/* Filter Toolbar */}
-          <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3 bg-slate-50/50">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-semibold text-slate-500">
-                Quick Filters:
-              </span>
-              <button
-                onClick={() => setQuickFilter("all")}
-                className={`px-3 py-1 rounded-lg text-xs font-medium border transition-all ${
-                  quickFilter === "all"
-                    ? "bg-emerald-700 text-white border-emerald-700 shadow-xs"
-                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                }`}
-              >
-                All ({agents.length})
-              </button>
-              <button
-                onClick={() => setQuickFilter("male")}
-                className={`px-3 py-1 rounded-lg text-xs font-medium border transition-all ${
-                  quickFilter === "male"
-                    ? "bg-emerald-700 text-white border-emerald-700"
-                    : "bg-white text-slate-600 border-slate-200 hover:bg-emerald-50"
-                }`}
-              >
-                Male Voices (
-                {
-                  agents.filter(
-                    (a) =>
-                      (
-                        platformVoices.find(
-                          (v) =>
-                            v.id.toLowerCase() ===
-                            (a.tts_voice || "").toLowerCase(),
-                        ) || getVoiceById(a.tts_voice)
-                      ).gender === "Male",
-                  ).length
-                }
-                )
-              </button>
-              <button
-                onClick={() => setQuickFilter("female")}
-                className={`px-3 py-1 rounded-lg text-xs font-medium border transition-all ${
-                  quickFilter === "female"
-                    ? "bg-emerald-700 text-white border-emerald-700"
-                    : "bg-white text-slate-600 border-slate-200 hover:bg-emerald-50"
-                }`}
-              >
-                Female Voices (
-                {
-                  agents.filter(
-                    (a) =>
-                      (
-                        platformVoices.find(
-                          (v) =>
-                            v.id.toLowerCase() ===
-                            (a.tts_voice || "").toLowerCase(),
-                        ) || getVoiceById(a.tts_voice)
-                      ).gender === "Female",
-                  ).length
-                }
-                )
-              </button>
-              <button
-                onClick={() => setQuickFilter("internal")}
-                className={`px-3 py-1 rounded-lg text-xs font-medium border transition-all ${
-                  quickFilter === "internal"
-                    ? "bg-emerald-600 text-white border-emerald-600"
-                    : "bg-white text-emerald-700 border-slate-200 hover:bg-emerald-50"
-                }`}
-              >
-                Internal Platform
-              </button>
-            </div>
-
-            {/* Dropdown Filters */}
-            <div className="flex items-center gap-2">
-              <SmartSelect
-                value={companyFilter}
-                onChange={setCompanyFilter}
-                searchPlaceholder="Search companies…"
-                menuWidth={280}
-                className="w-[220px] [&>button]:h-10 [&>button]:rounded-lg [&>button]:px-3 [&>button]:text-xs"
-                options={[
-                  {
-                    value: "all",
-                    label: `All Companies (${uniqueCompanies.length})`,
-                    icon: (
-                      <img
-                        src={`${API_BASE_URL}/admin/settings/logo`}
-                        alt=""
-                        className="h-5 w-5 object-contain"
-                      />
-                    ),
-                  },
-                  ...uniqueCompanies.map((c) => ({
-                    value: c.id,
-                    label: c.name,
-                    icon: (
-                      <CompanyLogo
-                        companyId={c.id}
-                        companyName={c.name}
-                        logoReference={companyLogoById[c.id]}
-                      />
-                    ),
-                  })),
-                ]}
-              />
-            </div>
-          </div>
-
           <section
             className="border-b border-slate-100 bg-slate-50/40 px-4 py-3"
             aria-label="Compare voice personas"
@@ -1891,96 +2025,153 @@ export default function AdminAgentsPage() {
                       (agent.tts_voice || "").toLowerCase(),
                   ) || getVoiceById(agent.tts_voice);
                 const isPreviewingThis = previewingVoiceId === voiceObj.id;
+                const isMale = voiceObj.gender === "Male";
+                const isFemale = voiceObj.gender === "Female";
+
                 return (
                   <article
                     key={agent.id}
-                    className="flex min-h-[235px] flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md"
+                    className={`relative flex min-h-[260px] flex-col justify-between space-y-3 overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition-all ${
+                      isPreviewingThis
+                        ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg"
+                        : "border-slate-200/80 hover:border-emerald-300 hover:shadow-md"
+                    }`}
                   >
+                    {isPreviewingThis && (
+                      <div className="absolute left-0 right-0 top-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 animate-pulse" />
+                    )}
+
                     <div>
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-sm font-extrabold text-emerald-700">
+                      {/* Top Row: Avatar, Name, Badges, Status */}
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-extrabold shadow-sm ${
+                              isMale
+                                ? "border-blue-200 bg-blue-50 text-blue-800"
+                                : isFemale
+                                  ? "border-purple-200 bg-purple-50 text-purple-800"
+                                  : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                            }`}
+                          >
                             {agent.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <h3 className="truncate text-sm font-extrabold text-slate-900">
-                              {agent.name}
-                            </h3>
-                            <p className="truncate text-[11px] text-slate-500">
-                              {agent.description || `Configured for ${agent.company_name}`}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-extrabold tracking-tight text-slate-900 truncate">
+                                {agent.name}
+                              </h3>
+                              <span className="rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800">
+                                AI Agent
+                              </span>
+                            </div>
+                            <span className="mt-1 inline-block rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700 truncate max-w-[170px]">
+                              {agent.company_name}
+                            </span>
                           </div>
                         </div>
-                        {agent.status === "active" && (
-                          <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
+
+                        {agent.status === "active" ? (
+                          <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 flex items-center gap-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                             Active
+                          </span>
+                        ) : (
+                          <span className="shrink-0 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                            Idle
                           </span>
                         )}
                       </div>
-                      <div className="mt-4 space-y-2 rounded-xl bg-slate-50/80 p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Workspace</span>
-                          <span className="truncate text-xs font-semibold text-slate-800">{agent.company_name}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Voice</span>
-                          <span className="truncate text-xs font-semibold text-emerald-700">{voiceObj.name}</span>
-                        </div>
-                        <div onClick={(event) => event.stopPropagation()}>
-                          <SmartSelect
-                            value={agent.tts_voice || voiceObj.id}
-                            disabled={updatingAgentId === agent.id}
-                            searchable
-                            searchPlaceholder="Search voice…"
-                            onChange={(value) => handleUpdateVoice(agent.id, value)}
-                            options={[
-                              ...customVoices.map((voice) => ({
-                                value: voice.voice_id || voice.id,
-                                label: voice.name,
-                                group: `My Cloned Voices (${customVoices.length})`,
-                                badge: "Cloned",
-                              })),
-                              ...VOICES.map((voice) => ({
-                                value: voice.id,
-                                label: voice.name,
-                                group: `${voice.gender} Voice Personas`,
-                                description: voice.tone,
-                                badge: voice.gender,
-                              })),
-                              ...GEMINI_VOICES.map((voice) => ({
-                                value: voice.id,
-                                label: voice.name,
-                                group: `Gemini Live Voices (${GEMINI_VOICES.length})`,
-                                description: voice.tone,
-                                badge: "Gemini",
-                              })),
-                            ]}
-                            menuWidth={300}
-                            className="[&>button]:h-9 [&>button]:text-[11px]"
-                          />
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">AI model</span>
-                          <span className="truncate font-mono text-[10px] text-slate-600">{agent.llm_model || "sarvam-105b"}</span>
-                        </div>
+
+                      {/* Description */}
+                      <p className="mb-2.5 text-[11px] leading-relaxed text-slate-600 line-clamp-2 min-h-[34px]">
+                        {agent.description || `Configured for ${agent.company_name}`}
+                      </p>
+
+                      {/* Spec Box */}
+                      <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/40 p-2 text-[10px] font-mono text-emerald-700">
+                        <span className="font-bold">AI Model:</span>
+                        <span className="truncate max-w-[130px]">{agent.llm_model || "sarvam-105b"}</span>
+                        <span>{agent.default_language || "en-IN"}</span>
                       </div>
                     </div>
-                    <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
-                      <button
-                        onClick={() => handlePlayVoicePreview(voiceObj, agent)}
-                        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${isPreviewingThis ? "border-red-600 bg-red-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"}`}
-                      >
-                        {isPreviewingThis ? <Square className="h-3 w-3 fill-current" /> : <Play className="h-3 w-3 fill-current" />}
-                        {isPreviewingThis ? "Stop" : "Listen"}
-                      </button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEditDrawer(agent)}
-                        className="h-8 gap-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-emerald-50 hover:text-emerald-700"
-                      >
-                        <Settings2 className="h-3.5 w-3.5" /> Configure
-                      </Button>
+
+                    {/* Bottom Action Section */}
+                    <div className="space-y-3 border-t border-slate-100 pt-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-[11px] font-semibold text-slate-500">
+                            Assigned Voice Persona:
+                          </label>
+                          <span className="text-[10px] font-bold text-emerald-700 truncate max-w-[120px]">
+                            {voiceObj.name}
+                          </span>
+                        </div>
+                        <SmartSelect
+                          value={agent.tts_voice || voiceObj.id}
+                          disabled={updatingAgentId === agent.id}
+                          searchable
+                          searchPlaceholder="Search voice…"
+                          onChange={(value) => handleUpdateVoice(agent.id, value)}
+                          options={[
+                            ...customVoices.map((voice) => ({
+                              value: voice.voice_id || voice.id,
+                              label: voice.name,
+                              group: `My Cloned Voices (${customVoices.length})`,
+                              badge: "Cloned",
+                            })),
+                            ...VOICES.map((voice) => ({
+                              value: voice.id,
+                              label: voice.name,
+                              group: `${voice.gender} Voice Personas`,
+                              description: voice.tone,
+                              badge: voice.gender,
+                            })),
+                            ...GEMINI_VOICES.map((voice) => ({
+                              value: voice.id,
+                              label: voice.name,
+                              group: `Gemini Live Voices (${GEMINI_VOICES.length})`,
+                              description: voice.tone,
+                              badge: "Gemini",
+                            })),
+                          ]}
+                          menuWidth={300}
+                          className="w-full [&>button]:h-9 [&>button]:text-[11px]"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handlePlayVoicePreview(voiceObj, agent)}
+                          className={`flex-1 inline-flex items-center justify-center gap-2 rounded-xl h-9 text-[11px] font-bold transition-all ${
+                            isPreviewingThis
+                              ? "bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-500/20"
+                              : "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800"
+                          }`}
+                        >
+                          {isPreviewingThis ? (
+                            <>
+                              <Square className="h-3 w-3 fill-current" />
+                              <span>Stop audio</span>
+                            </>
+                          ) : (
+                            <>
+                              <Play className="h-3 w-3 fill-current" />
+                              <span>Listen voice</span>
+                            </>
+                          )}
+                        </button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditDrawer(agent)}
+                          className="h-9 px-3 rounded-xl text-xs font-semibold text-slate-700 border-slate-200 hover:bg-slate-50 gap-1.5 shadow-xs"
+                        >
+                          <Settings2 className="h-3.5 w-3.5" />
+                          <span>Configure</span>
+                        </Button>
+                      </div>
                     </div>
                   </article>
                 );
@@ -2227,64 +2418,22 @@ export default function AdminAgentsPage() {
 
       {/* ─────────────────── TAB 2: VOICE STUDIO & SOUND GALLERY ─────────────────── */}
       {activeTab === "voices" && (
-        <div className="space-y-6">
-          {/* Header Filter Pill Bar */}
-          <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                Gender Filter:
-              </span>
-              <div className="flex gap-1.5">
-                {(["all", "Female", "Male"] as const).map((g) => (
-                  <button
-                    key={g}
-                    onClick={() => setGenderFilter(g)}
-                    className={`px-3.5 py-1.5 text-xs font-bold rounded-xl border transition-all ${
-                      genderFilter === g
-                        ? "bg-emerald-700 text-white border-emerald-700 shadow-xs"
-                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
-                    }`}
-                  >
-                    {g === "all"
-                      ? "All Personas (11)"
-                      : `${g} Personas (${g === "Female" ? 6 : 5})`}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="text-xs flex items-center gap-4">
-              <div className="text-slate-500 hidden xl:flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <span>Full Bulbul v3 acoustic spectrum</span>
-              </div>
-              <Button
-                onClick={() => {
-                  setActiveTab("custom_voices");
-                  setIsVoiceStudioOpen(true);
-                }}
-                className="bg-[#3E5448] hover:bg-[#2C3B32] text-white rounded-xl h-9 text-xs shadow-sm"
-              >
-                <Mic className="h-3.5 w-3.5 mr-2" />
-                Clone Custom Voice
-              </Button>
-            </div>
-          </div>
-
+        <div className="space-y-4">
           {/* 11 Voice Studio Cards */}
           <div
             className={
               viewMode === "grid"
-                ? "grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                ? "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
                 : "flex flex-col gap-2"
             }
           >
             {orderedPlatformVoices
               .filter((v) => genderFilter === "all" || v.gender === genderFilter)
               .map((voice) => {
-              const isPlaying = previewingVoiceId === voice.id;
-              const assignedAgents = assignedAgentsForVoice(agents, voice);
-              const acoustics = getVoiceAcoustics(voice.id);
+                const isPlaying = previewingVoiceId === voice.id;
+                const assignedAgents = assignedAgentsForVoice(agents, voice);
+                const acoustics = getVoiceAcoustics(voice.id);
+                const isMale = voice.gender === "Male";
 
                 if (viewMode === "list") {
                   return (
@@ -2293,20 +2442,36 @@ export default function AdminAgentsPage() {
                       className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-emerald-300 hover:shadow-md sm:flex-row sm:items-center"
                     >
                       <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-sm font-extrabold text-emerald-800">
+                        <div
+                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-extrabold ${
+                            isMale
+                              ? "border-blue-200 bg-blue-50 text-blue-800"
+                              : "border-purple-200 bg-purple-50 text-purple-800"
+                          }`}
+                        >
                           {voice.name.charAt(0)}
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <h3 className="truncate text-sm font-extrabold text-slate-900">{voice.name}</h3>
-                            <Badge variant="outline" className="text-[9px] font-bold uppercase text-emerald-800">{voice.gender}</Badge>
-                            <span className="hidden rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700 md:inline">Platform voice</span>
+                            <span className="rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800">
+                              Platform Voice
+                            </span>
+                            <span
+                              className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
+                                isMale
+                                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                                  : "bg-purple-50 text-purple-700 border-purple-200"
+                              }`}
+                            >
+                              {isMale ? "♂ Male" : "♀ Female"}
+                            </span>
                           </div>
                           <p className="truncate text-[11px] text-emerald-700">{voice.tone} · {voice.accent || "Indian"}</p>
                           <p className="truncate text-[11px] text-slate-500">{voice.description}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 text-[10px] text-slate-500 sm:w-44">
+                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 sm:w-44">
                         <Users className="h-3 w-3 shrink-0 text-emerald-600" />
                         <span className="truncate" title={assignedAgents.map((a) => a.name).join(", ")}>
                           {assignedAgents.length > 0 ? assignedAgents.map((a) => a.name).join(", ") : "Unassigned"}
@@ -2326,231 +2491,166 @@ export default function AdminAgentsPage() {
                           className="[&>button]:h-8 [&>button]:text-[10px]"
                         />
                       </div>
-                      <Button
+                      <button
+                        type="button"
                         onClick={() => handlePlayVoicePreview(voice)}
-                        className={`shrink-0 text-[11px] font-bold ${isPlaying ? "bg-red-600 hover:bg-red-700" : "bg-emerald-700 hover:bg-emerald-800"}`}
+                        className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
+                          isPlaying ? "bg-red-600 text-white hover:bg-red-700" : "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800"
+                        }`}
                       >
                         {isPlaying ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
                         {isPlaying ? "Stop" : "Listen"}
-                      </Button>
+                      </button>
                     </div>
                   );
                 }
 
-              return (
-                <div
-                  key={voice.id}
-                  className={`bg-white rounded-2xl border transition-all p-3 flex flex-col justify-between space-y-2.5 shadow-sm relative overflow-hidden ${
-                    isPlaying
-                      ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg"
-                      : "border-slate-200/80 hover:border-slate-300 hover:shadow-md"
-                  }`}
-                >
-                  {/* Playing Pulse Banner */}
-                  {isPlaying && (
-                    <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 animate-pulse" />
-                  )}
+                return (
+                  <div
+                    key={voice.id}
+                    className={`relative flex min-h-[260px] flex-col justify-between space-y-3 overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition-all ${
+                      isPlaying
+                        ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg"
+                        : "border-slate-200/80 hover:border-emerald-300 hover:shadow-md"
+                    }`}
+                  >
+                    {isPlaying && (
+                      <div className="absolute left-0 right-0 top-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 animate-pulse" />
+                    )}
 
-                  <div>
-                    {/* Top Row: Name, Avatar, Gender */}
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex items-center gap-2.5">
-                        <div className="h-10 w-10 rounded-xl flex items-center justify-center font-extrabold text-sm shrink-0 shadow-sm border bg-emerald-50 border-emerald-100 text-emerald-800">
-                          {voice.name.charAt(0)}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-extrabold text-slate-900 text-sm">
-                              {voice.name}
-                            </h3>
-                            <Badge
-                              variant="outline"
-                              className="text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border-emerald-100"
-                            >
-                              {voice.gender}
-                            </Badge>
+                    <div>
+                      {/* Top Row: Avatar, Name, Badges, Usage Count */}
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-extrabold shadow-sm ${
+                              isMale
+                                ? "border-blue-200 bg-blue-50 text-blue-800"
+                                : "border-purple-200 bg-purple-50 text-purple-800"
+                            }`}
+                          >
+                            {voice.name.charAt(0)}
                           </div>
-                          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50/80 px-2 py-0.5 rounded-md inline-block mt-1">
-                            {voice.tone}
-                          </span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-sm font-extrabold tracking-tight text-slate-900">{voice.name}</h3>
+                              <span className="rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800">
+                                Platform Voice
+                              </span>
+                              <span
+                                className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
+                                  isMale
+                                    ? "bg-blue-50 text-blue-700 border-blue-200"
+                                    : "bg-purple-50 text-purple-700 border-purple-200"
+                                }`}
+                              >
+                                {isMale ? "♂ Male" : "♀ Female"}
+                              </span>
+                            </div>
+                            <span className="mt-1 inline-block rounded-md bg-emerald-50/80 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                              {voice.tone}
+                            </span>
+                          </div>
                         </div>
+
+                        <span className="shrink-0 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                          {assignedAgents.length} {assignedAgents.length === 1 ? "Agent" : "Agents"}
+                        </span>
                       </div>
 
-                      {/* Usage Badge */}
-                      <Badge
-                        variant="secondary"
-                        className="text-[11px] bg-slate-100 text-slate-700 border-slate-200 font-semibold shrink-0"
+                      {/* Assigned Row */}
+                      <div className="mb-2 flex items-center gap-1.5 text-[10px] text-slate-500">
+                        <Users className="h-3 w-3 shrink-0 text-emerald-600" />
+                        <span className="font-semibold text-slate-600">Assigned:</span>
+                        <span className="truncate font-medium text-slate-700" title={assignedAgents.map((agent) => agent.name).join(", ")}>
+                          {assignedAgents.length > 0 ? assignedAgents.map((agent) => agent.name).join(", ") : "Unassigned"}
+                        </span>
+                      </div>
+
+                      {/* Description */}
+                      <p className="mb-2.5 text-[11px] leading-relaxed text-slate-600 line-clamp-2 min-h-[34px]">
+                        {voice.description}
+                      </p>
+
+                      {/* Provider Spec Pill */}
+                      <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/40 p-2 text-[10px] font-mono text-emerald-700">
+                        <span className="font-bold">Provider:</span>
+                        <span>Sarvam AI · Bulbul v3</span>
+                        <span>{voice.accent || "Indian"} · Pitch {acoustics.pitch.toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Bottom Action Section */}
+                    <div className="space-y-3 border-t border-slate-100 pt-3" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => handlePlayVoicePreview(voice)}
+                        disabled={isPreviewLoading && previewingVoiceId === voice.id}
+                        className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold transition-all ${
+                          isPreviewLoading && previewingVoiceId === voice.id
+                            ? "bg-slate-200 text-slate-600 cursor-not-allowed"
+                            : isPlaying
+                              ? "bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-500/20"
+                              : "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800"
+                        }`}
                       >
-                        {assignedAgents.length}{" "}
-                        {assignedAgents.length === 1 ? "Agent" : "Agents"}
-                      </Badge>
-                    </div>
+                        {isPreviewLoading && previewingVoiceId === voice.id ? (
+                          <>
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Loading voice sample...</span>
+                          </>
+                        ) : isPlaying ? (
+                          <>
+                            <Square className="h-3 w-3 fill-current" />
+                            <span>Stop voice sample</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="h-3 w-3 fill-current" />
+                            <span>Listen voice sample</span>
+                          </>
+                        )}
+                      </button>
 
-                    <div className="mb-2 flex items-center gap-1.5 text-[10px] text-slate-500">
-                      <Users className="h-3 w-3 shrink-0 text-emerald-600" />
-                      <span className="font-semibold text-slate-600">Assigned:</span>
-                      <span className="truncate" title={assignedAgents.map((a) => a.name).join(", ")}>
-                        {assignedAgents.length > 0
-                          ? assignedAgents.map((a) => a.name).join(", ")
-                          : "Unassigned"}
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] text-slate-600 leading-relaxed mb-2 line-clamp-2 min-h-[32px]">
-                      {voice.description}
-                    </p>
-
-                    {/* Acoustic Telemetry Pill */}
-                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100 mb-2.5">
-                      <span className="text-slate-800 font-bold">
-                        Acoustics:
-                      </span>
-                      <span>Pitch {acoustics.pitch.toFixed(2)}</span>
-                      <span>·</span>
-                      <span>Rate {acoustics.rate.toFixed(2)}x</span>
-                      <span>·</span>
-                      <span className="capitalize">
-                        {voice.accent || "Indian"}
-                      </span>
-                    </div>
-
-                    <p className="truncate text-[10px] italic text-slate-500" title={voice.sampleText}>
-                      Preview: “{voice.sampleText}”
-                    </p>
-                  </div>
-
-                  {/* Bottom Actions */}
-                  <div className="space-y-2.5 pt-2.5 border-t border-slate-100">
-                    <Button
-                      onClick={() => handlePlayVoicePreview(voice)}
-                      disabled={
-                        isPreviewLoading && previewingVoiceId === voice.id
-                      }
-                        className={`w-full text-[11px] font-bold gap-2 py-1.5 rounded-xl transition-all ${
-                        isPlaying
-                          ? "bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-500/20"
-                          : "bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs"
-                      }`}
-                    >
-                      {isPreviewLoading && previewingVoiceId === voice.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : isPlaying ? (
-                        <>
-                          <Square className="h-3.5 w-3.5 fill-current" />
-                          <span>Stop Audio Sample</span>
-                        </>
-                      ) : (
-                        <>
-                          <Play className="h-3.5 w-3.5 fill-current" />
-                          <span>Listen Voice Sample</span>
-                        </>
-                      )}
-                    </Button>
-
-                    {/* Reassign to Agent Selector */}
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-semibold text-slate-500 block">
-                        Assign this voice to platform agent:
-                      </label>
-                      <SmartSelect
-                        value={assignedAgents[0]?.id || ""}
-                        placeholder={
-                          assignedAgents.length > 0
-                            ? assignedAgents[0].name
-                            : "Choose an agent to assign…"
-                        }
-                        searchPlaceholder="Search agents…"
-                        onChange={(value) => handleUpdateVoice(value, voice.id)}
-                        options={agents.map((a) => ({
-                          value: a.id,
-                          label: `${a.name} (${a.company_name})`,
-                          badge:
-                            a.tts_voice?.toLowerCase() ===
-                            voice.id.toLowerCase()
-                              ? "Current"
-                              : undefined,
-                        }))}
-                      />
+                      <div className="space-y-1">
+                        <label className="block text-[11px] font-semibold text-slate-500">
+                          Assign this voice to platform agent:
+                        </label>
+                        <SmartSelect
+                          value={assignedAgents[0]?.id || ""}
+                          placeholder={
+                            assignedAgents.length > 0
+                              ? assignedAgents[0].name
+                              : "Choose an agent to assign…"
+                          }
+                          searchPlaceholder="Search agents…"
+                          onChange={(value) => handleUpdateVoice(value, voice.id)}
+                          options={agents.map((a) => ({
+                            value: a.id,
+                            label: `${a.name} (${a.company_name})`,
+                            badge: assignedAgents.some((assigned) => assigned.id === a.id) ? "Current" : undefined,
+                          }))}
+                          className="w-full [&>button]:h-9 [&>button]:text-[11px]"
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
         </div>
       )}
 
       {/* ─────────────────── TAB 2B: GEMINI LIVE VOICES ─────────────────── */}
       {activeTab === "gemini_voices" && (
-        <div className="space-y-6">
-          <section className="overflow-hidden rounded-2xl border border-[#DCE7DF] bg-white shadow-[0_5px_18px_#1b3b300a]">
-            <div className="flex flex-col gap-3 border-b border-[#E8EEE9] bg-gradient-to-r from-emerald-50/70 via-white to-white px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-emerald-700" />
-                  <h2 className="text-lg font-extrabold text-slate-900">
-                    Gemini Live Voices
-                  </h2>
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
-                    {GEMINI_VOICES.length} prebuilt
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-slate-500">
-                  Choose a native Gemini voice for real-time voice-to-voice agents.
-                </p>
-              </div>
-
-              {/* Gender Filter Controls & Badges */}
-              <div className="flex flex-wrap items-center gap-3">
-                <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 shadow-xs">
-                  <button
-                    type="button"
-                    onClick={() => setGeminiGenderFilter("all")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      geminiGenderFilter === "all"
-                        ? "bg-white text-slate-900 shadow-sm border border-slate-200/60"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    All ({GEMINI_VOICES.length})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setGeminiGenderFilter("Male")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
-                      geminiGenderFilter === "Male"
-                        ? "bg-blue-600 text-white shadow-sm"
-                        : "text-slate-600 hover:text-blue-700 hover:bg-blue-50/60"
-                    }`}
-                  >
-                    <span>♂ Male</span>
-                    <span className="text-[10px] opacity-80 font-semibold">
-                      ({GEMINI_VOICES.filter((v) => v.gender === "Male").length})
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setGeminiGenderFilter("Female")}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
-                      geminiGenderFilter === "Female"
-                        ? "bg-purple-600 text-white shadow-sm"
-                        : "text-slate-600 hover:text-purple-700 hover:bg-purple-50/60"
-                    }`}
-                  >
-                    <span>♀ Female</span>
-                    <span className="text-[10px] opacity-80 font-semibold">
-                      ({GEMINI_VOICES.filter((v) => v.gender === "Female").length})
-                    </span>
-                  </button>
-                </div>
-
-                <div className="rounded-xl border border-emerald-100 bg-white px-3 py-2 text-[11px] font-semibold text-emerald-700 shadow-xs">
-                  Gemini Live · Native audio
-                </div>
-              </div>
-            </div>
-
-            <div className={viewMode === "grid" ? "grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-3 sm:p-5" : "flex flex-col gap-2 p-4 sm:p-5"}>
+        <div className="space-y-4">
+          <div
+            className={
+              viewMode === "grid"
+                ? "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
+                : "flex flex-col gap-2"
+            }
+          >
               {orderedGeminiVoices.map((voice) => {
                 const assignedAgents = assignedAgentsForVoice(agents, voice);
                 const previewVoice = {
@@ -2611,7 +2711,7 @@ export default function AdminAgentsPage() {
                 }
 
                 return (
-                  <div key={voice.id} className={`relative flex min-h-[250px] flex-col justify-between space-y-3 overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition-all ${previewingVoiceId === voice.id ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg" : "border-slate-200/80 hover:border-emerald-300 hover:shadow-md"}`}>
+                  <div key={voice.id} className={`relative flex min-h-[260px] flex-col justify-between space-y-3 overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition-all ${previewingVoiceId === voice.id ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg" : "border-slate-200/80 hover:border-emerald-300 hover:shadow-md"}`}>
                     {previewingVoiceId === voice.id && <div className="absolute left-0 right-0 top-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 animate-pulse" />}
                     <div>
                       <div className="mb-3 flex items-start justify-between gap-3">
@@ -2649,18 +2749,81 @@ export default function AdminAgentsPage() {
                         {previewingVoiceId === voice.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
                         {previewingVoiceId === voice.id ? "Stop voice sample" : "Listen voice sample"}
                       </button>
-                      <label className="block text-[11px] font-semibold text-slate-500">Assign this voice to platform agent:</label>
-                      <SmartSelect
-                        value={assignedAgents[0]?.id || ""}
-                        placeholder={assignedAgents.length > 0 ? `Assign to another agent` : "Assign to agent"}
-                        searchPlaceholder="Search agents…"
-                        onChange={(agentId) => handleUpdateVoice(agentId, voice.id)}
-                        options={agents.map((agent) => ({
-                          value: agent.id,
-                          label: `${agent.name} (${agent.company_name})`,
-                        }))}
-                        className="min-w-0 flex-1 [&>button]:h-9 [&>button]:text-[11px]"
-                      />
+                      <div className="space-y-1">
+                        <label className="block text-[11px] font-semibold text-slate-500">
+                          Assign this voice to platform agent:
+                        </label>
+                        <SmartSelect
+                          value={assignedAgents[0]?.id || ""}
+                          placeholder={
+                            assignedAgents.length > 0
+                              ? assignedAgents[0].name
+                              : "Choose an agent to assign…"
+                          }
+                          searchPlaceholder="Search agents…"
+                          onChange={(agentId) => handleUpdateVoice(agentId, voice.id)}
+                          options={agents.map((agent) => ({
+                            value: agent.id,
+                            label: `${agent.name} (${agent.company_name})`,
+                            badge: assignedAgents.some((assigned) => assigned.id === agent.id) ? "Current" : undefined,
+                          }))}
+                          className="w-full [&>button]:h-9 [&>button]:text-[11px]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────── TAB 2C: AZURE STANDARD VOICES ─────────────────── */}
+      {activeTab === "azure_voices" && (
+        <div className="space-y-4">
+          <section className="overflow-hidden rounded-2xl border border-[#DCE7DF] bg-white shadow-[0_5px_18px_#1b3b300a]">
+            <div className="flex flex-col gap-2 border-b border-[#E8EEE9] bg-gradient-to-r from-emerald-50/70 via-white to-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-emerald-700" />
+                  <h2 className="text-lg font-extrabold text-slate-900">Azure Speech Voices</h2>
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">{AZURE_VOICES.length} F0 eligible</span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">Indian Standard Neural voices available in Azure&apos;s free F0 quota.</p>
+              </div>
+              <span className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">Azure key required for live calls</span>
+            </div>
+            <div className={viewMode === "grid" ? "grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-2 p-4"}>
+              {orderedAzureVoices.map((voice) => {
+                const previewVoice = {
+                  id: voice.id,
+                  name: voice.name,
+                  gender: voice.gender,
+                  provider: "Azure Speech",
+                  enabled: true,
+                  description: voice.description,
+                  tone: voice.tone,
+                  sampleText: `Hello, this is ${voice.name}, an Azure ${voice.language} voice.`,
+                };
+                return (
+                  <div key={voice.id} className={viewMode === "grid" ? "flex min-h-[180px] flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" : "flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center"}>
+                    <div className="flex min-w-0 flex-1 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-sm font-extrabold text-emerald-800">{voice.name.charAt(0)}</div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="truncate text-sm font-extrabold text-slate-900">{voice.name}</h3>
+                          <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-700">{voice.gender}</span>
+                        </div>
+                        <p className="truncate text-[11px] text-emerald-700">{voice.language} · Azure Standard Neural</p>
+                        <p className="truncate text-[11px] text-slate-500">{voice.id}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="hidden text-[10px] text-slate-400 sm:inline">Catalog only</span>
+                      <Button onClick={() => handlePlayVoicePreview(previewVoice)} className="shrink-0 bg-emerald-700 text-[11px] font-bold hover:bg-emerald-800">
+                        {previewingVoiceId === voice.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
+                        {previewingVoiceId === voice.id ? "Stop" : "Preview"}
+                      </Button>
                     </div>
                   </div>
                 );
@@ -2685,42 +2848,10 @@ export default function AdminAgentsPage() {
 
           {/* Right Panel: Gallery */}
           <div className="w-full flex-1 pb-12">
-            <div className="bg-gradient-to-r from-slate-50 to-white p-6 rounded-3xl border border-slate-200/80 shadow-md flex flex-col xl:flex-row items-start xl:items-center justify-between gap-5 mb-8 relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-100/30 rounded-full blur-3xl -mr-20 -mt-20 pointer-events-none" />
-              <div className="relative z-10 flex flex-col">
-                <h3 className="font-extrabold text-slate-900 text-2xl tracking-tight">
-                  My Custom Voices
-                </h3>
-                <p className="text-sm text-slate-500 mt-1 font-medium">
-                  Manage and assign voices you have cloned.
-                </p>
-              </div>
-              <div className="relative z-10 flex flex-wrap items-center gap-3 w-full xl:w-auto">
-                <Button
-                  onClick={() => setIsVoiceStudioOpen(true)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl h-10 text-sm font-bold shadow-[0_4px_14px_0_rgba(16,185,129,0.39)] hover:shadow-[0_6px_20px_rgba(16,185,129,0.23)] hover:-translate-y-0.5 transition-all duration-200 shrink-0 relative overflow-hidden group"
-                >
-                  <div className="absolute inset-0 bg-white/20 w-full h-full -translate-x-full group-hover:animate-[shimmer_1.5s_infinite]"></div>
-                  <Plus className="h-4 w-4 mr-1.5" />
-                  Create Voice
-                </Button>
-                <div className="relative flex-1 min-w-[160px]">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search cloned voices..."
-                    className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-800 shadow-sm h-10"
-                  />
-                </div>
-              </div>
-            </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start w-full">
               {/* LEFT SIDE (70%): Gallery Grid / List */}
               <div
-                className={`col-span-1 lg:col-span-8 ${viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "flex flex-col gap-3"}`}
+                className={`col-span-1 lg:col-span-8 ${viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "flex flex-col gap-2"}`}
               >
                 {filteredVoices.length === 0 ? (
                   <div className="col-span-full py-12 flex flex-col items-center justify-center text-center bg-white rounded-3xl border border-slate-200 border-dashed">
@@ -2735,32 +2866,60 @@ export default function AdminAgentsPage() {
                 ) : (
                   filteredVoices.map((voice) => {
                     const isSelected = selectedVoiceId === voice.id;
-                    const assignedAgents = assignedAgentsForVoice(
-                      agents,
-                      voice,
-                    );
+                    const previewVoice = getVoiceForPicker(voice.voice_id || voice.id);
+                    const isPlaying = previewingVoiceId === previewVoice.id || previewingVoiceId === voice.id;
+                    const assignedAgents = assignedAgentsForVoice(agents, voice);
+                    const isMale = voice.gender === "Male";
+                    const isFemale = voice.gender === "Female";
 
                     if (viewMode === "list") {
-                      const previewVoice = getVoiceForPicker(voice.voice_id || voice.id);
                       return (
                         <div
                           key={voice.id}
                           onClick={() => setSelectedVoiceId(voice.id)}
-                          className={`flex flex-col gap-3 rounded-xl border bg-white p-3 shadow-sm transition hover:border-emerald-300 hover:shadow-md sm:flex-row sm:items-center ${isSelected ? "border-emerald-500 ring-1 ring-emerald-500/20" : "border-slate-200"}`}
+                          className={`flex flex-col gap-3 rounded-xl border bg-white p-3 shadow-sm transition hover:border-emerald-300 hover:shadow-md sm:flex-row sm:items-center cursor-pointer ${
+                            isSelected ? "border-emerald-500 ring-1 ring-emerald-500/20" : "border-slate-200"
+                          }`}
                         >
                           <div className="flex min-w-0 flex-1 items-center gap-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-sm font-extrabold text-emerald-800">{voice.name?.charAt(0)?.toUpperCase() || "C"}</div>
+                            <div
+                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-extrabold ${
+                                isMale
+                                  ? "border-blue-200 bg-blue-50 text-blue-800"
+                                  : isFemale
+                                    ? "border-purple-200 bg-purple-50 text-purple-800"
+                                    : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                              }`}
+                            >
+                              {voice.name?.charAt(0)?.toUpperCase() || "C"}
+                            </div>
                             <div className="min-w-0">
                               <div className="flex items-center gap-2">
                                 <h3 className="truncate text-sm font-extrabold text-slate-900">{voice.name}</h3>
-                                <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700">Cloned</span>
+                                <span className="rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800">
+                                  ✨ Cloned
+                                </span>
+                                <span
+                                  className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
+                                    isMale
+                                      ? "bg-blue-50 text-blue-700 border-blue-200"
+                                      : isFemale
+                                        ? "bg-purple-50 text-purple-700 border-purple-200"
+                                        : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                  }`}
+                                >
+                                  {isMale ? "♂ Male" : isFemale ? "♀ Female" : "✨ Active"}
+                                </span>
                               </div>
+                              <p className="truncate text-[11px] text-emerald-700">Cloned Voice Persona</p>
                               <p className="truncate text-[11px] text-slate-500">{voice.description || "Custom cloned voice"}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5 text-[10px] text-slate-500 sm:w-44">
                             <Users className="h-3 w-3 shrink-0 text-emerald-600" />
-                            <span className="truncate" title={assignedAgents.map((a) => a.name).join(", ")}>{assignedAgents.length > 0 ? assignedAgents.map((a) => a.name).join(", ") : "Unassigned"}</span>
+                            <span className="truncate" title={assignedAgents.map((a) => a.name).join(", ")}>
+                              {assignedAgents.length > 0 ? assignedAgents.map((a) => a.name).join(", ") : "Unassigned"}
+                            </span>
                           </div>
                           <div className="min-w-[190px]" onClick={(event) => event.stopPropagation()}>
                             <SmartSelect
@@ -2776,258 +2935,166 @@ export default function AdminAgentsPage() {
                               className="[&>button]:h-8 [&>button]:text-[10px]"
                             />
                           </div>
-                          <Button onClick={(event) => { event.stopPropagation(); return handlePlayVoicePreview(previewVoice); }} className="shrink-0 bg-emerald-700 text-[11px] font-bold hover:bg-emerald-800">
-                            {previewingVoiceId === previewVoice.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
-                            {previewingVoiceId === previewVoice.id ? "Stop" : "Listen"}
-                          </Button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handlePlayVoicePreview(previewVoice);
+                            }}
+                            className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
+                              isPlaying ? "bg-red-600 text-white hover:bg-red-700" : "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800"
+                            }`}
+                          >
+                            {isPlaying ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
+                            {isPlaying ? "Stop" : "Listen"}
+                          </button>
                         </div>
                       );
                     }
 
-                    if (viewMode === "grid") {
-                      return (
-                        <div
-                          key={voice.id}
-                          onClick={() => setSelectedVoiceId(voice.id)}
-                          className={`bg-white rounded-3xl border ${isSelected ? "border-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]" : "border-slate-200 hover:border-emerald-300 hover:shadow-md"} transition-all duration-300 p-5 flex flex-col gap-4 group relative overflow-hidden cursor-pointer h-full`}
-                        >
-                          {/* Background glowing accent on hover (Grid only) */}
-                          <div
-                            className={`absolute top-0 right-0 w-64 h-64 ${isSelected ? "bg-emerald-400/20 opacity-100" : "bg-emerald-400/10 opacity-0 group-hover:opacity-100"} rounded-full blur-[80px] transition-opacity duration-700 pointer-events-none -mr-16 -mt-16`}
-                          ></div>
+                    return (
+                      <div
+                        key={voice.id}
+                        onClick={() => setSelectedVoiceId(voice.id)}
+                        className={`relative flex min-h-[260px] flex-col justify-between space-y-3 overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition-all cursor-pointer ${
+                          isPlaying
+                            ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg"
+                            : isSelected
+                              ? "border-emerald-500 ring-1 ring-emerald-500/20 shadow-md"
+                              : "border-slate-200/80 hover:border-emerald-300 hover:shadow-md"
+                        }`}
+                      >
+                        {isPlaying && (
+                          <div className="absolute left-0 right-0 top-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 animate-pulse" />
+                        )}
 
-                          <div className="relative z-10 flex flex-col h-full gap-4">
-                            {/* Top Header */}
-                            <div className="flex items-start justify-between">
+                        <div>
+                          {/* Top Row: Avatar, Name, Badges, Usage Count */}
+                          <div className="mb-3 flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-3">
                               <div
-                                className={`h-12 w-12 rounded-2xl ${isSelected ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-gradient-to-br from-slate-50 to-slate-100 text-slate-700 border-slate-200"} border flex items-center justify-center font-black text-xl shadow-sm shrink-0 relative transition-colors`}
+                                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-extrabold shadow-sm ${
+                                  isMale
+                                    ? "border-blue-200 bg-blue-50 text-blue-800"
+                                    : isFemale
+                                      ? "border-purple-200 bg-purple-50 text-purple-800"
+                                      : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                }`}
                               >
                                 {voice.name?.charAt(0)?.toUpperCase() || "C"}
-                                <div className="absolute -bottom-1 -right-1 h-4 w-4 bg-emerald-500 rounded-full border-2 border-white flex items-center justify-center">
-                                  <Check className="h-2 w-2 text-white" />
-                                </div>
                               </div>
-                              <Badge
-                                variant="secondary"
-                                className="text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border-emerald-100 px-1.5 py-0.5 rounded-md shadow-sm shrink-0"
-                              >
-                                ✨ Cloned
-                              </Badge>
-                            </div>
-
-                            <div className="flex flex-col gap-1">
-                              <h3 className="font-bold text-slate-900 text-lg tracking-tight leading-tight line-clamp-1 flex items-center gap-1.5">
-                                {voice.name}
-                                {voice.is_pinned && (
-                                  <span className="text-sm" title="Pinned">
-                                    📌
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h3 className="text-sm font-extrabold tracking-tight text-slate-900 truncate max-w-[130px]">
+                                    {voice.name}
+                                  </h3>
+                                  <span className="rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800">
+                                    ✨ Cloned
                                   </span>
-                                )}
-                              </h3>
-                              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
-                                <Calendar className="h-3 w-3" />
-                                {new Date(
-                                  voice.created_at || Date.now(),
-                                ).toLocaleDateString("en-US", {
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                })}
-                              </div>
-                            </div>
-
-                            {/* Statuses */}
-                            <div className="flex flex-col gap-2 mt-1">
-                              <div className="flex items-center gap-2 text-[11px] font-bold text-slate-600">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]"></span>{" "}
-                                Active
-                              </div>
-                              {voice.name?.toLowerCase().includes("mix") ? (
-                                <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-600">
-                                  <AlertTriangle className="h-3.5 w-3.5" />{" "}
-                                  Multiple Voices
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-600">
-                                  <ShieldCheck className="h-3.5 w-3.5" /> High
-                                  Clarity
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Assigned Agent */}
-                            <div className="mt-auto pt-4 border-t border-slate-100 flex flex-col gap-2">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                                Assigned:
-                              </span>
-                              {assignedAgents.length > 0 ? (
-                                <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1.5 w-full">
-                                  <Users className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                                   <span
-                                    className="text-[11px] font-semibold text-slate-700 truncate"
-                                    title={assignedAgents
-                                      .map((a) => a.name)
-                                      .join(", ")}
+                                    className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
+                                      isMale
+                                        ? "bg-blue-50 text-blue-700 border-blue-200"
+                                        : isFemale
+                                          ? "bg-purple-50 text-purple-700 border-purple-200"
+                                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                    }`}
                                   >
-                                    {assignedAgents
-                                      .map((a) => a.name)
-                                      .join(", ")}
+                                    {isMale ? "♂ Male" : isFemale ? "♀ Female" : "✨ Active"}
                                   </span>
                                 </div>
-                              ) : (
-                                <div className="flex items-center gap-2 px-2.5 py-1.5 w-full border border-slate-200 border-dashed rounded-lg bg-slate-50">
-                                  <span className="text-[11px] font-bold text-slate-400">
-                                    Unassigned
-                                  </span>
-                                </div>
-                              )}
-                              <div onClick={(event) => event.stopPropagation()}>
-                                <SmartSelect
-                                  value={assignedAgents[0]?.id || ""}
-                                  placeholder="Select company agent…"
-                                  searchPlaceholder="Search agents or companies…"
-                                  onChange={(agentId) =>
-                                    handleUpdateVoice(agentId, voice.id)
-                                  }
-                                  options={agents.map((agent) => ({
-                                    value: agent.id,
-                                    label: `${agent.name} · ${agent.company_name}`,
-                                    badge: assignedAgents.some(
-                                      (assigned) => assigned.id === agent.id,
-                                    )
-                                      ? "Current"
-                                      : undefined,
-                                  }))}
-                                  className="[&>button]:h-9 [&>button]:text-[11px]"
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    } else {
-                      // LIST VIEW
-                      return (
-                        <div
-                          key={voice.id}
-                          onClick={() => setSelectedVoiceId(voice.id)}
-                          className={`bg-white rounded-2xl border ${isSelected ? "border-emerald-500 shadow-md bg-emerald-50/20" : "border-slate-200 shadow-sm hover:border-emerald-300 hover:shadow-md"} transition-all duration-300 p-4 px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative group w-full cursor-pointer`}
-                        >
-                          {/* LEFT: Avatar, Name, Date, Badge */}
-                          <div className="flex items-center gap-4 w-full sm:w-[45%] shrink-0">
-                            <div
-                              className={`h-11 w-11 rounded-xl ${isSelected ? "bg-emerald-50 text-emerald-600 border-emerald-200" : "bg-gradient-to-br from-slate-50 to-slate-100 text-slate-700 border-slate-200"} border flex items-center justify-center font-black text-lg shadow-sm shrink-0 relative transition-colors`}
-                            >
-                              {voice.name?.charAt(0)?.toUpperCase() || "C"}
-                              <div className="absolute -bottom-1 -right-1 h-3.5 w-3.5 bg-emerald-500 rounded-full border-2 border-white flex items-center justify-center">
-                                <Check className="h-2 w-2 text-white" />
-                              </div>
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                              <div className="flex items-center gap-2">
-                                <h3 className="font-bold text-slate-900 text-base tracking-tight leading-tight truncate">
-                                  {voice.name}
-                                </h3>
-                                <Badge
-                                  variant="secondary"
-                                  className="text-[8px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border-emerald-100 px-1 py-0 rounded-md shrink-0"
-                                >
-                                  ✨ Cloned
-                                </Badge>
-                                {voice.is_pinned && (
-                                  <span
-                                    className="text-sm shrink-0"
-                                    title="Pinned"
-                                  >
-                                    📌
-                                  </span>
-                                )}
-                              </div>
-                              <div className="mt-0.5 flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
-                                <Calendar className="h-3 w-3" />
-                                {new Date(
-                                  voice.created_at || Date.now(),
-                                ).toLocaleDateString("en-US", {
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                })}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* MIDDLE: Status badge, Clarity */}
-                          <div className="flex items-center justify-start sm:justify-center gap-4 w-full sm:w-[25%] shrink-0">
-                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-600 bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
-                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_0_2px_rgba(16,185,129,0.2)]"></span>{" "}
-                              Active
-                            </div>
-                            {voice.name?.toLowerCase().includes("mix") ? (
-                              <div className="flex items-center gap-1 text-[11px] font-bold text-amber-600">
-                                <AlertTriangle className="h-3.5 w-3.5" /> Multi
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1 text-[11px] font-bold text-emerald-600">
-                                <ShieldCheck className="h-3.5 w-3.5" /> High
-                                Clarity
-                              </div>
-                            )}
-                          </div>
-
-                          {/* RIGHT: Assigned Agent + Chevron */}
-                          <div className="flex items-center justify-between sm:justify-end gap-4 w-full sm:w-[30%] shrink-0">
-                            {assignedAgents.length > 0 ? (
-                              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1 max-w-[140px]">
-                                <Users className="h-3 w-3 text-slate-400 shrink-0" />
-                                <span
-                                  className="text-[11px] font-semibold text-slate-700 truncate"
-                                  title={assignedAgents
-                                    .map((a) => a.name)
-                                    .join(", ")}
-                                >
-                                  {assignedAgents.map((a) => a.name).join(", ")}
+                                <span className="mt-1 inline-block rounded-md bg-emerald-50/80 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                                  Cloned Voice Persona
                                 </span>
                               </div>
-                            ) : (
-                              <span className="text-[11px] font-bold text-slate-400">
-                                Unassigned
-                              </span>
-                            )}
-                            <div
-                              className="min-w-[170px]"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <SmartSelect
-                                value={assignedAgents[0]?.id || ""}
-                                placeholder="Select agent…"
-                                searchPlaceholder="Search agents or companies…"
-                                onChange={(agentId) =>
-                                  handleUpdateVoice(agentId, voice.id)
-                                }
-                                options={agents.map((agent) => ({
-                                  value: agent.id,
-                                  label: `${agent.name} · ${agent.company_name}`,
-                                  badge: assignedAgents.some(
-                                    (assigned) => assigned.id === agent.id,
-                                  )
-                                    ? "Current"
-                                    : undefined,
-                                }))}
-                                className="[&>button]:h-8 [&>button]:text-[10px]"
-                              />
                             </div>
-                            <ChevronRight
-                              className={`h-4 w-4 transition-colors ${isSelected ? "text-emerald-500" : "text-slate-300 group-hover:text-slate-500"}`}
+
+                            <span className="shrink-0 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                              {assignedAgents.length} {assignedAgents.length === 1 ? "Agent" : "Agents"}
+                            </span>
+                          </div>
+
+                          {/* Assigned Row */}
+                          <div className="mb-2 flex items-center gap-1.5 text-[10px] text-slate-500">
+                            <Users className="h-3 w-3 shrink-0 text-emerald-600" />
+                            <span className="font-semibold text-slate-600">Assigned:</span>
+                            <span className="truncate font-medium text-slate-700" title={assignedAgents.map((a) => a.name).join(", ")}>
+                              {assignedAgents.length > 0 ? assignedAgents.map((a) => a.name).join(", ") : "Unassigned"}
+                            </span>
+                          </div>
+
+                          {/* Description */}
+                          <p className="mb-2.5 text-[11px] leading-relaxed text-slate-600 line-clamp-2 min-h-[34px]">
+                            {voice.description || "Custom enterprise cloned voice persona."}
+                          </p>
+
+                          {/* Provider Spec Pill */}
+                          <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/40 p-2 text-[10px] font-mono text-emerald-700">
+                            <span className="font-bold">Provider:</span>
+                            <span>Sarvam Cloned</span>
+                            <span>High Clarity · Active</span>
+                          </div>
+                        </div>
+
+                        {/* Bottom Action Section */}
+                        <div className="space-y-3 border-t border-slate-100 pt-3" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => handlePlayVoicePreview(previewVoice)}
+                            disabled={isPreviewLoading && previewingVoiceId === previewVoice.id}
+                            className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold transition-all ${
+                              isPreviewLoading && previewingVoiceId === previewVoice.id
+                                ? "bg-slate-200 text-slate-600 cursor-not-allowed"
+                                : isPlaying
+                                  ? "bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-500/20"
+                                  : "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800"
+                            }`}
+                          >
+                            {isPreviewLoading && previewingVoiceId === previewVoice.id ? (
+                              <>
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <span>Loading voice sample...</span>
+                              </>
+                            ) : isPlaying ? (
+                              <>
+                                <Square className="h-3 w-3 fill-current" />
+                                <span>Stop voice sample</span>
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-3 w-3 fill-current" />
+                                <span>Listen voice sample</span>
+                              </>
+                            )}
+                          </button>
+
+                          <div className="space-y-1">
+                            <label className="block text-[11px] font-semibold text-slate-500">
+                              Assign this voice to platform agent:
+                            </label>
+                            <SmartSelect
+                              value={assignedAgents[0]?.id || ""}
+                              placeholder={
+                                assignedAgents.length > 0
+                                  ? assignedAgents[0].name
+                                  : "Choose an agent to assign…"
+                              }
+                              searchPlaceholder="Search agents…"
+                              onChange={(value) => handleUpdateVoice(value, voice.id)}
+                              options={agents.map((a) => ({
+                                value: a.id,
+                                label: `${a.name} (${a.company_name})`,
+                                badge: assignedAgents.some((assigned) => assigned.id === a.id) ? "Current" : undefined,
+                              }))}
+                              className="w-full [&>button]:h-9 [&>button]:text-[11px]"
                             />
                           </div>
                         </div>
-                      );
-                    }
+                      </div>
+                    );
                   })
                 )}
               </div>
-
-              {/* RIGHT SIDE (30%): Sticky Voice Settings Panel */}
               <div className="col-span-1 lg:col-span-4 lg:sticky lg:top-24 self-start">
                 <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col max-h-[calc(100vh-8rem)] overflow-y-auto custom-scrollbar">
                   {/* Sticky Header */}
