@@ -1538,7 +1538,7 @@ export default function AdminAgentsPage() {
             >
               <Mic className="h-4 w-4" />
               My Voice Studio
-              <span className={org.tabCount}>Cloned</span>
+              <span className={org.tabCount}>{customVoices.length}</span>
             </button>
           </div>
 
