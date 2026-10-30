@@ -2109,15 +2109,15 @@ export default function AdminAgentsPage() {
       {/* ─────────────────── TAB 2B: GEMINI LIVE VOICES ─────────────────── */}
       {activeTab === "gemini_voices" && (
         <div className="space-y-6">
-          <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-sm">
-            <div className="flex flex-col gap-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50/70 via-white to-white px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <section className="overflow-hidden rounded-2xl border border-[#DCE7DF] bg-white shadow-[0_5px_18px_#1b3b300a]">
+            <div className="flex flex-col gap-3 border-b border-[#E8EEE9] bg-gradient-to-r from-emerald-50/70 via-white to-white px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
               <div>
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-indigo-600" />
+                  <Sparkles className="h-5 w-5 text-emerald-700" />
                   <h2 className="text-lg font-extrabold text-slate-900">
                     Gemini Live Voices
                   </h2>
-                  <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-700">
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
                     {GEMINI_VOICES.length} prebuilt
                   </span>
                 </div>
@@ -2125,7 +2125,7 @@ export default function AdminAgentsPage() {
                   Choose a native Gemini voice for real-time voice-to-voice agents.
                 </p>
               </div>
-              <div className="rounded-xl border border-indigo-100 bg-white px-3 py-2 text-[11px] font-semibold text-indigo-700">
+              <div className="rounded-xl border border-emerald-100 bg-white px-3 py-2 text-[11px] font-semibold text-emerald-700">
                 Gemini Live · Native audio
               </div>
             </div>
@@ -2150,31 +2150,31 @@ export default function AdminAgentsPage() {
                 };
 
                 return (
-                  <div key={voice.id} className={`relative flex min-h-[300px] flex-col justify-between space-y-4 overflow-hidden rounded-2xl border bg-white p-5 shadow-sm transition-all ${previewingVoiceId === voice.id ? "border-indigo-500 ring-2 ring-indigo-500/20 shadow-lg" : "border-slate-200/80 hover:border-slate-300 hover:shadow-md"}`}>
-                    {previewingVoiceId === voice.id && <div className="absolute left-0 right-0 top-0 h-1.5 bg-gradient-to-r from-indigo-500 via-violet-400 to-indigo-600 animate-pulse" />}
+                  <div key={voice.id} className={`relative flex min-h-[300px] flex-col justify-between space-y-4 overflow-hidden rounded-2xl border bg-white p-5 shadow-sm transition-all ${previewingVoiceId === voice.id ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg" : "border-slate-200/80 hover:border-emerald-300 hover:shadow-md"}`}>
+                    {previewingVoiceId === voice.id && <div className="absolute left-0 right-0 top-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 animate-pulse" />}
                     <div>
                       <div className="mb-3 flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50 text-base font-extrabold text-indigo-700 shadow-sm">{voice.name.charAt(0)}</div>
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-emerald-100 bg-emerald-50 text-base font-extrabold text-emerald-800 shadow-sm">{voice.name.charAt(0)}</div>
                           <div>
                             <div className="flex items-center gap-2">
                               <h3 className="text-base font-extrabold tracking-tight text-slate-900">{voice.name}</h3>
-                              <span className="rounded-md border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-indigo-700">Gemini Live</span>
+                              <span className="rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800">Gemini Live</span>
                             </div>
-                            <span className="mt-1 inline-block rounded-md bg-indigo-50/80 px-2 py-0.5 text-xs font-semibold text-indigo-700">{voice.tone}</span>
+                            <span className="mt-1 inline-block rounded-md bg-emerald-50/80 px-2 py-0.5 text-xs font-semibold text-emerald-700">{voice.tone}</span>
                           </div>
                         </div>
                         <span className="shrink-0 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{currentAgent ? "1 Agent" : "0 Agents"}</span>
                       </div>
                       <p className="mb-3.5 text-xs leading-relaxed text-slate-600">{voice.description}</p>
-                      <div className="flex items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50/40 p-2.5 text-[11px] font-mono text-indigo-700">
+                      <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/40 p-2.5 text-[11px] font-mono text-emerald-700">
                         <span className="font-bold">Provider:</span>
                         <span>Google Gemini Live</span>
                         <span>Native audio</span>
                       </div>
                     </div>
                     <div className="space-y-3 border-t border-slate-100 pt-3">
-                      <button type="button" onClick={() => handlePlayVoicePreview(previewVoice)} className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${previewingVoiceId === voice.id ? "bg-red-600 text-white hover:bg-red-700" : "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700"}`}>
+                      <button type="button" onClick={() => handlePlayVoicePreview(previewVoice)} className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${previewingVoiceId === voice.id ? "bg-red-600 text-white hover:bg-red-700" : "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800"}`}>
                         {previewingVoiceId === voice.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
                         {previewingVoiceId === voice.id ? "Stop voice sample" : "Listen voice sample"}
                       </button>
