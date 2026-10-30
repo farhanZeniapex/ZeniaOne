@@ -2521,6 +2521,26 @@ export default function AdminAgentsPage() {
                                   </span>
                                 </div>
                               )}
+                              <div onClick={(event) => event.stopPropagation()}>
+                                <SmartSelect
+                                  value={assignedAgents[0]?.id || ""}
+                                  placeholder="Select company agent…"
+                                  searchPlaceholder="Search agents or companies…"
+                                  onChange={(agentId) =>
+                                    handleUpdateVoice(agentId, voice.id)
+                                  }
+                                  options={agents.map((agent) => ({
+                                    value: agent.id,
+                                    label: `${agent.name} · ${agent.company_name}`,
+                                    badge: assignedAgents.some(
+                                      (assigned) => assigned.id === agent.id,
+                                    )
+                                      ? "Current"
+                                      : undefined,
+                                  }))}
+                                  className="[&>button]:h-9 [&>button]:text-[11px]"
+                                />
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -2613,6 +2633,29 @@ export default function AdminAgentsPage() {
                                 Unassigned
                               </span>
                             )}
+                            <div
+                              className="min-w-[170px]"
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              <SmartSelect
+                                value={assignedAgents[0]?.id || ""}
+                                placeholder="Select agent…"
+                                searchPlaceholder="Search agents or companies…"
+                                onChange={(agentId) =>
+                                  handleUpdateVoice(agentId, voice.id)
+                                }
+                                options={agents.map((agent) => ({
+                                  value: agent.id,
+                                  label: `${agent.name} · ${agent.company_name}`,
+                                  badge: assignedAgents.some(
+                                    (assigned) => assigned.id === agent.id,
+                                  )
+                                    ? "Current"
+                                    : undefined,
+                                }))}
+                                className="[&>button]:h-8 [&>button]:text-[10px]"
+                              />
+                            </div>
                             <ChevronRight
                               className={`h-4 w-4 transition-colors ${isSelected ? "text-emerald-500" : "text-slate-300 group-hover:text-slate-500"}`}
                             />
