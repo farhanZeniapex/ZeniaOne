@@ -155,7 +155,24 @@ export function getVoiceById(id: string | undefined): Voice {
   return found || VOICES[0];
 }
 
-export const MALE_VOICE_IDS = new Set(["rahul", "rohan", "aditya", "kabir", "amit"]);
+export const GEMINI_MALE_VOICE_IDS = new Set([
+  "puck", "charon", "fenrir", "orus", "enceladus", "iapetus", 
+  "umbriel", "algenib", "rasalgethi", "achernar", "alnilam", 
+  "schedar", "gacrux", "achird", "zubenelgenubi", "sadaltager"
+]);
+
+export const GEMINI_FEMALE_VOICE_IDS = new Set([
+  "zephyr", "kore", "leda", "aoede", "callirrhoe", "autonoe", 
+  "algieba", "despina", "erinome", "laomedeia", "pulcherrima", 
+  "vindemiatrix", "sadachbia", "sulafat"
+]);
+
+export const MALE_VOICE_IDS = new Set([
+  "rahul", "rohan", "aditya", "kabir", "amit",
+  "puck", "charon", "fenrir", "orus", "enceladus", "iapetus", 
+  "umbriel", "algenib", "rasalgethi", "achernar", "alnilam", 
+  "schedar", "gacrux", "achird", "zubenelgenubi", "sadaltager"
+]);
 
 export function isMaleVoice(id: string | undefined): boolean {
   if (!id) return false;
@@ -171,42 +188,54 @@ export interface VoiceAcousticConfig {
 export function getVoiceAcoustics(voiceId: string | undefined): VoiceAcousticConfig {
   const vid = (voiceId || "").toLowerCase();
   switch (vid) {
-    // --- Male Voices (Distinct Timbres & Cadences) ---
-    // Kabir: Deep, heavy, commanding baritone
-    case "kabir":
-      return { pitch: 0.58, rate: 0.85, isMale: true };
-    // Amit: Mature, calm, trustworthy baritone
-    case "amit":
-      return { pitch: 0.68, rate: 0.90, isMale: true };
-    // Aditya: Crisp, articulated, authoritative corporate male
-    case "aditya":
-      return { pitch: 0.76, rate: 0.96, isMale: true };
-    // Rahul: Warm, friendly, approachable conversational male
-    case "rahul":
-      return { pitch: 0.85, rate: 0.94, isMale: true };
-    // Rohan: Vibrant, dynamic, energetic, fast-talking young male
-    case "rohan":
-      return { pitch: 1.00, rate: 1.08, isMale: true };
+    // --- Standard Persona Male Voices ---
+    case "kabir": return { pitch: 0.58, rate: 0.85, isMale: true };
+    case "amit": return { pitch: 0.68, rate: 0.90, isMale: true };
+    case "aditya": return { pitch: 0.76, rate: 0.96, isMale: true };
+    case "rahul": return { pitch: 0.85, rate: 0.94, isMale: true };
+    case "rohan": return { pitch: 1.00, rate: 1.08, isMale: true };
 
-    // --- Female Voices (Distinct Timbres & Cadences) ---
-    // Kavya: Composed, dignified, polite, calm female
-    case "kavya":
-      return { pitch: 0.88, rate: 0.88, isMale: false };
-    // Ritu: Warm, natural, balanced, friendly support female
-    case "ritu":
-      return { pitch: 0.98, rate: 0.94, isMale: false };
-    // Neha: Soft, gentle, comforting, patient healthcare female
-    case "neha":
-      return { pitch: 1.02, rate: 0.84, isMale: false };
-    // Shreya: Modern, expressive, punchy urban female
-    case "shreya":
-      return { pitch: 1.08, rate: 1.00, isMale: false };
-    // Priya: Crisp, polished, professional corporate female
-    case "priya":
-      return { pitch: 1.14, rate: 0.96, isMale: false };
-    // Pooja: High-energy, enthusiastic, upbeat sales female
-    case "pooja":
-      return { pitch: 1.24, rate: 1.08, isMale: false };
+    // --- Gemini Male Voices (Distinct Timbres) ---
+    case "puck": return { pitch: 1.12, rate: 1.05, isMale: true }; // Upbeat, buoyant
+    case "charon": return { pitch: 0.68, rate: 0.90, isMale: true }; // Deep informative baritone
+    case "fenrir": return { pitch: 0.94, rate: 1.10, isMale: true }; // Excitable, fast
+    case "orus": return { pitch: 0.72, rate: 0.92, isMale: true }; // Firm, commanding
+    case "enceladus": return { pitch: 0.80, rate: 0.86, isMale: true }; // Breathy, calm
+    case "iapetus": return { pitch: 0.82, rate: 0.95, isMale: true }; // Clear, articulate
+    case "umbriel": return { pitch: 0.86, rate: 0.92, isMale: true }; // Easy-going, relaxed
+    case "algenib": return { pitch: 0.58, rate: 0.85, isMale: true }; // Gravelly, gritty deep
+    case "rasalgethi": return { pitch: 0.75, rate: 0.92, isMale: true }; // Informative, authoritative
+    case "achernar": return { pitch: 0.78, rate: 0.88, isMale: true }; // Soft, thoughtful
+    case "alnilam": return { pitch: 0.70, rate: 0.94, isMale: true }; // Firm, steady
+    case "schedar": return { pitch: 0.76, rate: 0.92, isMale: true }; // Even, balanced
+    case "gacrux": return { pitch: 0.62, rate: 0.88, isMale: true }; // Mature, seasoned
+    case "achird": return { pitch: 0.84, rate: 0.96, isMale: true }; // Friendly, warm
+    case "zubenelgenubi": return { pitch: 0.88, rate: 1.02, isMale: true }; // Casual, conversational
+    case "sadaltager": return { pitch: 0.74, rate: 0.95, isMale: true }; // Knowledgeable
+
+    // --- Standard Persona Female Voices ---
+    case "kavya": return { pitch: 0.88, rate: 0.88, isMale: false };
+    case "ritu": return { pitch: 0.98, rate: 0.94, isMale: false };
+    case "neha": return { pitch: 1.02, rate: 0.84, isMale: false };
+    case "shreya": return { pitch: 1.08, rate: 1.00, isMale: false };
+    case "priya": return { pitch: 1.14, rate: 0.96, isMale: false };
+    case "pooja": return { pitch: 1.24, rate: 1.08, isMale: false };
+
+    // --- Gemini Female Voices (Distinct Timbres) ---
+    case "zephyr": return { pitch: 1.05, rate: 1.00, isMale: false }; // Bright, clear
+    case "kore": return { pitch: 0.95, rate: 0.92, isMale: false }; // Firm, professional
+    case "leda": return { pitch: 1.22, rate: 1.04, isMale: false }; // Youthful, energetic
+    case "aoede": return { pitch: 1.16, rate: 0.96, isMale: false }; // Breezy, musical
+    case "callirrhoe": return { pitch: 1.02, rate: 0.90, isMale: false }; // Easy-going, gentle
+    case "autonoe": return { pitch: 1.18, rate: 1.02, isMale: false }; // Bright, cheerful
+    case "algieba": return { pitch: 0.98, rate: 0.94, isMale: false }; // Smooth, polished
+    case "despina": return { pitch: 1.00, rate: 0.96, isMale: false }; // Smooth, sophisticated
+    case "erinome": return { pitch: 0.92, rate: 0.94, isMale: false }; // Clear, direct
+    case "laomedeia": return { pitch: 1.20, rate: 1.06, isMale: false }; // Upbeat, vivacious
+    case "pulcherrima": return { pitch: 1.04, rate: 0.98, isMale: false }; // Forward, bold
+    case "vindemiatrix": return { pitch: 0.90, rate: 0.88, isMale: false }; // Gentle, soft
+    case "sadachbia": return { pitch: 1.14, rate: 1.04, isMale: false }; // Lively, expressive
+    case "sulafat": return { pitch: 0.96, rate: 0.90, isMale: false }; // Warm, comforting
 
     default:
       if (isMaleVoice(vid)) {

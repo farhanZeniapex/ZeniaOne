@@ -44,10 +44,20 @@ def _get_embedding_model() -> Any:
                 try:
                     # local_files_only=True prevents the 90+ second hang from HuggingFace HEAD requests
                     _embedding_model = SentenceTransformer(settings.embedding_model, local_files_only=True)
-                except Exception as e:
-                    logger.error(f"[EMBEDDING_MODEL_ERROR] Failed to load model locally: {str(e)}. "
-                                 f"Ensure the model is downloaded to the HuggingFace cache.")
-                    raise RuntimeError(f"Embedding model not available locally: {str(e)}")
+                except Exception as local_err:
+                    logger.warning(
+                        "[EMBEDDING_MODEL_FALLBACK] Local load failed (%s), attempting standard load...",
+                        local_err,
+                    )
+                    try:
+                        _embedding_model = SentenceTransformer(settings.embedding_model)
+                    except Exception as e:
+                        logger.error(
+                            "[EMBEDDING_MODEL_ERROR] Failed to load model: %s. "
+                            "Ensure the model is downloaded to the HuggingFace cache.",
+                            e,
+                        )
+                        raise RuntimeError(f"Embedding model not available: {str(e)}")
                     
                 latency_ms = (time.perf_counter() - start_time) * 1000
                 logger.info(f"[EMBEDDING_MODEL_READY] model={settings.embedding_model} device={_embedding_model.device} latency_ms={latency_ms:.2f}")

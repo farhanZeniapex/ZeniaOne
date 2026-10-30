@@ -54,7 +54,9 @@ function CompanyMark({ sub }: { sub: Subscription }) {
     .slice(0, 2)
     .toUpperCase();
   const [showFallback, setShowFallback] = useState(false);
-  const logo = getCompanyLogoUrl(sub.company_id, sub.logo_url || "current");
+  const logo = sub.logo_url
+    ? getCompanyLogoUrl(sub.company_id, sub.logo_url)
+    : undefined;
   if (!showFallback && logo)
     return (
       <img

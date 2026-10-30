@@ -142,11 +142,12 @@ check("Multiple variants in one sentence",
       "ZeniaONE")
 
 # Summary
-logger.info("\n" + "=" * 60)
-if FAIL == 0:
-    logger.info(f"ALL {PASS} TESTS PASSED ✅")
-else:
-    logger.error(f"{PASS} passed, {FAIL} FAILED ❌")
-logger.info("=" * 60)
-
-sys.exit(1 if FAIL > 0 else 0)
+if __name__ == "__main__":
+    logger.info("\n" + "=" * 60)
+    if FAIL == 0:
+        logger.info(f"ALL {PASS} TESTS PASSED ✅")
+    else:
+        logger.error(f"{PASS} passed, {FAIL} FAILED ❌")
+    logger.info("=" * 60)
+    
+    sys.exit(1 if FAIL > 0 else 0)

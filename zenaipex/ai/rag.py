@@ -142,6 +142,8 @@ class TenantRAGPipeline:
         if knowledge_base_id:
             ready_query["knowledge_base_id"] = str(knowledge_base_id)
         ready_docs = await col_documents().find(ready_query, {"_id": 1}).to_list(length=10000)
+        if not ready_docs and knowledge_base_id:
+            ready_docs = await col_documents().find({"company_id": company_id, "status": "ready"}, {"_id": 1}).to_list(length=10000)
         ready_ids = {str(doc["_id"]) for doc in ready_docs}
         guarded = [
             doc for doc in docs
@@ -152,7 +154,9 @@ class TenantRAGPipeline:
 
     def rag_enabled(self) -> bool:
         """Returns True if this agent has a knowledge base attached."""
-        return bool(self.agent.get("knowledge_base_id"))
+        if not self.agent.get("knowledge_base_id"):
+            return False
+        return bool(self.agent.get("rag_enabled", True))
 
     def should_retrieve(self, query: str, language: str = "en-IN") -> bool:
         """Decide if RAG retrieval should be triggered for this query."""

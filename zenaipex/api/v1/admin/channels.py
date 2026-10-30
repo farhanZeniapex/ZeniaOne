@@ -562,11 +562,49 @@ async def get_channel_conversations(channel_id: str, limit: int = 50, sync_provi
         except Exception as exc:
             logger.debug("Twilio history status reconciliation skipped: %s", type(exc).__name__)
     
+    phones = set()
+    for doc in convs:
+        p = doc.get("caller_phone") or doc.get("from_phone") or doc.get("to_phone")
+        if p:
+            digits = re.sub(r"\D", "", p)
+            if len(digits) >= 10:
+                phones.add(digits[-10:])
+
+    contact_map = {}
+    if phones:
+        try:
+            from core.database import col_leads
+            lead_docs = await col_leads().find(
+                {"company_id": str(channel["company_id"]), "phone": {"$regex": f"({'|'.join(phones)})$"}}
+            ).to_list(None)
+            for lead in lead_docs:
+                p_clean = re.sub(r"\D", "", lead.get("phone", ""))[-10:]
+                if p_clean and lead.get("name"):
+                    contact_map[p_clean] = lead["name"]
+
+            prior_named = await col_conversations().find(
+                {
+                    "company_id": str(channel["company_id"]),
+                    "contact_name": {"$exists": True, "$ne": None, "$nin": ["", "Unknown", "inbound", "None"]}
+                },
+                {"caller_phone": 1, "from_phone": 1, "to_phone": 1, "contact_name": 1}
+            ).to_list(100)
+            for pc in prior_named:
+                for candidate in (pc.get("caller_phone"), pc.get("from_phone"), pc.get("to_phone")):
+                    if candidate:
+                        cand_clean = re.sub(r"\D", "", candidate)[-10:]
+                        if cand_clean and cand_clean not in contact_map and pc.get("contact_name"):
+                            contact_map[cand_clean] = pc["contact_name"]
+        except Exception as c_err:
+            logger.debug("Contact batch prefetch skipped: %s", c_err)
+
     def _fmt(doc):
         direction = doc.get("direction", "inbound")
         caller_phone = doc.get("caller_phone")
         caller_to = doc.get("caller_to")
         channel_phone = channel.get("phone_number")
+        phone_key = re.sub(r"\D", "", caller_phone or doc.get("from_phone") or doc.get("to_phone") or "")[-10:]
+        resolved_contact = doc.get("contact_name") or contact_map.get(phone_key)
         legacy_from_is_channel = bool(
             direction == "outbound"
             and channel_phone
@@ -587,7 +625,7 @@ async def get_channel_conversations(channel_id: str, limit: int = 50, sync_provi
             "caller_to": caller_to,
             "from_phone": from_phone,
             "to_phone": to_phone,
-            "contact_name": doc.get("contact_name"),
+            "contact_name": resolved_contact,
             "destination_phone": to_phone,
             "recording_url": doc.get("recording_url"),
             "status": doc.get("status"),
@@ -813,7 +851,7 @@ async def trigger_test_call(channel_id: str, body: TestCallRequest):
             stream_base = str(actual_webhook).rstrip("/")
             stream_base = stream_base.replace("https://", "wss://").replace("http://", "ws://")
             stream_url = f"{stream_base}/api/v1/webhook/twilio/media-stream"
-            logger.info("📡 Sending call request to Twilio...")
+            logger.info("ðŸ“¡ Sending call request to Twilio...")
             call_sid = await twilio_provider.create_call(
                 to_phone=dest_number,
                 from_phone="system_default",
@@ -879,7 +917,7 @@ async def trigger_test_call(channel_id: str, body: TestCallRequest):
             }
 
             url = "https://api.enablex.io/voice/v1/call"
-            logger.info("📡 Sending outbound call request to EnableX...")
+            logger.info("ðŸ“¡ Sending outbound call request to EnableX...")
             response = requests.post(
                 url,
                 json=payload,
@@ -952,6 +990,9 @@ async def trigger_test_call(channel_id: str, body: TestCallRequest):
             url = f"https://{exotel_subdomain}/v1/Accounts/{exotel_sid}/Calls/connect.json"
             status_webhook_url = f"{actual_webhook}/api/v1/webhook/exotel/advanced/{company_id}/{agent_id}/status?channel_id={channel_id_str}&{callback_query}"
             
+            # This is the ExoML/Studio flow that was verified for outbound
+            # calls. Keep the known-working flow instead of using the channel
+            # form's unrelated/configured flow value.
             exotel_app_url = f"http://my.exotel.com/{exotel_sid}/exoml/start_voice/1355682"
             
             payload = {

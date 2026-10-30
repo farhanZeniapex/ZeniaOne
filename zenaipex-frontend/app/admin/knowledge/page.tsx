@@ -95,7 +95,7 @@ function CompanyMark({
     .slice(0, 2)
     .toUpperCase();
   const [failed, setFailed] = useState(false);
-  const src = getCompanyLogoUrl(id, logoUrl || "current");
+  const src = logoUrl ? getCompanyLogoUrl(id, logoUrl) : undefined;
   return src && !failed ? (
     <img
       src={src}

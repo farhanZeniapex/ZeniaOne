@@ -23,6 +23,9 @@ def _fmt_conv(doc: dict) -> dict:
         "agent_id": str(doc["agent_id"]) if doc.get("agent_id") else None,
         "caller_phone": doc.get("caller_phone"),
         "caller_to": doc.get("caller_to"),
+        "from_phone": doc.get("from_phone") or doc.get("caller_phone"),
+        "to_phone": doc.get("to_phone") or doc.get("caller_to"),
+        "contact_name": doc.get("contact_name"),
         "call_sid": doc.get("call_sid"),
         "recording_url": doc.get("recording_url"),
         "recording_sid": doc.get("recording_sid"),
@@ -552,3 +555,32 @@ async def force_fail_conversation(company_id: str, conversation_id: str, user: d
         raise NotFoundError("Conversation")
     return {"success": True, "message": "Marked as failed"}
 
+
+
+@router.get("/caller-profile/{phone}")
+@public_router.get("/caller-profile/{phone}")
+async def get_caller_crm_profile(
+    phone: str,
+    company_id: Optional[str] = Query(None),
+):
+    from services.caller_intelligence_service import get_caller_profile
+    cid = company_id or "6adde16e093109b716737af3"
+    return await get_caller_profile(cid, phone)
+
+
+@router.post("/caller-profile/{phone}/save")
+@public_router.post("/caller-profile/{phone}/save")
+async def save_caller_crm_contact(
+    phone: str,
+    request: Request,
+    company_id: Optional[str] = Query(None),
+):
+    from services.caller_intelligence_service import save_caller_contact
+    cid = company_id or "6adde16e093109b716737af3"
+    data = await request.json()
+    name = str(data.get("name") or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Name is required")
+    email = data.get("email")
+    notes = data.get("notes")
+    return await save_caller_contact(cid, phone, name, email, notes)

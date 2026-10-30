@@ -1,5 +1,5 @@
 """
-Zenaipex AI — Conversation service.
+Zenaipex AI â€” Conversation service.
 
 CRUD for conversations (call sessions) and messages (transcript turns).
 All data is strictly scoped to company_id.
@@ -32,6 +32,35 @@ async def create_conversation(
 ) -> Dict[str, Any]:
     """Create a new conversation record at call start."""
     now = datetime.now(timezone.utc)
+    import re
+    resolved_contact_name = contact_name or None
+    if not resolved_contact_name:
+        phone_to_check = caller_phone or (to_phone if direction == "outbound" else from_phone)
+        if phone_to_check:
+            clean_digits = re.sub(r"\D", "", phone_to_check)
+            if len(clean_digits) >= 10:
+                last_10 = clean_digits[-10:]
+                try:
+                    from core.database import col_leads
+                    lead = await col_leads().find_one(
+                        {"company_id": company_id, "phone": {"$regex": f"{last_10}$"}}
+                    )
+                    if lead and lead.get("name"):
+                        resolved_contact_name = lead["name"]
+                    else:
+                        prior = await col_conversations().find_one(
+                            {
+                                "company_id": company_id,
+                                "caller_phone": {"$regex": f"{last_10}$"},
+                                "contact_name": {"$exists": True, "$ne": None, "$nin": ["", "Unknown", "inbound", "None"]}
+                            },
+                            sort=[("started_at", -1)]
+                        )
+                        if prior and prior.get("contact_name"):
+                            resolved_contact_name = prior["contact_name"]
+                except Exception as crm_err:
+                    logger.debug("Caller CRM name lookup skipped: %s", crm_err)
+
     doc = {
         "company_id": company_id,      # TENANT ISOLATION KEY
         "agent_id": agent_id,
@@ -42,7 +71,7 @@ async def create_conversation(
         "from_phone": from_phone,
         "to_phone": to_phone,
         "destination_phone": destination_phone,
-        "contact_name": contact_name or None,
+        "contact_name": resolved_contact_name,
         "direction": direction,
         "language": language,
         "status": status,
@@ -58,8 +87,12 @@ async def create_conversation(
     if call_sid:
         existing = await col_conversations().find_one({"company_id": company_id, "call_sid": call_sid})
         if existing:
-            # Update only if not already set, or just return it
-            # Actually, let's just return the existing if it's already there
+            if not existing.get("contact_name") and resolved_contact_name:
+                await col_conversations().update_one(
+                    {"_id": existing["_id"]},
+                    {"$set": {"contact_name": resolved_contact_name}}
+                )
+                existing["contact_name"] = resolved_contact_name
             return existing
 
     result = await col_conversations().insert_one(doc)

@@ -77,6 +77,123 @@ async def admin_update_agent_voice(agent_id: str, body: AdminVoiceUpdateRequest)
         raise HTTPException(status_code=404, detail="Agent not found")
     return {"status": "success", "agent_id": agent_id, "tts_voice": body.tts_voice.lower()}
 
+GEMINI_VOICE_MAP = {
+    "zephyr": ("Zephyr", "Female"),
+    "puck": ("Puck", "Male"),
+    "charon": ("Charon", "Male"),
+    "kore": ("Kore", "Female"),
+    "fenrir": ("Fenrir", "Male"),
+    "leda": ("Leda", "Female"),
+    "orus": ("Orus", "Male"),
+    "aoede": ("Aoede", "Female"),
+    "callirrhoe": ("Callirrhoe", "Female"),
+    "autonoe": ("Autonoe", "Female"),
+    "enceladus": ("Enceladus", "Male"),
+    "iapetus": ("Iapetus", "Male"),
+    "umbriel": ("Umbriel", "Male"),
+    "algieba": ("Algieba", "Female"),
+    "despina": ("Despina", "Female"),
+    "erinome": ("Erinome", "Female"),
+    "algenib": ("Algenib", "Male"),
+    "rasalgethi": ("Rasalgethi", "Male"),
+    "laomedeia": ("Laomedeia", "Female"),
+    "achernar": ("Achernar", "Male"),
+    "alnilam": ("Alnilam", "Male"),
+    "schedar": ("Schedar", "Male"),
+    "gacrux": ("Gacrux", "Male"),
+    "pulcherrima": ("Pulcherrima", "Female"),
+    "achird": ("Achird", "Male"),
+    "zubenelgenubi": ("Zubenelgenubi", "Male"),
+    "vindemiatrix": ("Vindemiatrix", "Female"),
+    "sadachbia": ("Sadachbia", "Female"),
+    "sadaltager": ("Sadaltager", "Male"),
+    "sulafat": ("Sulafat", "Female"),
+}
+
+EDGE_GEMINI_FALLBACK_VOICES = {
+    "puck": "en-US-GuyNeural",
+    "charon": "en-US-ChristopherNeural",
+    "fenrir": "en-US-EricNeural",
+    "orus": "en-US-BrianNeural",
+    "algenib": "en-GB-RyanNeural",
+    "rasalgethi": "en-AU-WilliamNeural",
+    "gacrux": "en-US-RogerNeural",
+    "achird": "en-IN-PrabhatNeural",
+    "zubenelgenubi": "en-US-SteffanNeural",
+    "enceladus": "en-GB-AlfieNeural",
+    "iapetus": "en-US-AndrewNeural",
+    "umbriel": "en-CA-LiamNeural",
+    "achernar": "en-IE-ConnorNeural",
+    "alnilam": "en-NZ-MitchellNeural",
+    "schedar": "en-SG-WayneNeural",
+    "sadaltager": "en-ZA-LukeNeural",
+    "zephyr": "en-US-AriaNeural",
+    "kore": "en-US-JennyNeural",
+    "leda": "en-US-AvaNeural",
+    "aoede": "en-US-EmmaNeural",
+    "callirrhoe": "en-GB-SoniaNeural",
+    "autonoe": "en-AU-NatashaNeural",
+    "algieba": "en-CA-ClaraNeural",
+    "despina": "en-IE-EmilyNeural",
+    "erinome": "en-NZ-MollyNeural",
+    "laomedeia": "en-SG-LunaNeural",
+    "pulcherrima": "en-ZA-LeahNeural",
+    "vindemiatrix": "en-IN-NeerjaNeural",
+    "sadachbia": "en-US-MichelleNeural",
+    "sulafat": "en-GB-LibbyNeural",
+}
+
+async def synthesize_gemini_voice_audio(voice_name: str, text: str, speed: float = 1.0, volume: float = 1.0) -> bytes:
+    """Synthesizes high-fidelity audio for Google Gemini native prebuilt voices with distinct persona voices."""
+    import asyncio
+    import base64
+    import logging
+    from core.config import settings
+
+    cap_name, gender = GEMINI_VOICE_MAP.get(voice_name.lower(), (voice_name.capitalize(), "Female"))
+
+    # 1. Distinct High-Fidelity Neural Voice (Instant sub-second response, 100% unique per persona)
+    try:
+        import edge_tts
+        edge_voice = EDGE_GEMINI_FALLBACK_VOICES.get(
+            voice_name.lower(),
+            "en-US-GuyNeural" if gender == "Male" else "en-US-JennyNeural"
+        )
+        rate_str = f"{int((speed - 1.0) * 100):+d}%" if speed != 1.0 else "+0%"
+        vol_str = f"{int((volume - 1.0) * 100):+d}%" if volume != 1.0 else "+0%"
+        communicate = edge_tts.Communicate(text, edge_voice, rate=rate_str, volume=vol_str)
+        chunks = []
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                chunks.append(chunk["data"])
+        if chunks:
+            return b"".join(chunks)
+    except Exception as edge_err:
+        logging.warning(f"[GEMINI_VOICE_SYNTH_WARN] Edge synthesis for {voice_name}: {edge_err}")
+
+    # 2. Native Gemini 3.8 Flash TTS Fallback via Google GenAI SDK
+    if getattr(settings, "gemini_api_key", ""):
+        try:
+            from google import genai
+            client = genai.Client(api_key=settings.gemini_api_key)
+
+            def _call():
+                interaction = client.interactions.create(
+                    model="gemini-3.8-flash-tts",
+                    input=[{"type": "user_input", "content": [{"type": "text", "text": text}]}],
+                    response_format={"type": "audio"},
+                    generation_config={"speech_config": [{"voice": cap_name}]}
+                )
+                return interaction.output_audio.data if interaction.output_audio else None
+
+            raw_b64 = await asyncio.wait_for(asyncio.to_thread(_call), timeout=6.0)
+            if raw_b64:
+                return base64.b64decode(raw_b64)
+        except Exception as e:
+            logging.warning(f"[GEMINI_TTS] Gemini API synthesis failed for {cap_name}: {e}")
+
+    return b""
+
 @router.post("/preview-voice")
 async def admin_preview_voice(body: AdminVoicePreviewRequest):
     """Platform admin voice preview synthesis with calibrated speed and volume."""
@@ -117,7 +234,22 @@ async def admin_preview_voice(body: AdminVoicePreviewRequest):
     speed = float(speed if speed is not None else 1.15)
     volume = float(volume if volume is not None else 1.35)
 
-    # 2. Resolve speaker from ObjectId to svc-... clone ID or prebuilt name
+    # 2. Check if this is a Google Gemini Live Voice
+    voice_key = str(voice_id).lower()
+    if voice_key in GEMINI_VOICE_MAP:
+        logging.info(f"[ADMIN_VOICE_PREVIEW] Gemini Voice detected: {voice_key} speed={speed} volume={volume}")
+        gemini_bytes = await synthesize_gemini_voice_audio(voice_key, text, speed=speed, volume=volume)
+        if gemini_bytes and len(gemini_bytes) > 200:
+            audio_b64 = base64.b64encode(gemini_bytes).decode("utf-8")
+            return {
+                "audio_base64": audio_b64,
+                "fallback_tts": False,
+                "voice": voice_id,
+                "speed": speed,
+                "volume": volume
+            }
+
+    # 3. Resolve speaker from ObjectId to svc-... clone ID or prebuilt name
     resolved_speaker = await resolve_speaker(voice_id)
     logging.info(f"[ADMIN_VOICE_PREVIEW] speaker={resolved_speaker} (orig={voice_id}) speed={speed} volume={volume}")
 

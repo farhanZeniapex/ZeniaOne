@@ -16,7 +16,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parent
 BACKEND = ROOT / "zenaipex"
 ENV_FILE = BACKEND / ".env"
-BACKEND_PORT = int(os.getenv("ZENIA_BACKEND_PORT", "8002"))
+BACKEND_PORT = int(os.getenv("ZENIA_BACKEND_PORT", "8003"))
 NGROK_DOMAIN = os.getenv("ZENIA_NGROK_DOMAIN", "nonperverse-bess-unplayfully.ngrok-free.dev")
 
 
@@ -47,18 +47,28 @@ def start_ngrok() -> subprocess.Popen | None:
         update_webhook_url(existing)
         return None
 
-    npx = shutil.which("npx.cmd") or shutil.which("npx")
-    if not npx:
-        print("[tunnel] npx/ngrok unavailable; backend will still start locally", flush=True)
-        return None
+    ngrok_bin = (
+        shutil.which("ngrok.cmd")
+        or shutil.which("ngrok.exe")
+        or shutil.which("ngrok")
+    )
+    if ngrok_bin:
+        cmd = [ngrok_bin, "http", f"--url={NGROK_DOMAIN}", str(BACKEND_PORT)]
+    else:
+        npx = shutil.which("npx.cmd") or shutil.which("npx")
+        if not npx:
+            print("[tunnel] ngrok and npx unavailable; backend will still start locally", flush=True)
+            return None
+        cmd = [npx, "ngrok", "http", f"--url={NGROK_DOMAIN}", str(BACKEND_PORT)]
 
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     process = subprocess.Popen(
-        [npx, "ngrok", "http", f"--domain={NGROK_DOMAIN}", str(BACKEND_PORT)],
+        cmd,
         cwd=ROOT,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         creationflags=flags,
+        shell=(os.name == "nt"),
     )
     for _ in range(20):
         if process.poll() is not None:
@@ -76,7 +86,7 @@ def start_ngrok() -> subprocess.Popen | None:
 
 def run_backend() -> int:
     command = [sys.executable, "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", str(BACKEND_PORT)]
-    if os.getenv("ZENIA_DEV_RELOAD", "").lower() in {"1", "true", "yes"}:
+    if os.getenv("ZENIA_DEV_RELOAD", "true").lower() in {"1", "true", "yes"}:
         command.append("--reload")
     print(f"[backend] Starting on port {BACKEND_PORT}", flush=True)
     return subprocess.run(command, cwd=BACKEND).returncode
@@ -91,7 +101,9 @@ def main() -> int:
                 return 0
             print(f"[backend] Exited with code {code}; restarting in 2 seconds", flush=True)
             time.sleep(2)
-            if ngrok_process is not None and ngrok_process.poll() is not None:
+            # Always check and restart ngrok if it died
+            if ngrok_process is None or ngrok_process.poll() is not None:
+                print("[supervisor] Restarting ngrok...", flush=True)
                 ngrok_process = start_ngrok()
     except KeyboardInterrupt:
         print("\n[supervisor] Stopping", flush=True)

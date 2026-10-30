@@ -6,6 +6,9 @@ export interface Conversation {
   agent_id?: string;
   caller_phone?: string;
   caller_to?: string;
+  from_phone?: string;
+  to_phone?: string;
+  contact_name?: string;
   call_sid?: string;
   recording_url?: string;
   recording_sid?: string;

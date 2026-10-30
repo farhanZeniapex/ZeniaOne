@@ -94,25 +94,36 @@ async def fetch_or_create_settings() -> Dict[str, Any]:
     doc["_id"] = str(doc["_id"])
     return doc
 
+
+def _settings_response(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Return settings without binary logo storage fields.
+
+    MongoDB stores the uploaded logo as BSON Binary. Returning that field from
+    the JSON settings endpoint makes FastAPI try to UTF-8 decode PNG/JPG bytes
+    and raises UnicodeDecodeError (0x89 is the PNG signature byte).
+    """
+    response = dict(doc)
+    platform = dict(response.get("platform") or {})
+    platform["has_logo"] = bool(platform.get("logo_path") or platform.get("logo_data"))
+    for key in ("logo_path", "logo_data", "logo_content_type", "logo_filename"):
+        platform.pop(key, None)
+    response["platform"] = platform
+    return response
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("")
 async def get_settings(user: dict = Depends(get_platform_admin)):
     """Get all platform settings."""
     doc = await fetch_or_create_settings()
-    # Mask actual path out of API response, indicate presence instead
-    if doc.get("platform", {}).get("logo_path"):
-        doc["platform"]["has_logo"] = True
-    else:
-        doc["platform"]["has_logo"] = False
+    response = _settings_response(doc)
         
     # Inject backend environment overrides for the UI
     from core.config import settings as app_settings
-    doc["env_overrides"] = {
+    response["env_overrides"] = {
         "ai_billing_enforcement": app_settings.ai_billing_enforcement
     }
-    
-    return {"settings": doc}
+    return {"settings": response}
 
 
 @router.put("")
@@ -160,9 +171,7 @@ async def update_settings(
     if not update_data:
         # Just return the current settings without modified flags if nothing to update
         doc = await fetch_or_create_settings()
-        if doc.get("platform", {}).get("logo_path"):
-            doc["platform"]["has_logo"] = True
-        return {"success": True, "settings": doc}
+        return {"success": True, "settings": _settings_response(doc)}
 
     update_data["updated_at"] = datetime.now(timezone.utc)
     
@@ -182,9 +191,7 @@ async def update_settings(
     })
     
     doc = await fetch_or_create_settings()
-    if doc.get("platform", {}).get("logo_path"):
-        doc["platform"]["has_logo"] = True
-    return {"success": True, "settings": doc}
+    return {"success": True, "settings": _settings_response(doc)}
 
 
 @router.post("/logo")

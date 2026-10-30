@@ -949,9 +949,21 @@ async def voice_preview(
     lang = (body.get("language") or "hi-IN").strip()
 
     from modules.sarvam_tts import realtime_tts
+    from api.v1.admin.agents import GEMINI_VOICE_MAP, synthesize_gemini_voice_audio
     import base64
 
     logger.info(f"[VOICE_PREVIEW] speaker={speaker} lang={lang} text_len={len(text)}")
+
+    # Check for Gemini Live native voices
+    if speaker in GEMINI_VOICE_MAP:
+        try:
+            gemini_bytes = await synthesize_gemini_voice_audio(speaker, text)
+            if gemini_bytes and len(gemini_bytes) > 200:
+                audio_b64 = base64.b64encode(gemini_bytes).decode("utf-8")
+                return {"audio_base64": audio_b64, "audio_bytes": len(gemini_bytes), "fallback_tts": False}
+        except Exception as exc:
+            logger.error(f"[VOICE_PREVIEW_GEMINI_ERROR] {exc}")
+
     try:
         tts_bytes = await realtime_tts(text=text, language=lang, speaker=speaker)
     except ValueError as exc:

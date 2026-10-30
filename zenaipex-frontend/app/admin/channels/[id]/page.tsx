@@ -63,7 +63,7 @@ const VOICE_MODES = [
     id: "gemini_clone",
     title: "Gemini + Clone Voice",
     description: "Gemini Live captures speech, Google Gemini generates the answer, and Sarvam speaks with your cloned voice.",
-    flow: "Gemini Live → Google Gemini → Sarvam Clone TTS",
+    flow: "Gemini Live â†’ Google Gemini â†’ Sarvam Clone TTS",
     voiceEngine: "pipeline",
     stt: "gemini_live",
     llm: "gemini",
@@ -73,7 +73,7 @@ const VOICE_MODES = [
     id: "classic",
     title: "Classic Deepgram + Groq",
     description: "The predictable pipeline: Deepgram speech recognition, Groq reasoning, and the selected voice output.",
-    flow: "Deepgram → Groq → Sarvam Clone TTS",
+    flow: "Deepgram â†’ Groq â†’ Sarvam Clone TTS",
     voiceEngine: "pipeline",
     stt: "deepgram",
     llm: "groq",
@@ -81,9 +81,9 @@ const VOICE_MODES = [
   },
   {
     id: "gemini_s2s",
-    title: "Gemini Live S2S · Browser + Phone",
+    title: "Gemini Live S2S Â· Browser + Phone",
     description: "Gemini's native real-time voice-to-voice mode for browser voice and Exotel calls. The selected clone voice is bypassed in this mode.",
-    flow: "Microphone / Phone → Gemini Live → Gemini native audio",
+    flow: "Microphone / Phone â†’ Gemini Live â†’ Gemini native audio",
     voiceEngine: "gemini_live",
     stt: "gemini_live",
     llm: "gemini",
@@ -660,16 +660,16 @@ export default function AdminChannelDetailPage({
       const next = { ...prev, [key]: value };
       setHasChanges(
         Boolean(next.exotel_api_key?.trim() || next.exotel_api_token?.trim()) ||
-          next.name !== (channel?.name || "") ||
-          next.phone_number !== (channel?.phone_number || "") ||
+        next.name !== (channel?.name || "") ||
+        next.phone_number !== (channel?.phone_number || "") ||
         next.agent_id !== (channel?.agent_id || "") ||
-          next.is_active !== (channel?.is_active ?? true) ||
-          next.exotel_account_sid !== (channel?.config?.exotel_account_sid || "") ||
-          next.exotel_flow_id !== (channel?.config?.exotel_flow_id || "") ||
-          next.voicebot_url !== (channel?.config?.voicebot_url || "") ||
-          next.status_url !== (channel?.config?.status_url || "") ||
-          next.recording_enabled !== (channel?.config?.recording_enabled ?? true) ||
-          next.recording_channels !== (channel?.config?.recording_channels || "dual"),
+        next.is_active !== (channel?.is_active ?? true) ||
+        next.exotel_account_sid !== (channel?.config?.exotel_account_sid || "") ||
+        next.exotel_flow_id !== (channel?.config?.exotel_flow_id || "") ||
+        next.voicebot_url !== (channel?.config?.voicebot_url || "") ||
+        next.status_url !== (channel?.config?.status_url || "") ||
+        next.recording_enabled !== (channel?.config?.recording_enabled ?? true) ||
+        next.recording_channels !== (channel?.config?.recording_channels || "dual"),
       );
       hasChangesRef.current = true;
       return next;
@@ -868,7 +868,7 @@ export default function AdminChannelDetailPage({
           // We only do this if it's empty, or maybe we just don't overwrite if monitor is open
           if (!isMonitorOpenRef.current) {
             setActiveCallId(activeCall.call_sid || activeCall._id);
-            setActiveCallContact(activeCall.caller_phone || "Unknown");
+            setActiveCallContact(activeCall.contact_name ? `${activeCall.contact_name} (${activeCall.caller_phone || "Unknown"})` : (activeCall.caller_phone || "Unknown"));
           }
         } else {
           // Only clear active call ID if monitor is not manually opened
@@ -1131,26 +1131,26 @@ export default function AdminChannelDetailPage({
   const providerName = isExotelChannel ? "Exotel" : "Twilio";
   const integrationChecks: Array<[string, boolean]> = isExotelChannel
     ? [
-        ["Channel name", Boolean(editForm.name.trim())],
-        ["ExoPhone / caller ID", Boolean(editForm.phone_number.trim())],
-        ["Exotel account ID", Boolean(editForm.exotel_account_sid.trim())],
-        ["Exotel flow ID", Boolean(editForm.exotel_flow_id.trim())],
-        ["Voicebot callback URL", Boolean(editForm.voicebot_url.trim())],
-        ["Status callback URL", Boolean(editForm.status_url.trim())],
-        ["Backend credentials", Boolean(channel.config?.provider_credentials_configured)],
-      ]
+      ["Channel name", Boolean(editForm.name.trim())],
+      ["ExoPhone / caller ID", Boolean(editForm.phone_number.trim())],
+      ["Exotel account ID", Boolean(editForm.exotel_account_sid.trim())],
+      ["Exotel flow ID", Boolean(editForm.exotel_flow_id.trim())],
+      ["Voicebot callback URL", Boolean(editForm.voicebot_url.trim())],
+      ["Status callback URL", Boolean(editForm.status_url.trim())],
+      ["Backend credentials", Boolean(channel.config?.provider_credentials_configured)],
+    ]
     : [
-        ["Channel name", Boolean(editForm.name.trim())],
-        ["Caller ID", Boolean(editForm.phone_number.trim())],
-        ["Backend credentials", Boolean(channel.config?.provider_credentials_configured)],
-      ];
+      ["Channel name", Boolean(editForm.name.trim())],
+      ["Caller ID", Boolean(editForm.phone_number.trim())],
+      ["Backend credentials", Boolean(channel.config?.provider_credentials_configured)],
+    ];
   const completedIntegrations = integrationChecks.filter(([, complete]) => complete).length;
   const integrationPercent = Math.round((completedIntegrations / integrationChecks.length) * 100);
   const missingIntegrations = integrationChecks.filter(([, complete]) => !complete).map(([label]) => label);
 
   return (
     <div className={org.page}>
-      {/* â”€â”€ Breadcrumb â”€â”€ */}
+      {/* Ã¢â€â‚¬Ã¢â€â‚¬ Breadcrumb Ã¢â€â‚¬Ã¢â€â‚¬ */}
       <div className="flex items-center text-xs font-semibold text-slate-500 mb-2 mt-2">
         <button
           onClick={() => router.push("/admin/channels")}
@@ -1162,7 +1162,7 @@ export default function AdminChannelDetailPage({
         <span className="text-slate-900">{channel.name}</span>
       </div>
 
-      {/* â”€â”€ 1. PREMIUM HEADER â”€â”€ */}
+      {/* Ã¢â€â‚¬Ã¢â€â‚¬ 1. PREMIUM HEADER Ã¢â€â‚¬Ã¢â€â‚¬ */}
       <div className={org.pageHeader}>
         <div className="flex items-start gap-4">
           <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-700 shadow-sm shrink-0">
@@ -1254,14 +1254,14 @@ export default function AdminChannelDetailPage({
         </div>
       </div>
 
-      {/* â”€â”€ LIVE STATUS BAR â”€â”€ */}
+      {/* Ã¢â€â‚¬Ã¢â€â‚¬ LIVE STATUS BAR Ã¢â€â‚¬Ã¢â€â‚¬ */}
       <div className={org.note}>
         <Activity size={16} className="shrink-0" />
         <span>
           <strong>
             {channel.is_active ? "Channel active" : "Channel inactive"}
           </strong>{" "}
-          · {channel.type?.replaceAll("_", " ")} · Agent: {agentName}. Use a
+          Â· {channel.type?.replaceAll("_", " ")} Â· Agent: {agentName}. Use a
           test call and recent history to verify the live connection.
         </span>
       </div>
@@ -1318,7 +1318,7 @@ export default function AdminChannelDetailPage({
             <strong>Latest recorded event</strong>
             <span>
               {conversations[0]?.created_at
-                ? `${conversations[0].status || "Unknown outcome"} · ${format(new Date(conversations[0].created_at), "dd MMM yyyy, hh:mm a")}`
+                ? `${conversations[0].status || "Unknown outcome"} Â· ${format(new Date(conversations[0].created_at), "dd MMM yyyy, hh:mm a")}`
                 : "No event recorded"}
             </span>
           </div>
@@ -1329,7 +1329,7 @@ export default function AdminChannelDetailPage({
         </p>
       </details>
 
-      {/* â”€â”€ ACTIVE CALL BANNER â”€â”€ */}
+      {/* Ã¢â€â‚¬Ã¢â€â‚¬ ACTIVE CALL BANNER Ã¢â€â‚¬Ã¢â€â‚¬ */}
       {activeCallId && (
         <div className="bg-slate-900 text-white px-5 py-3 rounded-xl shadow-md flex items-center justify-between animate-in slide-in-from-top border border-slate-800">
           <div className="flex items-center gap-4 w-full">
@@ -1361,7 +1361,7 @@ export default function AdminChannelDetailPage({
         </div>
       )}
 
-      {/* â”€â”€ 2. KPI SUMMARY â”€â”€ */}
+      {/* Ã¢â€â‚¬Ã¢â€â‚¬ 2. KPI SUMMARY Ã¢â€â‚¬Ã¢â€â‚¬ */}
       {analytics && (
         <div className={org.metrics}>
           <div className={org.metric}>
@@ -1373,7 +1373,7 @@ export default function AdminChannelDetailPage({
               {analytics.total_calls || 0}
             </strong>
             <span className={org.metricSub}>
-              {analytics.inbound_calls || 0} inbound ·{" "}
+              {analytics.inbound_calls || 0} inbound Â·{" "}
               {analytics.outbound_calls || 0} outbound
             </span>
           </div>
@@ -1412,7 +1412,7 @@ export default function AdminChannelDetailPage({
         </div>
       )}
 
-      {/* â”€â”€ 3. MAIN NAVIGATION TABS â”€â”€ */}
+      {/* Ã¢â€â‚¬Ã¢â€â‚¬ 3. MAIN NAVIGATION TABS Ã¢â€â‚¬Ã¢â€â‚¬ */}
       <div
         className={`${org.sectionTabs} self-start max-w-full overflow-x-auto`}
         role="group"
@@ -1454,7 +1454,7 @@ export default function AdminChannelDetailPage({
         })}
       </div>
 
-      {/* â”€â”€ TAB CONTENTS â”€â”€ */}
+      {/* Ã¢â€â‚¬Ã¢â€â‚¬ TAB CONTENTS Ã¢â€â‚¬Ã¢â€â‚¬ */}
 
       {/* OVERVIEW TAB */}
       {activeTab === "overview" && (
@@ -1466,14 +1466,14 @@ export default function AdminChannelDetailPage({
                   <strong>Review channel impact before saving</strong>
                   {editForm.agent_id !== (channel.agent_id || "") && (
                     <p>
-                      AI agent: {agentName} →{" "}
+                      AI agent: {agentName} â†’{" "}
                       {agentsMap[editForm.agent_id] || "Unassigned"}
                     </p>
                   )}
                   {editForm.is_active !== (channel.is_active ?? true) && (
                     <p>
                       Operating status:{" "}
-                      {channel.is_active ? "Active" : "Inactive"} →{" "}
+                      {channel.is_active ? "Active" : "Inactive"} â†’{" "}
                       {editForm.is_active ? "Active" : "Inactive"}
                       {!editForm.is_active
                         ? ". New inbound calls will stop on this channel."
@@ -1633,7 +1633,7 @@ export default function AdminChannelDetailPage({
                           {channel.config?.provider_credentials_configured && <span className="text-[10px] font-bold text-emerald-700">Saved securely</span>}
                         </span>
                         <span className="relative mt-1 block">
-                          <input type={showExotelSecrets ? "text" : "password"} autoComplete="new-password" value={editForm.exotel_api_key} onChange={(e) => updateForm("exotel_api_key", e.target.value)} placeholder={channel.config?.provider_credentials_configured ? "Saved securely — enter a new key to replace" : "Enter API key"} className="w-full rounded-lg border border-slate-200 px-3 py-1.5 pr-10 text-sm font-mono text-slate-900" />
+                          <input type={showExotelSecrets ? "text" : "password"} autoComplete="new-password" value={editForm.exotel_api_key} onChange={(e) => updateForm("exotel_api_key", e.target.value)} placeholder={channel.config?.provider_credentials_configured ? "Saved securely â€” enter a new key to replace" : "Enter API key"} className="w-full rounded-lg border border-slate-200 px-3 py-1.5 pr-10 text-sm font-mono text-slate-900" />
                           <button type="button" aria-label={showExotelSecrets ? "Hide API key" : "Show API key"} onClick={() => setShowExotelSecrets((visible) => !visible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
                             <Eye className="h-4 w-4" />
                           </button>
@@ -1645,7 +1645,7 @@ export default function AdminChannelDetailPage({
                           {channel.config?.provider_credentials_configured && <span className="text-[10px] font-bold text-emerald-700">Saved securely</span>}
                         </span>
                         <span className="relative mt-1 block">
-                          <input type={showExotelSecrets ? "text" : "password"} autoComplete="new-password" value={editForm.exotel_api_token} onChange={(e) => updateForm("exotel_api_token", e.target.value)} placeholder={channel.config?.provider_credentials_configured ? "Saved securely — enter a new token to replace" : "Enter API token"} className="w-full rounded-lg border border-slate-200 px-3 py-1.5 pr-10 text-sm font-mono text-slate-900" />
+                          <input type={showExotelSecrets ? "text" : "password"} autoComplete="new-password" value={editForm.exotel_api_token} onChange={(e) => updateForm("exotel_api_token", e.target.value)} placeholder={channel.config?.provider_credentials_configured ? "Saved securely â€” enter a new token to replace" : "Enter API token"} className="w-full rounded-lg border border-slate-200 px-3 py-1.5 pr-10 text-sm font-mono text-slate-900" />
                           <button type="button" aria-label={showExotelSecrets ? "Hide API token" : "Show API token"} onClick={() => setShowExotelSecrets((visible) => !visible)} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
                             <Eye className="h-4 w-4" />
                           </button>
@@ -1683,8 +1683,8 @@ export default function AdminChannelDetailPage({
                     {channel.config?.provider_credentials_configured
                       ? "Provider credentials configured for this channel"
                       : isExotelChannel
-                        ? "Channel credentials missing — enter this Exotel account API key and API token, then save"
-                        : "Backend provider credentials missing — configure the provider credentials"}
+                        ? "Channel credentials missing â€” enter this Exotel account API key and API token, then save"
+                        : "Backend provider credentials missing â€” configure the provider credentials"}
                   </div>
                   <div className="md:col-span-2 flex flex-wrap items-center gap-2 pt-1">
                     {isExotelChannel && (
@@ -1711,7 +1711,7 @@ export default function AdminChannelDetailPage({
                     <div className="md:col-span-2 rounded-lg border border-slate-200 bg-slate-50 p-3 space-y-1">
                       {verification.checks.map((check: any) => (
                         <div key={check.name} className={`flex items-center justify-between gap-3 text-xs ${check.ok ? "text-emerald-700" : "text-rose-700"}`}>
-                          <span className="font-semibold">{check.ok ? "✓" : "!"} {check.name}</span>
+                          <span className="font-semibold">{check.ok ? "âœ“" : "!"} {check.name}</span>
                           <span className="text-right text-slate-500">{check.detail}</span>
                         </div>
                       ))}
@@ -1727,7 +1727,7 @@ export default function AdminChannelDetailPage({
                   <Zap className="w-4 h-4 mr-2 text-emerald-700" /> AI
                   Configuration & Routing
                 </h3>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Editable · validated</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Editable Â· validated</span>
               </div>
               <div className="p-5 space-y-5">
                 <div className="col-span-2 sm:col-span-1">
@@ -1738,7 +1738,7 @@ export default function AdminChannelDetailPage({
                     value={editForm.agent_id}
                     onChange={(value) => updateForm("agent_id", value)}
                     placeholder="Unassigned"
-                    searchPlaceholder="Search agents…"
+                    searchPlaceholder="Search agentsâ€¦"
                     options={Object.entries(agentsMap).map(
                       ([value, label]) => ({ value, label }),
                     )}
@@ -1766,8 +1766,8 @@ export default function AdminChannelDetailPage({
                     </div>
                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <div className="flex items-center justify-between mb-2"><span className="text-xs font-bold text-slate-700">Supported languages</span><span className="text-[10px] text-slate-400">BCP-47 codes</span></div>
-                      <div className="flex flex-wrap gap-2 mb-3">{(aiConfigDraft.supported_languages || []).map((code: string) => <button type="button" key={code} onClick={() => updateAiConfig("supported_languages", (aiConfigDraft.supported_languages || []).filter((item: string) => item !== code || item === aiConfigDraft.default_language))} className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">{code} ×</button>)}</div>
-                      <div className="flex gap-2"><input value={languageInput} onChange={(e) => setLanguageInput(e.target.value)} placeholder="Add language, e.g. hi-IN" className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" /><button type="button" onClick={() => { const value = languageInput.trim(); if (value && ! (aiConfigDraft.supported_languages || []).includes(value)) { updateAiConfig("supported_languages", [...(aiConfigDraft.supported_languages || []), value]); setLanguageInput(""); } }} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Add</button></div>
+                      <div className="flex flex-wrap gap-2 mb-3">{(aiConfigDraft.supported_languages || []).map((code: string) => <button type="button" key={code} onClick={() => updateAiConfig("supported_languages", (aiConfigDraft.supported_languages || []).filter((item: string) => item !== code || item === aiConfigDraft.default_language))} className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800">{code} Ã—</button>)}</div>
+                      <div className="flex gap-2"><input value={languageInput} onChange={(e) => setLanguageInput(e.target.value)} placeholder="Add language, e.g. hi-IN" className="flex-1 rounded-lg border border-slate-200 px-3 py-2 text-sm" /><button type="button" onClick={() => { const value = languageInput.trim(); if (value && !(aiConfigDraft.supported_languages || []).includes(value)) { updateAiConfig("supported_languages", [...(aiConfigDraft.supported_languages || []), value]); setLanguageInput(""); } }} className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white">Add</button></div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                       <label className="text-xs font-semibold text-slate-600">LLM model<input value={aiConfigDraft.llm_model} onChange={(e) => updateAiConfig("llm_model", e.target.value)} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
@@ -1787,7 +1787,7 @@ export default function AdminChannelDetailPage({
                       <label className="text-xs font-semibold text-slate-600">Silence timeout (ms)<input type="number" min="200" max="5000" value={aiConfigDraft.silence_timeout_ms} onChange={(e) => updateAiConfig("silence_timeout_ms", Number(e.target.value))} className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" /></label>
                       <label className="flex items-center gap-2 pt-5 text-xs font-semibold text-slate-600"><input type="checkbox" checked={aiConfigDraft.enable_background_audio} onChange={(e) => updateAiConfig("enable_background_audio", e.target.checked)} />Background audio</label>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={saveAiConfiguration} disabled={aiConfigSaving || !aiConfigDirty} className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{aiConfigSaving ? "Saving…" : "Save AI configuration"}</button>{aiConfigDirty && <span className="text-xs text-amber-700">Unsaved AI changes</span>}</div>
+                    <div className="flex flex-wrap items-center gap-2"><button type="button" onClick={saveAiConfiguration} disabled={aiConfigSaving || !aiConfigDirty} className="rounded-lg bg-emerald-700 px-4 py-2 text-xs font-bold text-white disabled:opacity-50">{aiConfigSaving ? "Savingâ€¦" : "Save AI configuration"}</button>{aiConfigDirty && <span className="text-xs text-amber-700">Unsaved AI changes</span>}</div>
                   </>
                 ) : <p className="text-sm text-slate-400">Select an AI agent to configure its language, model and voice.</p>}
 
@@ -1916,7 +1916,7 @@ export default function AdminChannelDetailPage({
             </div>
           </div>
 
-            <div className="lg:col-span-3 lg:order-[20] h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="lg:col-span-3 lg:order-[20] h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="bg-white overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
@@ -1981,10 +1981,10 @@ export default function AdminChannelDetailPage({
                 <button type="button" key={conv.id || idx} onClick={() => openCallDetails(conv)} className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-slate-50">
                   <span className="min-w-0">
                     <span className="block truncate text-xs font-bold capitalize text-slate-900">
-                      {conv.direction === "outbound" ? "Outbound" : "Inbound"} · {conv.status ? conv.status.replace("-", " ") : "Unknown"}
+                      {conv.direction === "outbound" ? "Outbound" : "Inbound"} Â· {conv.status ? conv.status.replace("-", " ") : "Unknown"}
                     </span>
                     <span className="mt-0.5 block truncate font-mono text-[11px] text-slate-500">
-                      {conv.contact_name ? `${conv.contact_name} · ` : ""}{conv.to_phone || conv.caller_phone || "Unknown"}
+                      {conv.contact_name ? `${conv.contact_name} Â· ` : ""}{conv.to_phone || conv.caller_phone || "Unknown"}
                     </span>
                   </span>
                   <span className="text-[11px] font-semibold text-slate-500">{formatSecs(conv.duration_seconds)}</span>
@@ -2061,7 +2061,7 @@ export default function AdminChannelDetailPage({
                         new Set(
                           conversations
                             .map((c) => c.caller_phone)
-                            .filter((p) => p && p !== "Unknown" && p !== "—"),
+                            .filter((p) => p && p !== "Unknown" && p !== "â€”"),
                         ),
                       ).map((phone) => (
                         <div
@@ -2086,16 +2086,16 @@ export default function AdminChannelDetailPage({
                           <span className="font-medium">{phone}</span>
                           {conversations.find((c) => c.caller_phone === phone)
                             ?.contact_name && (
-                            <span className="ml-2 text-xs text-slate-400">
-                              (
-                              {
-                                conversations.find(
-                                  (c) => c.caller_phone === phone,
-                                )?.contact_name
-                              }
-                              )
-                            </span>
-                          )}
+                              <span className="ml-2 text-xs text-slate-400">
+                                (
+                                {
+                                  conversations.find(
+                                    (c) => c.caller_phone === phone,
+                                  )?.contact_name
+                                }
+                                )
+                              </span>
+                            )}
                         </div>
                       ))}
                     </div>
@@ -2346,7 +2346,7 @@ export default function AdminChannelDetailPage({
                                 : "text-emerald-700 font-medium"
                             }
                           >
-                            {format(runDate, "MMM d, yyyy • h:mm a")}
+                            {format(runDate, "MMM d, yyyy â€¢ h:mm a")}
                           </span>
                           <span className="ml-auto text-[10px] uppercase tracking-wider font-bold">
                             <LiveCountdown
@@ -2537,10 +2537,10 @@ export default function AdminChannelDetailPage({
                                   <span className="font-mono font-semibold tracking-tight">
                                     {conv.direction === "outbound"
                                       ? conv.to_phone ||
-                                        conv.destination_phone ||
-                                        conv.caller_phone ||
-                                        conv.caller_to ||
-                                        "Unknown"
+                                      conv.destination_phone ||
+                                      conv.caller_phone ||
+                                      conv.caller_to ||
+                                      "Unknown"
                                       : conv.caller_phone || "Unknown"}
                                   </span>
                                   {conv.contact_name &&
@@ -2568,17 +2568,17 @@ export default function AdminChannelDetailPage({
                                 <div className="text-sm text-slate-700">
                                   {conv.created_at
                                     ? format(
-                                        new Date(conv.created_at),
-                                        "dd MMM yyyy",
-                                      )
+                                      new Date(conv.created_at),
+                                      "dd MMM yyyy",
+                                    )
                                     : "Unknown"}
                                 </div>
                                 <div className="text-[11px] text-slate-500 mt-0.5">
                                   {conv.created_at
                                     ? format(
-                                        new Date(conv.created_at),
-                                        "hh:mm:ss a",
-                                      )
+                                      new Date(conv.created_at),
+                                      "hh:mm:ss a",
+                                    )
                                     : ""}
                                 </div>
                               </td>
@@ -2623,96 +2623,96 @@ export default function AdminChannelDetailPage({
                                     "active",
                                     "in-progress",
                                   ].includes(conv.status) && (
-                                    <div
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="w-28 [&>div>button]:h-7 [&>div>button]:rounded [&>div>button]:px-1.5 [&>div>button]:text-[10px]"
-                                    >
-                                      <SmartSelect
-                                        value=""
-                                        placeholder="Update Status"
-                                        searchable={false}
-                                        onChange={async (value) => {
-                                          if (value === "force_fail") {
-                                            try {
-                                              await fetchApi(
-                                                `/admin/conversations/${channel.company_id}/${conv.id || conv._id}/status`,
-                                                { method: "POST", body: JSON.stringify({ status: value }) },
-                                              );
-                                              setConversations((prev) =>
-                                                prev.map((c) =>
-                                                  c.id === conv.id ||
-                                                  c._id === conv._id
-                                                    ? { ...c, status: "failed" }
-                                                    : c,
-                                                ),
-                                              );
-                                            } catch (err) {
-                                              console.error(
-                                                "Failed to update status",
-                                                err,
-                                              );
+                                      <div
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="w-28 [&>div>button]:h-7 [&>div>button]:rounded [&>div>button]:px-1.5 [&>div>button]:text-[10px]"
+                                      >
+                                        <SmartSelect
+                                          value=""
+                                          placeholder="Update Status"
+                                          searchable={false}
+                                          onChange={async (value) => {
+                                            if (value === "force_fail") {
+                                              try {
+                                                await fetchApi(
+                                                  `/admin/conversations/${channel.company_id}/${conv.id || conv._id}/status`,
+                                                  { method: "POST", body: JSON.stringify({ status: value }) },
+                                                );
+                                                setConversations((prev) =>
+                                                  prev.map((c) =>
+                                                    c.id === conv.id ||
+                                                      c._id === conv._id
+                                                      ? { ...c, status: "failed" }
+                                                      : c,
+                                                  ),
+                                                );
+                                              } catch (err) {
+                                                console.error(
+                                                  "Failed to update status",
+                                                  err,
+                                                );
+                                              }
+                                            } else {
+                                              try {
+                                                await fetchApi(
+                                                  `/admin/conversations/${channel.company_id}/${conv.id || conv._id}/status`,
+                                                  { method: "POST", body: JSON.stringify({ status: value }) },
+                                                );
+                                                setConversations((prev) =>
+                                                  prev.map((c) =>
+                                                    c.id === conv.id || c._id === conv._id
+                                                      ? { ...c, status: value }
+                                                      : c,
+                                                  ),
+                                                );
+                                              } catch (err) {
+                                                console.error("Failed to update status", err);
+                                              }
                                             }
-                                          } else {
-                                            try {
-                                              await fetchApi(
-                                                `/admin/conversations/${channel.company_id}/${conv.id || conv._id}/status`,
-                                                { method: "POST", body: JSON.stringify({ status: value }) },
-                                              );
-                                              setConversations((prev) =>
-                                                prev.map((c) =>
-                                                  c.id === conv.id || c._id === conv._id
-                                                    ? { ...c, status: value }
-                                                    : c,
-                                                ),
-                                              );
-                                            } catch (err) {
-                                              console.error("Failed to update status", err);
-                                            }
-                                          }
-                                        }}
-                                        options={[
-                                          {
-                                            value: "completed",
-                                            label: "Mark as Completed",
-                                            badge: "Status",
-                                            icon: <Check className="h-4 w-4" />,
-                                          },
-                                          {
-                                            value: "failed",
-                                            label: "Mark as Failed",
-                                            badge: "Status",
-                                            icon: (
-                                              <CircleX className="h-4 w-4" />
-                                            ),
-                                          },
-                                          {
-                                            value: "cancelled",
-                                            label: "Mark as Cancelled",
-                                            badge: "Status",
-                                            icon: <X className="h-4 w-4" />,
-                                          },
-                                          {
-                                            value: "busy",
-                                            label: "Mark as Busy",
-                                            badge: "Status",
-                                            icon: <PhoneMissed className="h-4 w-4" />,
-                                          },
-                                          {
-                                            value: "no-answer",
-                                            label: "Mark as No Answer",
-                                            badge: "Status",
-                                            icon: <PhoneMissed className="h-4 w-4" />,
-                                          },
-                                          {
-                                            value: "hung-up",
-                                            label: "Mark as Hung Up",
-                                            badge: "Status",
-                                            icon: <PhoneOff className="h-4 w-4" />,
-                                          },
-                                        ]}
-                                      />
-                                    </div>
-                                  )}
+                                          }}
+                                          options={[
+                                            {
+                                              value: "completed",
+                                              label: "Mark as Completed",
+                                              badge: "Status",
+                                              icon: <Check className="h-4 w-4" />,
+                                            },
+                                            {
+                                              value: "failed",
+                                              label: "Mark as Failed",
+                                              badge: "Status",
+                                              icon: (
+                                                <CircleX className="h-4 w-4" />
+                                              ),
+                                            },
+                                            {
+                                              value: "cancelled",
+                                              label: "Mark as Cancelled",
+                                              badge: "Status",
+                                              icon: <X className="h-4 w-4" />,
+                                            },
+                                            {
+                                              value: "busy",
+                                              label: "Mark as Busy",
+                                              badge: "Status",
+                                              icon: <PhoneMissed className="h-4 w-4" />,
+                                            },
+                                            {
+                                              value: "no-answer",
+                                              label: "Mark as No Answer",
+                                              badge: "Status",
+                                              icon: <PhoneMissed className="h-4 w-4" />,
+                                            },
+                                            {
+                                              value: "hung-up",
+                                              label: "Mark as Hung Up",
+                                              badge: "Status",
+                                              icon: <PhoneOff className="h-4 w-4" />,
+                                            },
+                                          ]}
+                                        />
+                                      </div>
+                                    )}
                                 </div>
                               </td>
                               <td className="px-5 py-3.5 text-right w-[160px]">
@@ -2945,10 +2945,10 @@ export default function AdminChannelDetailPage({
                     <span className="text-xs font-bold text-emerald-600">
                       {analytics.total_calls > 0
                         ? Math.round(
-                            (analytics.completed_calls /
-                              analytics.total_calls) *
-                              100,
-                          )
+                          (analytics.completed_calls /
+                            analytics.total_calls) *
+                          100,
+                        )
                         : 0}
                       %
                     </span>
@@ -2960,9 +2960,9 @@ export default function AdminChannelDetailPage({
                     <span className="text-xs font-bold text-amber-600">
                       {analytics.total_calls > 0
                         ? Math.round(
-                            (analytics.active_calls / analytics.total_calls) *
-                              100,
-                          )
+                          (analytics.active_calls / analytics.total_calls) *
+                          100,
+                        )
                         : 0}
                       %
                     </span>
@@ -2974,9 +2974,9 @@ export default function AdminChannelDetailPage({
                     <span className="text-xs font-bold text-rose-600">
                       {analytics.total_calls > 0
                         ? Math.round(
-                            (analytics.failed_calls / analytics.total_calls) *
-                              100,
-                          )
+                          (analytics.failed_calls / analytics.total_calls) *
+                          100,
+                        )
                         : 0}
                       %
                     </span>
@@ -3266,9 +3266,9 @@ export default function AdminChannelDetailPage({
                                   <span>
                                     {call.created_at
                                       ? formatDistanceToNow(
-                                          new Date(call.created_at),
-                                          { addSuffix: true },
-                                        )
+                                        new Date(call.created_at),
+                                        { addSuffix: true },
+                                      )
                                       : ""}
                                   </span>
                                 </p>
@@ -3425,10 +3425,10 @@ export default function AdminChannelDetailPage({
                         <span className="text-sm font-bold text-emerald-600">
                           {analytics.total_calls > 0
                             ? Math.round(
-                                (analytics.completed_calls /
-                                  analytics.total_calls) *
-                                  100,
-                              )
+                              (analytics.completed_calls /
+                                analytics.total_calls) *
+                              100,
+                            )
                             : 0}
                           %
                         </span>
@@ -3440,10 +3440,10 @@ export default function AdminChannelDetailPage({
                         <span className="text-sm font-bold text-amber-600">
                           {analytics.total_calls > 0
                             ? Math.round(
-                                (analytics.active_calls /
-                                  analytics.total_calls) *
-                                  100,
-                              )
+                              (analytics.active_calls /
+                                analytics.total_calls) *
+                              100,
+                            )
                             : 0}
                           %
                         </span>
@@ -3455,10 +3455,10 @@ export default function AdminChannelDetailPage({
                         <span className="text-sm font-bold text-rose-600">
                           {analytics.total_calls > 0
                             ? Math.round(
-                                (analytics.failed_calls /
-                                  analytics.total_calls) *
-                                  100,
-                              )
+                              (analytics.failed_calls /
+                                analytics.total_calls) *
+                              100,
+                            )
                             : 0}
                           %
                         </span>
@@ -3485,20 +3485,36 @@ export default function AdminChannelDetailPage({
           open={Boolean(selectedCall)}
           onClose={() => setSelectedCall(null)}
           title="Call details"
-          description={`${selectedCall.direction === "outbound" ? "Outbound" : "Inbound"} · ${selectedCall.status || "Active"}`}
+          description={`${selectedCall.direction === "outbound" ? "Outbound" : "Inbound"} Â· ${selectedCall.status || "Active"}`}
           className="max-w-xl bg-[#FCFDFB]"
         >
           <div className="flex flex-col">
             <div className="p-6 border-b border-[#E7EEE9] shrink-0">
               <div className="flex justify-between items-start gap-4 mb-5">
                 <div>
-                  <h3 className="text-xl font-bold text-slate-900 font-mono mb-1">
-                    {selectedCall.direction === "outbound"
-                      ? selectedCall.to_phone ||
-                        selectedCall.destination_phone ||
-                        selectedCall.caller_to ||
-                        "Unknown"
-                      : selectedCall.caller_phone || "Unknown"}
+                  <h3 className="text-xl font-bold text-slate-900 mb-1 flex items-baseline gap-2">
+                    {selectedCall.contact_name ? (
+                      <>
+                        <span className="text-slate-900">{selectedCall.contact_name}</span>
+                        <span className="text-xs font-normal text-slate-500 font-mono">
+                          ({selectedCall.direction === "outbound"
+                            ? selectedCall.to_phone ||
+                            selectedCall.destination_phone ||
+                            selectedCall.caller_to ||
+                            "Unknown"
+                            : selectedCall.from_phone || selectedCall.caller_phone || "Unknown"})
+                        </span>
+                      </>
+                    ) : (
+                      <span className="font-mono">
+                        {selectedCall.direction === "outbound"
+                          ? selectedCall.to_phone ||
+                          selectedCall.destination_phone ||
+                          selectedCall.caller_to ||
+                          "Unknown"
+                          : selectedCall.from_phone || selectedCall.caller_phone || "Unknown"}
+                      </span>
+                    )}
                   </h3>
                   <p className="text-slate-500 font-medium text-sm flex items-center gap-2">
                     <span
@@ -3522,9 +3538,9 @@ export default function AdminChannelDetailPage({
                       ? format(new Date(selectedCall.created_at), "dd MMM yyyy")
                       : selectedCall.started_at
                         ? format(
-                            new Date(selectedCall.started_at),
-                            "dd MMM yyyy",
-                          )
+                          new Date(selectedCall.started_at),
+                          "dd MMM yyyy",
+                        )
                         : "-"}
                   </p>
                   <p className="text-sm text-slate-500 font-medium">
@@ -3532,9 +3548,9 @@ export default function AdminChannelDetailPage({
                       ? format(new Date(selectedCall.created_at), "hh:mm:ss a")
                       : selectedCall.started_at
                         ? format(
-                            new Date(selectedCall.started_at),
-                            "hh:mm:ss a",
-                          )
+                          new Date(selectedCall.started_at),
+                          "hh:mm:ss a",
+                        )
                         : "-"}
                   </p>
                 </div>
@@ -3561,16 +3577,30 @@ export default function AdminChannelDetailPage({
                   <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
                     From (Caller)
                   </p>
-                  <p className="text-xs font-semibold mt-1 text-slate-700 font-mono truncate">
-                    {selectedCall.from_phone || selectedCall.caller_phone || "N/A"}
+                  <p className="text-xs font-semibold mt-1 text-slate-700 font-mono truncate" title={selectedCall.contact_name && selectedCall.direction !== "outbound" ? `${selectedCall.contact_name} (${selectedCall.from_phone || selectedCall.caller_phone || "N/A"})` : undefined}>
+                    {selectedCall.contact_name && selectedCall.direction !== "outbound" ? (
+                      <span>
+                        <span className="font-sans font-bold text-slate-900">{selectedCall.contact_name}</span>{" "}
+                        <span className="text-slate-500 text-[11px]">({selectedCall.from_phone || selectedCall.caller_phone || "N/A"})</span>
+                      </span>
+                    ) : (
+                      selectedCall.from_phone || selectedCall.caller_phone || "N/A"
+                    )}
                   </p>
                 </div>
                 <div className="bg-white p-3 rounded-xl border border-[#E4ECE6]">
                   <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">
                     To (Recipient)
                   </p>
-                  <p className="text-xs font-semibold mt-1 text-slate-700 font-mono truncate">
-                    {selectedCall.to_phone || selectedCall.destination_phone || selectedCall.caller_to || "N/A"}
+                  <p className="text-xs font-semibold mt-1 text-slate-700 font-mono truncate" title={selectedCall.contact_name && selectedCall.direction === "outbound" ? `${selectedCall.contact_name} (${selectedCall.to_phone || selectedCall.destination_phone || selectedCall.caller_to || "N/A"})` : undefined}>
+                    {selectedCall.contact_name && selectedCall.direction === "outbound" ? (
+                      <span>
+                        <span className="font-sans font-bold text-slate-900">{selectedCall.contact_name}</span>{" "}
+                        <span className="text-slate-500 text-[11px]">({selectedCall.to_phone || selectedCall.destination_phone || selectedCall.caller_to || "N/A"})</span>
+                      </span>
+                    ) : (
+                      selectedCall.to_phone || selectedCall.destination_phone || selectedCall.caller_to || "N/A"
+                    )}
                   </p>
                 </div>
                 {selectedCall.ended_at && (
@@ -3672,9 +3702,9 @@ export default function AdminChannelDetailPage({
                     const timeStr =
                       msg.timestamp || msg.created_at
                         ? format(
-                            new Date(msg.timestamp || msg.created_at),
-                            "hh:mm:ss a",
-                          )
+                          new Date(msg.timestamp || msg.created_at),
+                          "hh:mm:ss a",
+                        )
                         : "";
                     return (
                       <div
@@ -3687,8 +3717,8 @@ export default function AdminChannelDetailPage({
                           {msg.role === "assistant"
                             ? selectedCall?.agent_id
                               ? agentsMap[selectedCall.agent_id] ||
-                                agentName ||
-                                "AI AGENT"
+                              agentName ||
+                              "AI AGENT"
                               : agentName || "AI AGENT"
                             : "CUSTOMER"}
                         </p>
@@ -3773,9 +3803,8 @@ export default function AdminChannelDetailPage({
             <button
               type="button"
               onClick={() => updateForm("is_active", !editForm.is_active)}
-              className={`px-3 py-1 rounded-full text-xs font-bold border transition ${
-                editForm.is_active ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200"
-              }`}
+              className={`px-3 py-1 rounded-full text-xs font-bold border transition ${editForm.is_active ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-slate-100 text-slate-600 border-slate-200"
+                }`}
             >
               {editForm.is_active ? "Active" : "Inactive"}
             </button>
@@ -3798,7 +3827,7 @@ export default function AdminChannelDetailPage({
               }}
               className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition shadow-xs disabled:opacity-50 cursor-pointer"
             >
-              {isSaving ? "Saving…" : "Save Changes"}
+              {isSaving ? "Savingâ€¦" : "Save Changes"}
             </button>
           </div>
         </div>

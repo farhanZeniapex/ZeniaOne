@@ -87,11 +87,33 @@ class NoisyEndpointFilter(logging.Filter):
 logging.getLogger("uvicorn.access").addFilter(NoisyEndpointFilter())
 
 
+def _windows_connection_exception_handler(loop, context):
+    """Ignore normal browser-aborted connections on Windows.
+
+    The Proactor event loop reports a client closing a socket during response
+    cleanup as WinError 10054. It is not an application or call failure, but
+    asyncio otherwise prints a full ERROR traceback for every such refresh or
+    navigation.
+    """
+    exc = context.get("exception")
+    if (
+        sys.platform == "win32"
+        and isinstance(exc, ConnectionResetError)
+        and getattr(exc, "winerror", None) == 10054
+    ):
+        return
+    loop.default_exception_handler(context)
+
+
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown lifecycle."""
+    if sys.platform == "win32":
+        asyncio.get_running_loop().set_exception_handler(
+            _windows_connection_exception_handler
+        )
     logger.info("=" * 60)
     logger.info(f"🚀 Starting {settings.app_name}")
     logger.info(f"   Environment: {settings.app_env}")
@@ -126,10 +148,18 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             logger.warning(f"Admin workspace provisioning failed: {exc}")
 
-        # RAG dependencies are loaded lazily on the first knowledge-base request.
-        # Keeping model/Pinecone initialization out of startup lets Render's
-        # health check pass quickly and keeps the API available during cold starts.
-        logger.info("RAG models will be loaded lazily on first knowledge-base request")
+        # RAG dependencies are loaded lazily for health checks, but warmed up
+        # asynchronously in the background so the first phone call has 0s latency.
+        async def _warmup_embeddings():
+            try:
+                import asyncio
+                from ai.vector_store import _get_embedding_model
+                await asyncio.to_thread(_get_embedding_model)
+                logger.info("✅ RAG embedding model preloaded in background")
+            except Exception as exc:
+                logger.warning(f"Background RAG warmup skipped: {exc}")
+
+        asyncio.create_task(_warmup_embeddings())
 
         # Start background tasks scheduler (e.g., daily KB sync)
         try:

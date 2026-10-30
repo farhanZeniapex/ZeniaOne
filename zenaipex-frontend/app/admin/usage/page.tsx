@@ -52,7 +52,9 @@ function CompanyMark({ company }: { company: any }) {
     .join("")
     .toUpperCase();
   const logo = company?.id && !failed
-    ? getCompanyLogoUrl(String(company.id), company.logo_url || "current")
+    ? (company.logo_url
+      ? getCompanyLogoUrl(String(company.id), company.logo_url)
+      : undefined)
     : undefined;
 
   return (

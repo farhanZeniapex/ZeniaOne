@@ -99,6 +99,9 @@ async def exotel_voice_webhook(company_id: str, agent_id: str, request: Request)
     caller = form.get("From") or form.get("CallFrom") or request.query_params.get("From") or request.query_params.get("CallFrom", "Unknown")
     to_number = form.get("To") or form.get("CallTo") or request.query_params.get("To") or request.query_params.get("CallTo", "Unknown")
     call_sid = form.get("CallSid") or request.query_params.get("CallSid", "")
+    raw_dir = str(form.get("Direction") or request.query_params.get("Direction") or request.query_params.get("direction") or "inbound").lower()
+    direction = "outbound" if "outbound" in raw_dir else "inbound"
+    caller_to = to_number
     logger.info(f"📞 Exotel Inbound call received from {caller} → {to_number} CallSid={call_sid} for agent {agent_id}")
 
     from core.database import col_agents
@@ -141,6 +144,7 @@ async def exotel_voice_webhook(company_id: str, agent_id: str, request: Request)
     
     # Find the channel to get channel_id for inbound calls
     async def _pre_create():
+        direction = str(request.query_params.get("direction") or "inbound").lower()
         await create_conversation(
             company_id=company_id,
             agent_id=agent_id,
@@ -156,7 +160,7 @@ async def exotel_voice_webhook(company_id: str, agent_id: str, request: Request)
     xml_data = f"""<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Connect>
-        <Stream url="{ws_url}"/>
+        <Stream url="{escape(ws_url)}"/>
     </Connect>
 </Response>"""
     
@@ -207,14 +211,31 @@ async def exotel_voicebot_webhook(company_id: str, agent_id: str, request: Reque
     ws_params = {"caller": caller, "CallTo": to_number}
     if channel_id: ws_params["channel_id"] = channel_id
     if call_sid: ws_params["call_sid"] = call_sid
+    for key in ("contact_name", "topic", "system_prompt", "direction"):
+        value = request.query_params.get(key, "")
+        if value:
+            ws_params[key] = value
     ws_params["signature"] = _exotel_stream_signature(company_id, agent_id, caller, to_number, call_sid)
     
     ws_url = f"{scheme}://{host}/api/v1/webhook/exotel/advanced/{company_id}/{agent_id}/media-stream?{urlencode(ws_params)}"
     
     from services.conversation_service import create_conversation
     import asyncio
+    direction = str(request.query_params.get("direction") or "inbound").lower()
     async def _pre_create():
-        await create_conversation(company_id, agent_id, call_sid, caller, to_number, channel_id, "inbound")
+        await create_conversation(
+            company_id=company_id,
+            agent_id=agent_id,
+            call_sid=call_sid,
+            caller_phone=caller,
+            caller_to=to_number,
+            channel_id=channel_id,
+            direction=direction,
+            from_phone=to_number if direction == "outbound" else caller,
+            to_phone=caller if direction == "outbound" else to_number,
+            destination_phone=caller if direction == "outbound" else to_number,
+            contact_name=request.query_params.get("contact_name") or None,
+        )
     asyncio.create_task(_pre_create())
     
     # Exotel Studio Voicebot Applet expects JSON response
@@ -266,6 +287,8 @@ async def exotel_recording_status(company_id: str, agent_id: str, request: Reque
 def normalize_text_for_speech(text: str) -> str:
     """Natural speech normalization (24/7, %, $, etc.)"""
     import re
+    # Remove thinking tags from reasoning models
+    text = re.sub(r'(?is)<think>.*?</think>', '', text)
     # Remove emojis
     text = re.sub(r'[\U00010000-\U0010ffff]', '', text)
     # Remove asterisks and markdown characters that TTS shouldn't read
@@ -531,9 +554,6 @@ async def fetch_llm_response(conversation_history, active_product="ZeniaONE", ra
     context_text = ""
     
     # 11. KNOWLEDGE RETRIEVAL SHOULD NOT DEPEND ON QUERY LENGTH
-    import logging
-    logger = logging.getLogger(__name__)
-    
     from modules.query_resolver import resolve_rag_query
     resolved_query_info = resolve_rag_query(latest_utterance, active_product, conversation_history)
     CASUAL_WORDS = frozenset({
@@ -1171,6 +1191,20 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
             await websocket.close(code=1008)
         return
 
+    # Apply per-call objective/instructions only to this outbound session.
+    call_topic = websocket.query_params.get("topic", "").strip()
+    call_prompt = websocket.query_params.get("system_prompt", "").strip()
+    if call_topic or call_prompt:
+        agent_doc = dict(agent_doc)
+        call_context = []
+        if call_topic:
+            call_context.append(f"Outbound call objective: {call_topic}")
+        if call_prompt:
+            call_context.append(f"Additional outbound instructions: {call_prompt}")
+        agent_doc["system_prompt"] = (
+            f"{agent_doc.get('system_prompt', '')}\n\n" + "\n".join(call_context)
+        ).strip()
+
     # Runtime settings must be derived only after the tenant-scoped agent has
     # been loaded.  Doing this before the lookup made every real phone stream
     # fail with an unbound ``agent_doc`` before STT could connect.
@@ -1242,6 +1276,21 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
             if native_conversation_id:
                 try:
                     from core.database import col_conversations
+
+                    # A carrier status callback can arrive just before the
+                    # media socket closes. Never overwrite its terminal
+                    # failure with a local "completed" caused only by stream
+                    # teardown.
+                    current_conv = await col_conversations().find_one({
+                        "_id": ObjectId(native_conversation_id),
+                        "company_id": native_company_id,
+                    }, {"status": 1})
+                    if (
+                        not native_error
+                        and current_conv
+                        and current_conv.get("status") in {"failed", "cancelled"}
+                    ):
+                        native_status = current_conv["status"]
 
                     await col_conversations().update_one(
                         {"_id": ObjectId(native_conversation_id), "company_id": native_company_id},
@@ -1466,6 +1515,8 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
                             )
                             conversation_id = str(conv_doc["_id"])
                             company_id = str(conv_doc.get("company_id", company_id)) # Use true company ID from DB
+                            if not contact_name and conv_doc.get("contact_name"):
+                                contact_name = conv_doc["contact_name"]
 
                             # The HTTP webhook may have pre-created this Call SID. Keep its
                             # channel attribution in sync with the validated stream channel.
@@ -1561,7 +1612,9 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
                             total_duration_sec = sum(int(c.get("recording_duration") or 0) for c in past_calls)
                             total_minutes = round(total_duration_sec / 60, 1)
                             
-                            caller_stats = f"\n[CALLER STATISTICS]\nThe caller ({caller_phone}) has previously called {total_calls} times in total. The total talk time across all calls is {total_minutes} minutes. Use this information naturally if the user asks about their call history or duration."
+                            from services.caller_intelligence_service import get_caller_profile, format_caller_memory_context
+                            caller_prof = await get_caller_profile(company_id, caller_phone, exclude_conversation_id=conversation_id)
+                            caller_stats = f"\n{format_caller_memory_context(caller_prof)}"
                             
                             conversation_history.append({"role": "assistant", "content": greeting})
                             
@@ -1805,8 +1858,12 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
                                 # Barge-in: any meaningful interim speech (>= 2 words) triggers interruption
                                 # Pure backchannels (e.g. "haan", "yes sir", "okay", "ji") do NOT cancel AI speech
                                 is_meaningful_speech = len(transcript.split()) >= 2 and not is_backchannel(transcript)
+                                try:
+                                    barge_in_allowed = bool(agent_doc.get("barge_in_enabled", True))
+                                except NameError:
+                                    barge_in_allowed = True
                                 
-                                if agent_doc.get("barge_in_enabled", True) and not cancel_event.is_set() and is_meaningful_speech:
+                                if barge_in_allowed and not cancel_event.is_set() and is_meaningful_speech:
                                     if greeting_protect[0]:
                                         logger.info(f"[BARGE_IN] interim_user_speech=\"{transcript}\"")
                                         logger.info("[BARGE_IN] ai_speaking=true")
@@ -1965,6 +2022,7 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
             await end_conversation(company_id, conversation_id, status="completed")
             await monitoring_manager.broadcast_event("call_ended", {
                 "id": conversation_id,
+                "call_sid": call_sid,
                 "status": "completed"
             })
             
@@ -2084,6 +2142,16 @@ async def exotel_status_webhook(company_id: str, agent_id: str, request: Request
             {"company_id": company_id, "call_sid": call_sid},
             {"$set": update_data}
         )
+
+        if internal_status in ["completed", "failed", "cancelled"]:
+            from services.live_monitoring import monitoring_manager
+            target_conv = await col_conversations().find_one({"company_id": company_id, "call_sid": call_sid})
+            if target_conv:
+                await monitoring_manager.broadcast_event("call_ended", {
+                    "id": str(target_conv["_id"]),
+                    "call_sid": call_sid,
+                    "status": internal_status
+                })
 
         
     except Exception as e:

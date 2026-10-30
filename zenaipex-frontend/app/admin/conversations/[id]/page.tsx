@@ -151,7 +151,7 @@ export default function ConversationDetailPage() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-xl font-bold text-slate-900">
-              {isPhone ? (conversation.caller_phone || "Unknown Number") : (conversation.title || "Conversation")}
+              {isPhone ? (conversation.contact_name ? `${conversation.contact_name} (${conversation.caller_phone || "Unknown Number"})` : (conversation.caller_phone || "Unknown Number")) : (conversation.title || "Conversation")}
             </h2>
             <ChannelBadge direction={sourceLabel} />
             <span className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full border ${
@@ -215,9 +215,17 @@ export default function ConversationDetailPage() {
             <CardContent className="pt-4 space-y-4">
               {isPhone && (
                 <div>
-                  <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Customer Number</p>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-wider mb-1">Customer</p>
                   <p className="font-mono font-bold text-slate-900 flex items-center gap-2 text-sm">
-                    <User className="h-4 w-4 text-slate-400" />{conversation.caller_phone || "Unknown"}
+                    <User className="h-4 w-4 text-slate-400" />
+                    {conversation.contact_name ? (
+                      <span>
+                        <span className="font-sans font-bold text-slate-900">{conversation.contact_name}</span>{" "}
+                        <span className="text-slate-500 text-xs font-normal">({conversation.caller_phone || "Unknown"})</span>
+                      </span>
+                    ) : (
+                      conversation.caller_phone || "Unknown"
+                    )}
                   </p>
                 </div>
               )}

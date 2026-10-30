@@ -251,7 +251,9 @@ function ConvDetail({ conv, onClose }: { conv: any; onClose: () => void }) {
             </div>
             <h3 className="text-base font-bold text-slate-900">
               {isPhone
-                ? conv.caller_phone || "Unknown Number"
+                ? conv.contact_name
+                  ? `${conv.contact_name} (${conv.caller_phone || "Unknown Number"})`
+                  : conv.caller_phone || "Unknown Number"
                 : conv.title || "Conversation"}
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -319,7 +321,7 @@ function ConvDetail({ conv, onClose }: { conv: any; onClose: () => void }) {
                     From (Customer)
                   </p>
                   <p className="font-mono text-sm font-bold text-slate-900">
-                    {conv.caller_phone || "Unknown"}
+                    {conv.contact_name ? `${conv.contact_name} (${conv.caller_phone || "Unknown"})` : (conv.caller_phone || "Unknown")}
                   </p>
                 </div>
                 <div>
@@ -988,9 +990,16 @@ export default function AdminConversationsPage() {
                             <ChannelBadge
                               d={isPhone ? conv.direction : conv.source_type}
                             />
-                            {isPhone && conv.caller_phone && (
-                              <span className="font-mono text-xs text-slate-600">
-                                {conv.caller_phone}
+                            {isPhone && (
+                              <span className="text-xs text-slate-700">
+                                {conv.contact_name ? (
+                                  <>
+                                    <span className="font-bold text-slate-900">{conv.contact_name}</span>{" "}
+                                    <span className="font-mono text-[11px] text-slate-500">({conv.caller_phone})</span>
+                                  </>
+                                ) : (
+                                  <span className="font-mono text-slate-600">{conv.caller_phone || "Unknown"}</span>
+                                )}
                               </span>
                             )}
                           </div>
