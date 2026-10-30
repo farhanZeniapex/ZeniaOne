@@ -196,7 +196,7 @@ export default function AdminAgentsPage() {
 
   // Filters & Search
   const [search, setSearch] = useState("");
-  const [voiceFilter, setVoiceFilter] = useState("active");
+  const [voiceFilter, setVoiceFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
   const [companyFilter, setCompanyFilter] = useState("all");
@@ -475,6 +475,11 @@ export default function AdminAgentsPage() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    setTypeFilter("all");
+    setVoiceFilter("all");
+  }, [activeTab]);
 
   const filteredVoices = useMemo(() => {
     let result = customVoices
@@ -1871,6 +1876,39 @@ export default function AdminAgentsPage() {
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Voice</span>
                           <span className="truncate text-xs font-semibold text-emerald-700">{voiceObj.name}</span>
+                        </div>
+                        <div onClick={(event) => event.stopPropagation()}>
+                          <SmartSelect
+                            value={agent.tts_voice || voiceObj.id}
+                            disabled={updatingAgentId === agent.id}
+                            searchable
+                            searchPlaceholder="Search voice…"
+                            onChange={(value) => handleUpdateVoice(agent.id, value)}
+                            options={[
+                              ...customVoices.map((voice) => ({
+                                value: voice.voice_id || voice.id,
+                                label: voice.name,
+                                group: `My Cloned Voices (${customVoices.length})`,
+                                badge: "Cloned",
+                              })),
+                              ...VOICES.map((voice) => ({
+                                value: voice.id,
+                                label: voice.name,
+                                group: `${voice.gender} Voice Personas`,
+                                description: voice.tone,
+                                badge: voice.gender,
+                              })),
+                              ...GEMINI_VOICES.map((voice) => ({
+                                value: voice.id,
+                                label: voice.name,
+                                group: `Gemini Live Voices (${GEMINI_VOICES.length})`,
+                                description: voice.tone,
+                                badge: "Gemini",
+                              })),
+                            ]}
+                            menuWidth={300}
+                            className="[&>button]:h-9 [&>button]:text-[11px]"
+                          />
                         </div>
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">AI model</span>
