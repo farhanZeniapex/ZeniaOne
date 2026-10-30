@@ -1257,6 +1257,71 @@ export default function AdminAgentsPage() {
     });
   }, [agents, search, companyFilter, genderFilter, quickFilter]);
 
+  const voicePickerOptions = useMemo(
+    () => [
+      ...VOICES.map((voice) => ({
+        value: voice.id,
+        label: voice.name,
+        description: voice.tone,
+        badge: voice.gender,
+        group: "Platform voices",
+      })),
+      ...customVoices.map((voice) => ({
+        value: voice.voice_id || voice.id,
+        label: voice.name,
+        description: voice.description || "Custom cloned voice",
+        badge: "Cloned",
+        group: "My cloned voices",
+      })),
+      ...GEMINI_VOICES.map((voice) => ({
+        value: voice.id,
+        label: voice.name,
+        description: voice.tone,
+        badge: "Gemini",
+        group: "Gemini Live voices",
+      })),
+    ],
+    [customVoices],
+  );
+
+  const getVoiceForPicker = (voiceId: string): Voice => {
+    const platformVoice = VOICES.find((voice) => voice.id === voiceId);
+    if (platformVoice) return platformVoice;
+
+    const customVoice = customVoices.find(
+      (voice) => (voice.voice_id || voice.id) === voiceId,
+    );
+    if (customVoice) {
+      return {
+        id: customVoice.voice_id || customVoice.id,
+        name: customVoice.name,
+        gender: customVoice.gender === "Male" ? "Male" : "Female",
+        provider: "Sarvam Cloned",
+        enabled: true,
+        description: customVoice.description || "Custom cloned voice",
+        tone: "Cloned Voice",
+        sampleText:
+          customVoice.sample_text || "Hello! This is a sample of my cloned voice.",
+      };
+    }
+
+    const geminiVoice = GEMINI_VOICES.find((voice) => voice.id === voiceId);
+    if (geminiVoice) {
+      return {
+        id: geminiVoice.id,
+        name: geminiVoice.name,
+        gender: "Female",
+        provider: "Google Gemini Live",
+        enabled: true,
+        description: geminiVoice.description,
+        tone: geminiVoice.tone,
+        sampleText: `Hello, this is ${geminiVoice.name}, a ${geminiVoice.tone.toLowerCase()} Gemini Live voice.`,
+      };
+    }
+
+    return VOICES[0];
+  };
+
   const totalVoiceCount = VOICES.length + GEMINI_VOICES.length + customVoices.length;
 
   return (
@@ -1850,8 +1915,7 @@ export default function AdminAgentsPage() {
             </div>
             <div className="grid grid-cols-1 gap-3 p-3 lg:grid-cols-2 sm:p-4">
               {compareVoices.map((voiceId, index) => {
-                const voice =
-                  VOICES.find((item) => item.id === voiceId) || VOICES[0];
+                const voice = getVoiceForPicker(voiceId);
                 return (
                   <div
                     className="flex min-w-0 flex-col rounded-xl border border-[#E3ECE5] bg-[#FAFCF9] p-3 sm:p-4"
@@ -1879,13 +1943,7 @@ export default function AdminAgentsPage() {
                         )
                       }
                       searchPlaceholder="Search voices…"
-                      options={VOICES.map((item) => ({
-                        value: item.id,
-                        label: item.name,
-                        description: item.tone,
-                        badge: item.gender,
-                        group: `${item.gender} voices`,
-                      }))}
+                      options={voicePickerOptions}
                       className="mt-2"
                     />
                     <div className="mt-3">
