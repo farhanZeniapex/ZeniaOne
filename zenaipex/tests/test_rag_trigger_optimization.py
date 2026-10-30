@@ -15,3 +15,4 @@ from ai.rag import should_use_rag
 ])
 def test_should_use_rag(query, expected):
     assert should_use_rag(query) == expected
+

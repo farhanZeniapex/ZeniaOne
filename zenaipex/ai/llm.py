@@ -1241,9 +1241,9 @@ Description: The human resources management product that handles policies, payro
             start = time.perf_counter()
             try:
                 if is_voice and i < len(stream_providers) - 1:
-                    # Do not let a slow primary consume the entire live-call
-                    # budget; preserve enough time for the fast fallback.
-                    provider_max = 3.5
+                    # Do not let a slow primary consume the live-call budget;
+                    # quickly fall over to low-latency fallback (Groq).
+                    provider_max = 1.8
                 elif i < len(stream_providers) - 1:
                     # Keep the first website-chat attempt short so the backup
                     # provider can answer within the same visitor request.
@@ -1324,7 +1324,7 @@ Description: The human resources management product that handles policies, payro
                             except Exception:
                                 continue
                     
-                    if strict_completion and success and not completed:
+                    if strict_completion and success and not completed and not is_voice:
                         raise RuntimeError("Provider stream ended before completion")
 
                     elapsed = time.perf_counter() - start
@@ -1363,7 +1363,7 @@ Description: The human resources management product that handles policies, payro
                                 request_id=self.request_id
                             )
             except asyncio.TimeoutError:
-                if strict_completion and success:
+                if strict_completion and success and not is_voice:
                     raise
                 elapsed = time.perf_counter() - start if 'start' in locals() else 0
                 fallback_str = stream_providers[i+1].provider.lower() if i+1 < len(stream_providers) else "NONE"

@@ -325,6 +325,7 @@ export default function LiveCallsPage() {
     let ws: WebSocket | null = null;
     let cancelled = false;
     let reconnectTimeout: any = null;
+    let heartbeatTimer: any = null;
 
     const connectWS = () => {
       fetchApi<{ ticket?: string }>(`/admin/live-monitoring-ticket?t=${Date.now()}`)
@@ -336,11 +337,21 @@ export default function LiveCallsPage() {
 
           ws.onopen = () => {
             setIsConnected(true);
+            heartbeatTimer = setInterval(() => {
+              if (ws && ws.readyState === WebSocket.OPEN) {
+                try {
+                  ws.send(JSON.stringify({ type: "ping" }));
+                } catch {}
+              }
+            }, 15000);
           };
 
           ws.onmessage = (event) => {
             try {
               const data = JSON.parse(event.data);
+              if (data.event === "ping") {
+                return;
+              }
 
               if (data.event === "call_started") {
                 const callData = data.data;
@@ -446,6 +457,7 @@ export default function LiveCallsPage() {
 
     return () => {
       cancelled = true;
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
       ws?.close();
       wsRef.current = null;

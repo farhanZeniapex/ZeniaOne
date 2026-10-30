@@ -617,7 +617,7 @@ async def get_channel_conversations(channel_id: str, limit: int = 50, sync_provi
             to_phone = doc.get("destination_phone") or doc.get("to_phone") or (caller_phone if legacy_from_is_channel else caller_to)
         else:
             from_phone = doc.get("from_phone") or caller_phone
-            to_phone = doc.get("to_phone") or doc.get("destination_phone") or caller_to
+            to_phone = channel_phone or doc.get("to_phone") or doc.get("destination_phone") or caller_to
         return {
             "id": str(doc["_id"]),
             "company_id": str(doc.get("company_id", "")),

@@ -457,6 +457,17 @@ async def resolve_speaker(speaker: str) -> str:
     return speaker
 
 
+_clone_client_session = None
+
+async def _get_clone_session():
+    global _clone_client_session
+    import aiohttp
+    if _clone_client_session is None or _clone_client_session.closed:
+        connector = aiohttp.TCPConnector(limit=20, keepalive_timeout=60, enable_cleanup_closed=True)
+        timeout = aiohttp.ClientTimeout(total=20, connect=4, sock_read=15)
+        _clone_client_session = aiohttp.ClientSession(connector=connector, timeout=timeout)
+    return _clone_client_session
+
 async def cloned_voice_tts_stream(
     text: str,
     voice_id: str,
@@ -492,17 +503,16 @@ async def cloned_voice_tts_stream(
     form.add_field("output_audio_codec", "linear16")
     form.add_field("speech_sample_rate", str(sample_rate))
 
-    timeout = aiohttp.ClientTimeout(total=20, connect=5, sock_read=15)
     headers = {"api-subscription-key": api_key}
     url = "https://api.sarvam.ai/voices/clone/stream"
-    async with aiohttp.ClientSession(timeout=timeout) as session:
-        async with session.post(url, headers=headers, data=form) as response:
-            if response.status != 200:
-                body = (await response.text())[:500]
-                raise RuntimeError(f"Sarvam clone stream failed ({response.status}): {body}")
-            async for chunk in response.content.iter_chunked(4096):
-                if chunk:
-                    yield bytes(chunk)
+    session = await _get_clone_session()
+    async with session.post(url, headers=headers, data=form) as response:
+        if response.status != 200:
+            body = (await response.text())[:500]
+            raise RuntimeError(f"Sarvam clone stream failed ({response.status}): {body}")
+        async for chunk in response.content.iter_chunked(4096):
+            if chunk:
+                yield bytes(chunk)
 
 async def fallback_neural_tts(text: str, speaker: str = "ritu", speed: float = 1.0, volume: float = 1.0) -> bytes:
     """Fallback neural synthesis for each persona using high-fidelity edge_tts, or Sarvam Cloned voice, applying speed and volume."""

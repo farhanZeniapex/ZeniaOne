@@ -131,7 +131,7 @@ async def end_conversation(
 
     conversation_id = str(conv["_id"])
     end_time = datetime.now(timezone.utc)
-    started_at = conv.get("started_at")
+    started_at = conv.get("answered_at") or conv.get("started_at")
     provider_duration = int(conv.get("duration_seconds") or 0)
     if provider_duration > 0:
         duration = provider_duration

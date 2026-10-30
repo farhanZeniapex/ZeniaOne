@@ -35,3 +35,4 @@ def _is_explicit_goodbye(txt: str) -> bool:
 ])
 def test_explicit_goodbye(text, expected):
     assert _is_explicit_goodbye(text) == expected
+

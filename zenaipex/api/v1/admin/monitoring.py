@@ -1,3 +1,5 @@
+import asyncio
+import json
 import logging
 import secrets
 import time
@@ -129,12 +131,28 @@ async def live_monitoring_ws(websocket: WebSocket):
 
     logger.info(">>> LIVE MONITORING WS CONNECTION ESTABLISHED")
     await monitoring_manager.connect(websocket)
+    heartbeat_task = None
     try:
+        async def _heartbeat():
+            while True:
+                await asyncio.sleep(15)
+                await websocket.send_text(json.dumps({"event": "ping"}))
+
+        heartbeat_task = asyncio.create_task(_heartbeat())
         while True:
-            # Keep connection alive, listen for ping or messages from client if needed
+            # Keep connection alive, listen for ping or messages from client
             data = await websocket.receive_text()
-    except WebSocketDisconnect:
-        monitoring_manager.disconnect(websocket)
+            try:
+                msg = json.loads(data)
+                if msg.get("type") == "ping" or msg.get("event") == "ping":
+                    await websocket.send_text(json.dumps({"event": "pong"}))
+            except Exception:
+                pass
+    except (WebSocketDisconnect, asyncio.CancelledError):
+        pass
     except Exception as e:
         logger.error(f"[LIVE_MONITORING] WebSocket error: {e}")
+    finally:
+        if heartbeat_task and not heartbeat_task.done():
+            heartbeat_task.cancel()
         monitoring_manager.disconnect(websocket)
