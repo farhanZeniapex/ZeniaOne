@@ -226,6 +226,9 @@ export default function LiveCallsPage() {
     return voice.replace(/[_-]+/g, " ");
   };
 
+  const selectedCall = activeCalls.find(c => c.id === selectedCallId);
+  const selectedCallState = selectedCallId ? (callStates[selectedCallId] || "listening") : "listening";
+
   const selectedAgentVoice = selectedCall
     ? agentVoiceConfigs[selectedCall.agent_id]
     : undefined;
@@ -461,9 +464,6 @@ export default function LiveCallsPage() {
     const pollInterval = setInterval(fetchMessages, 3000);
     return () => clearInterval(pollInterval);
   }, [selectedCallId, activeCalls]);
-
-  const selectedCall = activeCalls.find(c => c.id === selectedCallId);
-  const selectedCallState = selectedCallId ? (callStates[selectedCallId] || "listening") : "listening";
 
   const endSelectedCall = async () => {
     if (!selectedCall || endingCallId) return;
