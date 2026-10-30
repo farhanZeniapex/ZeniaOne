@@ -1458,7 +1458,7 @@ export default function AdminChannelDetailPage({
 
       {/* OVERVIEW TAB */}
       {activeTab === "overview" && (
-        <div className="grid grid-cols-1 lg:grid-cols-6 gap-2 xl:gap-3 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-6 gap-2 xl:gap-3 items-stretch">
           <div className="lg:contents">
             {hasChanges && (
               <div className="lg:col-span-6 bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex flex-wrap gap-3 items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2">
@@ -1520,7 +1520,7 @@ export default function AdminChannelDetailPage({
               </div>
             )}
 
-            <div className="lg:col-span-3 lg:order-[10] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="lg:col-span-3 lg:order-[10] h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                   <Phone className="w-4 h-4 mr-2 text-emerald-700" /> Telephony
@@ -1580,7 +1580,7 @@ export default function AdminChannelDetailPage({
             </div>
 
             {isVoice && (
-              <div className="lg:col-span-3 lg:order-[50] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="lg:col-span-3 lg:order-[50] h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                     <Server className="w-4 h-4 mr-2 text-emerald-700" /> {providerName} Integration
@@ -1721,7 +1721,7 @@ export default function AdminChannelDetailPage({
               </div>
             )}
 
-            <div className="lg:col-span-3 lg:order-[60] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="lg:col-span-3 lg:order-[60] h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                   <Zap className="w-4 h-4 mr-2 text-emerald-700" /> AI
@@ -1823,7 +1823,7 @@ export default function AdminChannelDetailPage({
             </div>
 
             <div className="lg:contents">
-              <div className="lg:col-span-2 lg:order-[30] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="lg:col-span-2 lg:order-[30] h-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                     <Database className="w-4 h-4 mr-2 text-emerald-700" />{" "}
@@ -1873,7 +1873,7 @@ export default function AdminChannelDetailPage({
                 </div>
               </div>
 
-              <div className="lg:col-span-2 lg:order-[30] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="lg:col-span-2 lg:order-[30] h-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                     <Settings className="w-4 h-4 mr-2 text-slate-500" /> Call
@@ -1916,7 +1916,7 @@ export default function AdminChannelDetailPage({
             </div>
           </div>
 
-            <div className="lg:col-span-3 lg:order-[20] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="lg:col-span-3 lg:order-[20] h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="bg-white overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
@@ -1967,7 +1967,7 @@ export default function AdminChannelDetailPage({
 
           </div>
 
-          <div className="lg:col-span-2 lg:order-[40] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="lg:col-span-2 lg:order-[40] h-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/50 px-5 py-3">
               <h3 className="flex items-center text-sm font-bold uppercase tracking-wider text-slate-900">
                 <History className="mr-2 h-4 w-4 text-slate-500" /> Recent Activity
