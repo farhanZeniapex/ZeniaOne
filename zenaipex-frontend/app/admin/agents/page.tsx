@@ -2045,11 +2045,7 @@ export default function AdminAgentsPage() {
               (v) => genderFilter === "all" || v.gender === genderFilter,
             ).map((voice) => {
               const isPlaying = previewingVoiceId === voice.id;
-              const assignedAgents = agents.filter(
-                (a) =>
-                  (a.tts_voice || "ritu").toLowerCase() ===
-                  voice.id.toLowerCase(),
-              );
+              const assignedAgents = assignedAgentsForVoice(agents, voice);
               const acoustics = getVoiceAcoustics(voice.id);
 
               return (
@@ -2099,6 +2095,16 @@ export default function AdminAgentsPage() {
                         {assignedAgents.length}{" "}
                         {assignedAgents.length === 1 ? "Agent" : "Agents"}
                       </Badge>
+                    </div>
+
+                    <div className="mb-2 flex items-center gap-1.5 text-[10px] text-slate-500">
+                      <Users className="h-3 w-3 shrink-0 text-emerald-600" />
+                      <span className="font-semibold text-slate-600">Assigned:</span>
+                      <span className="truncate" title={assignedAgents.map((a) => a.name).join(", ")}>
+                        {assignedAgents.length > 0
+                          ? assignedAgents.map((a) => a.name).join(", ")
+                          : "Unassigned"}
+                      </span>
                     </div>
 
                     <p className="text-[11px] text-slate-600 leading-relaxed mb-2 line-clamp-2 min-h-[32px]">
@@ -2210,9 +2216,7 @@ export default function AdminAgentsPage() {
                 const query = search.trim().toLowerCase();
                 return !query || `${voice.name} ${voice.tone}`.toLowerCase().includes(query);
               }).map((voice) => {
-                const currentAgent = agents.find(
-                  (agent) => agent.tts_voice?.toLowerCase() === voice.id,
-                );
+                const assignedAgents = assignedAgentsForVoice(agents, voice);
                 const previewVoice = {
                   id: voice.id,
                   name: voice.name,
@@ -2239,7 +2243,14 @@ export default function AdminAgentsPage() {
                             <span className="mt-1 inline-block rounded-md bg-emerald-50/80 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{voice.tone}</span>
                           </div>
                         </div>
-                        <span className="shrink-0 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{currentAgent ? "1 Agent" : "0 Agents"}</span>
+                        <span className="shrink-0 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{assignedAgents.length} {assignedAgents.length === 1 ? "Agent" : "Agents"}</span>
+                      </div>
+                      <div className="mb-2 flex items-center gap-1.5 text-[10px] text-slate-500">
+                        <Users className="h-3 w-3 shrink-0 text-emerald-600" />
+                        <span className="font-semibold text-slate-600">Assigned:</span>
+                        <span className="truncate" title={assignedAgents.map((agent) => agent.name).join(", ")}>
+                          {assignedAgents.length > 0 ? assignedAgents.map((agent) => agent.name).join(", ") : "Unassigned"}
+                        </span>
                       </div>
                       <p className="mb-2.5 text-[11px] leading-relaxed text-slate-600">{voice.description}</p>
                       <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/40 p-2 text-[10px] font-mono text-emerald-700">
@@ -2256,7 +2267,7 @@ export default function AdminAgentsPage() {
                       <label className="block text-[11px] font-semibold text-slate-500">Assign this voice to platform agent:</label>
                       <SmartSelect
                         value=""
-                        placeholder={currentAgent ? `Assign to another agent` : "Assign to agent"}
+                        placeholder={assignedAgents.length > 0 ? `Assign to another agent` : "Assign to agent"}
                         searchPlaceholder="Search agents…"
                         onChange={(agentId) => handleUpdateVoice(agentId, voice.id)}
                         options={agents.map((agent) => ({
