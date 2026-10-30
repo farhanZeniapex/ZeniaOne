@@ -1842,6 +1842,45 @@ export default function AdminAgentsPage() {
             </div>
           </div>
 
+          <section
+            className="border-b border-slate-100 bg-slate-50/40 px-4 py-3"
+            aria-label="Compare voice personas"
+          >
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-extrabold text-slate-900">Compare voice personas</h2>
+                <p className="text-[11px] text-slate-500">Compare two voices before assigning one to an agent.</p>
+              </div>
+              <span className="hidden rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700 sm:inline-flex">Preview before assign</span>
+            </div>
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+              {compareVoices.map((voiceId, index) => {
+                const voice = getVoiceForPicker(voiceId);
+                return (
+                  <div key={index} className="flex min-w-0 items-center gap-2 rounded-xl border border-slate-200 bg-white p-2">
+                    <span className="w-12 shrink-0 text-[10px] font-extrabold uppercase tracking-wider text-emerald-700">Voice {index === 0 ? "A" : "B"}</span>
+                    <SmartSelect
+                      value={voice.id}
+                      onChange={(value) =>
+                        setCompareVoices((current) =>
+                          index === 0 ? [value, current[1]] : [current[0], value],
+                        )
+                      }
+                      searchPlaceholder="Search voices…"
+                      options={voicePickerOptions}
+                      className="min-w-0 flex-1 [&>button]:h-8 [&>button]:text-[11px]"
+                    />
+                    <span className="hidden max-w-[180px] truncate text-[10px] text-slate-500 xl:block" title={voice.description}>{voice.tone}</span>
+                    <button type="button" onClick={() => handlePlayVoicePreview(voice)} className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-emerald-700 px-2.5 py-1.5 text-[10px] font-bold text-white hover:bg-emerald-800">
+                      {previewingVoiceId === voice.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
+                      {previewingVoiceId === voice.id ? "Stop" : "Listen"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
           {viewMode === "grid" && (
             <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredAgents.map((agent) => {
@@ -2189,84 +2228,6 @@ export default function AdminAgentsPage() {
       {/* ─────────────────── TAB 2: VOICE STUDIO & SOUND GALLERY ─────────────────── */}
       {activeTab === "voices" && (
         <div className="space-y-6">
-          <section
-            className="overflow-hidden rounded-2xl border border-[#DCE7DF] bg-white shadow-[0_5px_18px_#1b3b300a]"
-            aria-label="Compare voice personas"
-          >
-            <div className="border-b border-[#E8EEE9] px-4 py-3 sm:px-5">
-              <h2 className="text-[15px] font-bold text-[#172A40]">
-                Compare voice personas
-              </h2>
-              <p className="mt-1 text-xs text-[#718197]">
-                Choose two voices and listen to their samples before assigning
-                one.
-              </p>
-            </div>
-            <div className="grid grid-cols-1 gap-3 p-3 lg:grid-cols-2 sm:p-4">
-              {compareVoices.map((voiceId, index) => {
-                const voice = getVoiceForPicker(voiceId);
-                return (
-                  <div
-                    className="flex min-w-0 flex-col rounded-xl border border-[#E3ECE5] bg-[#FAFCF9] p-3 sm:p-4"
-                    key={index}
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <label
-                        htmlFor={`compare-voice-${index}`}
-                        className="text-[11px] font-extrabold uppercase tracking-[.12em] text-[#087F5B]"
-                      >
-                        Voice {index === 0 ? "A" : "B"}
-                      </label>
-                      <span className="rounded-full bg-[#E9F5EE] px-2.5 py-1 text-[11px] font-semibold text-[#087F5B]">
-                        {assignedAgentsForVoice(agents, voice).length} assigned
-                        agents
-                      </span>
-                    </div>
-                    <SmartSelect
-                      value={voice.id}
-                      onChange={(value) =>
-                        setCompareVoices((current) =>
-                          index === 0
-                            ? [value, current[1]]
-                            : [current[0], value],
-                        )
-                      }
-                      searchPlaceholder="Search voices…"
-                      options={voicePickerOptions}
-                      className="mt-2"
-                    />
-                    <div className="mt-3">
-                      <strong className="block text-base font-bold text-[#17372A]">
-                        {voice.name}
-                      </strong>
-                      <span className="mt-0.5 block text-xs font-medium text-[#648070]">
-                        {voice.tone} · {voice.accent || "Indian"}
-                      </span>
-                    </div>
-                    <p className="mt-2 min-h-0 text-xs leading-relaxed text-[#5C7163]">
-                      {voice.description}
-                    </p>
-                    <div className="mt-3 border-t border-[#E3ECE5] pt-3">
-                      <button
-                        type="button"
-                        onClick={() => handlePlayVoicePreview(voice)}
-                        className="inline-flex min-h-8 items-center gap-2 rounded-lg bg-[#087F5B] px-3 py-1.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#066B4C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#087F5B]"
-                      >
-                        {previewingVoiceId === voice.id ? (
-                          <Square size={14} />
-                        ) : (
-                          <Play size={14} />
-                        )}
-                        {previewingVoiceId === voice.id
-                          ? "Stop sample"
-                          : "Listen sample"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
           {/* Header Filter Pill Bar */}
           <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-3">
