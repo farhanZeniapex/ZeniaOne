@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Path, Query, Request, HTTPException
 from fastapi.responses import StreamingResponse
-from core.database import col_conversations, col_messages
+from core.database import col_conversations, col_messages, col_channels
 from core.dependencies import get_auth_context, AuthContext, get_platform_admin
 from core.exceptions import NotFoundError
 from services import conversation_service
@@ -371,15 +371,54 @@ async def proxy_recording(
     except (socket.gaierror, ValueError, OSError):
         raise HTTPException(status_code=400, detail="Recording host could not be resolved")
 
+    recording_auths = []
     if is_twilio:
         recording_auth = (settings.twilio_account_sid, settings.twilio_auth_token)
         if not all(recording_auth):
             raise HTTPException(status_code=503, detail="Twilio credentials are not configured")
+        recording_auths.append(recording_auth)
         if not url.endswith(".mp3"):
             url = url + ".mp3"
     else:
+        # Recordings are owned by the channel's Exotel account. The global
+        # fallback credentials can belong to another tenant/account, which
+        # causes Exotel to return 401 even when the call itself succeeded.
         recording_auth = (settings.exotel_api_key, settings.exotel_api_token)
-        if not all(recording_auth):
+        if all(recording_auth):
+            recording_auths.append(recording_auth)
+        try:
+            conv = await col_conversations().find_one(
+                {"_id": ObjectId(conv_id), "company_id": company_id},
+                {"channel_id": 1},
+            )
+            channel_ref = str((conv or {}).get("channel_id") or "")
+            if channel_ref:
+                channel = await col_channels().find_one({"_id": ObjectId(channel_ref)})
+                channel_credentials = (channel or {}).get("credentials") or {}
+                from core.security import decrypt_secret
+                channel_key = decrypt_secret(channel_credentials.get("api_key_encrypted", ""))
+                channel_token = decrypt_secret(channel_credentials.get("api_token_encrypted", ""))
+                if channel_key and channel_token:
+                    recording_auths.insert(0, (channel_key, channel_token))
+            # Older records can have a missing channel_id. Try configured
+            # Exotel accounts in the same company before declaring the media
+            # unavailable; this keeps historical recordings playable.
+            company_channels = await col_channels().find(
+                {"company_id": company_id, "type": {"$in": ["exotel", "exotel_voice"]}},
+                {"credentials": 1},
+            ).to_list(length=20)
+            from core.security import decrypt_secret
+            for candidate in company_channels:
+                candidate_credentials = candidate.get("credentials") or {}
+                candidate_auth = (
+                    decrypt_secret(candidate_credentials.get("api_key_encrypted", "")),
+                    decrypt_secret(candidate_credentials.get("api_token_encrypted", "")),
+                )
+                if all(candidate_auth) and candidate_auth not in recording_auths:
+                    recording_auths.append(candidate_auth)
+        except (TypeError, ValueError):
+            pass
+        if not recording_auths:
             raise HTTPException(status_code=503, detail="Exotel credentials are not configured")
     
     req_headers = {}
@@ -387,14 +426,20 @@ async def proxy_recording(
     if range_header:
         req_headers["Range"] = range_header
 
-    client = httpx.AsyncClient(auth=recording_auth, follow_redirects=False, timeout=30.0)
-    req = client.build_request("GET", url, headers=req_headers)
-    upstream_response = await client.send(req, stream=True)
-    
-    if upstream_response.status_code not in (200, 206):
-        await upstream_response.aclose()
-        await client.aclose()
-        raise HTTPException(status_code=502, detail="Upstream error")
+    upstream_response = None
+    client = None
+    for recording_auth in recording_auths:
+        candidate_client = httpx.AsyncClient(auth=recording_auth, follow_redirects=False, timeout=30.0)
+        req = candidate_client.build_request("GET", url, headers=req_headers)
+        candidate_response = await candidate_client.send(req, stream=True)
+        if candidate_response.status_code in (200, 206):
+            client = candidate_client
+            upstream_response = candidate_response
+            break
+        await candidate_response.aclose()
+        await candidate_client.aclose()
+    if upstream_response is None or client is None:
+        raise HTTPException(status_code=502, detail="Upstream recording unavailable")
         
     async def stream():
         try:
