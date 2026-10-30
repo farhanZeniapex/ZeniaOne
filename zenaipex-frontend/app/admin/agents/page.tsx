@@ -2150,27 +2150,35 @@ export default function AdminAgentsPage() {
                 };
 
                 return (
-                  <div key={voice.id} className="flex min-h-[190px] flex-col justify-between rounded-xl border border-slate-200 bg-slate-50/40 p-4 transition hover:border-indigo-200 hover:bg-indigo-50/30 hover:shadow-sm">
+                  <div key={voice.id} className={`relative flex min-h-[300px] flex-col justify-between space-y-4 overflow-hidden rounded-2xl border bg-white p-5 shadow-sm transition-all ${previewingVoiceId === voice.id ? "border-indigo-500 ring-2 ring-indigo-500/20 shadow-lg" : "border-slate-200/80 hover:border-slate-300 hover:shadow-md"}`}>
+                    {previewingVoiceId === voice.id && <div className="absolute left-0 right-0 top-0 h-1.5 bg-gradient-to-r from-indigo-500 via-violet-400 to-indigo-600 animate-pulse" />}
                     <div>
-                      <div className="flex items-start justify-between gap-3">
+                      <div className="mb-3 flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-sm font-black text-indigo-700">
-                            {voice.name.charAt(0)}
-                          </div>
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50 text-base font-extrabold text-indigo-700 shadow-sm">{voice.name.charAt(0)}</div>
                           <div>
-                            <h3 className="text-sm font-extrabold text-slate-900">{voice.name}</h3>
-                            <p className="text-[11px] font-semibold text-indigo-700">{voice.tone}</p>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-base font-extrabold tracking-tight text-slate-900">{voice.name}</h3>
+                              <span className="rounded-md border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-indigo-700">Gemini Live</span>
+                            </div>
+                            <span className="mt-1 inline-block rounded-md bg-indigo-50/80 px-2 py-0.5 text-xs font-semibold text-indigo-700">{voice.tone}</span>
                           </div>
                         </div>
-                        {currentAgent && <span className="rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">In use</span>}
+                        <span className="shrink-0 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{currentAgent ? "1 Agent" : "0 Agents"}</span>
                       </div>
-                      <p className="mt-3 text-xs leading-relaxed text-slate-500">{voice.description}</p>
+                      <p className="mb-3.5 text-xs leading-relaxed text-slate-600">{voice.description}</p>
+                      <div className="flex items-center justify-between rounded-xl border border-indigo-100 bg-indigo-50/40 p-2.5 text-[11px] font-mono text-indigo-700">
+                        <span className="font-bold">Provider:</span>
+                        <span>Google Gemini Live</span>
+                        <span>Native audio</span>
+                      </div>
                     </div>
-                    <div className="mt-4 flex items-center gap-2 border-t border-slate-200 pt-3">
-                      <button type="button" onClick={() => handlePlayVoicePreview(previewVoice)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-2.5 py-2 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-50">
+                    <div className="space-y-3 border-t border-slate-100 pt-3">
+                      <button type="button" onClick={() => handlePlayVoicePreview(previewVoice)} className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${previewingVoiceId === voice.id ? "bg-red-600 text-white hover:bg-red-700" : "bg-indigo-600 text-white shadow-sm hover:bg-indigo-700"}`}>
                         {previewingVoiceId === voice.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
-                        {previewingVoiceId === voice.id ? "Stop" : "Preview"}
+                        {previewingVoiceId === voice.id ? "Stop voice sample" : "Listen voice sample"}
                       </button>
+                      <label className="block text-[11px] font-semibold text-slate-500">Assign this voice to platform agent:</label>
                       <SmartSelect
                         value=""
                         placeholder={currentAgent ? `Assign to another agent` : "Assign to agent"}
