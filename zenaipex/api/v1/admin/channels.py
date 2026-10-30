@@ -83,8 +83,17 @@ async def _sync_exotel_history(channel: dict) -> dict:
     for sid, call in calls.items():
         outbound = str(call.get("Direction") or "").lower().startswith("outbound")
         direction = "outbound" if outbound else "inbound"
-        from_phone = str(call.get("From") or "")
-        to_phone = str(call.get("To") or number)
+        provider_from = str(call.get("From") or "")
+        provider_to = str(call.get("To") or number)
+        if outbound:
+            # Exotel's outbound list can expose the dialled party in From and
+            # the ExoPhone in To. The UI must show the actual customer as To.
+            customer_phone = provider_from if phone_numbers_match(provider_to, number) else provider_to
+            from_phone = number
+            to_phone = customer_phone
+        else:
+            from_phone = provider_from
+            to_phone = provider_to
         try:
             started_at = datetime.strptime(str(call.get("DateCreated")), "%Y-%m-%d %H:%M:%S").replace(tzinfo=ist).astimezone(timezone.utc)
         except (TypeError, ValueError):

@@ -168,14 +168,22 @@ def run(args: argparse.Namespace) -> None:
         started = provider_time(call.get("DateCreated"))
         duration = int(call.get("Duration") or 0)
         ended = provider_time(call.get("EndTime")) or (started + timedelta(seconds=duration) if started else None)
+        provider_direction = str(call.get("Direction") or "").lower()
+        outbound = provider_direction.startswith("outbound")
+        provider_from = call.get("From")
+        provider_to = call.get("To") or number
+        customer_phone = provider_from if outbound and phone_numbers_match(provider_to, number) else provider_to if outbound else provider_from
         new_doc = {
             "company_id": company_id,
             "agent_id": str(channel.get("agent_id") or ""),
             "channel_id": channel_id,
             "call_sid": sid,
-            "caller_phone": call.get("From"),
-            "caller_to": number,
-            "direction": "outbound" if str(call.get("Direction") or "").lower().startswith("outbound") else "inbound",
+            "caller_phone": customer_phone if outbound else provider_from,
+            "caller_to": number if outbound else provider_to,
+            "from_phone": number if outbound else provider_from,
+            "to_phone": customer_phone if outbound else provider_to,
+            "destination_phone": customer_phone if outbound else provider_to,
+            "direction": "outbound" if outbound else "inbound",
             "status": str(call.get("Status") or "completed").lower(),
             "started_at": started,
             "ended_at": ended,
