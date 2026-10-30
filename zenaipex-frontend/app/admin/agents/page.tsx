@@ -2164,8 +2164,12 @@ export default function AdminAgentsPage() {
                         Assign this voice to platform agent:
                       </label>
                       <SmartSelect
-                        value=""
-                        placeholder="Choose an agent to reassign…"
+                        value={assignedAgents[0]?.id || ""}
+                        placeholder={
+                          assignedAgents.length > 0
+                            ? assignedAgents[0].name
+                            : "Choose an agent to assign…"
+                        }
                         searchPlaceholder="Search agents…"
                         onChange={(value) => handleUpdateVoice(value, voice.id)}
                         options={agents.map((a) => ({
@@ -2266,7 +2270,7 @@ export default function AdminAgentsPage() {
                       </button>
                       <label className="block text-[11px] font-semibold text-slate-500">Assign this voice to platform agent:</label>
                       <SmartSelect
-                        value=""
+                        value={assignedAgents[0]?.id || ""}
                         placeholder={assignedAgents.length > 0 ? `Assign to another agent` : "Assign to agent"}
                         searchPlaceholder="Search agents…"
                         onChange={(agentId) => handleUpdateVoice(agentId, voice.id)}
