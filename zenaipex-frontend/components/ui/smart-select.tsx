@@ -253,7 +253,7 @@ export function SmartSelect({
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={searchPlaceholder}
-                  className="h-9 min-w-0 flex-1 bg-transparent text-xs text-[#17372A] outline-none placeholder:text-[#91A69A]"
+                  className="h-8 min-w-0 flex-1 bg-transparent text-[11px] text-[#17372A] outline-none placeholder:text-[#91A69A]"
                 />
               </div>
             )}
@@ -284,7 +284,7 @@ export function SmartSelect({
                           disabled={option.disabled}
                           onClick={() => choose(option)}
                           className={cn(
-                            "flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors duration-150",
+                            "flex min-h-8 w-full items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors duration-150",
                             option.disabled
                               ? "cursor-not-allowed opacity-45"
                               : "hover:bg-[#F0F8F2]",
@@ -297,11 +297,11 @@ export function SmartSelect({
                             </span>
                           ) : null}
                           <span className="min-w-0 flex-1">
-                              <span className="block truncate text-xs font-semibold leading-tight">
+                              <span className="block truncate text-[11px] font-semibold leading-tight">
                               {option.label}
                             </span>
                             {option.description && (
-                              <span className="block truncate text-[10px] leading-tight text-[#789487]">
+                              <span className="block truncate text-[9px] leading-tight text-[#789487]">
                                 {option.description}
                               </span>
                             )}
