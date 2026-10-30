@@ -45,6 +45,7 @@ def channel_conversation_query(channel: dict) -> dict:
     if channel.get("type") in VOICE_TYPES and channel.get("phone_number"):
         return {
             "company_id": company_id,
+            "is_archived": {"$ne": True},
             "$or": [
                 {"caller_to": {"$in": phone_variants(channel["phone_number"])}},
                 {
@@ -54,8 +55,8 @@ def channel_conversation_query(channel: dict) -> dict:
             ],
         }
     if channel.get("type") == "web_chat" and channel.get("public_identifier"):
-        return {"company_id": company_id, "caller_to": channel["public_identifier"]}
-    return {"company_id": company_id, "channel_id": channel_id}
+        return {"company_id": company_id, "is_archived": {"$ne": True}, "caller_to": channel["public_identifier"]}
+    return {"company_id": company_id, "is_archived": {"$ne": True}, "channel_id": channel_id}
 
 
 async def resolve_exotel_channel(

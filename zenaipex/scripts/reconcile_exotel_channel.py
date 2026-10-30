@@ -89,6 +89,14 @@ def run(args: argparse.Namespace) -> None:
         raise RuntimeError("A provider Call SID belongs to another company; no changes made")
 
     other_channels = list(db.channels.find({"company_id": company_id, "_id": {"$ne": channel["_id"]}}))
+    unmatched_channel_records = list(db.conversations.find({
+        "company_id": company_id,
+        "channel_id": channel_id,
+        "$and": [
+            {"call_sid": {"$exists": True, "$nin": [None, ""]}},
+            {"call_sid": {"$nin": sids}},
+        ],
+    }))
     wrongly_tagged = []
     for doc in db.conversations.find({"company_id": company_id, "channel_id": channel_id}):
         if doc.get("call_sid") in sids or not doc.get("caller_to"):
@@ -110,6 +118,7 @@ def run(args: argparse.Namespace) -> None:
         "existing_sid_matches": len(existing),
         "missing_provider_calls": len(missing),
         "other_provider_records_to_reassign": len(wrongly_tagged),
+        "unmatched_channel_records_to_archive": len(unmatched_channel_records),
         "channel_phone_needs_trim": channel.get("phone_number") != number,
         "mode": "apply" if args.apply else "dry-run",
     }
@@ -122,6 +131,7 @@ def run(args: argparse.Namespace) -> None:
         "channel": channel,
         "existing_provider_conversations": existing,
         "other_provider_conversations": [doc for doc, _ in wrongly_tagged],
+        "unmatched_channel_conversations": unmatched_channel_records,
         "provider_sids_to_insert": [call["Sid"] for call in missing],
     }, indent=2), encoding="utf-8")
     print(f"Backup: {backup_path}")
@@ -130,6 +140,7 @@ def run(args: argparse.Namespace) -> None:
     for call in provider_calls:
         sid = call["Sid"]
         doc = existing_by_sid.get(sid)
+        if doc:
             provider_direction = (
                 "outbound"
                 if str(call.get("Direction") or "").lower().startswith("outbound")
@@ -144,8 +155,11 @@ def run(args: argparse.Namespace) -> None:
                 "from_phone": doc.get("caller_to") if provider_direction == "outbound" else doc.get("caller_phone"),
                 "to_phone": doc.get("caller_phone") if provider_direction == "outbound" else doc.get("caller_to"),
                 "destination_phone": doc.get("caller_phone") if provider_direction == "outbound" else doc.get("caller_to"),
+                "source_type": "phone_call",
+                "provider_verified": True,
+                "provider_direction": call.get("Direction"),
+                "is_archived": False,
             }
-        if doc:
             db.conversations.update_one(
                 {"_id": doc["_id"], "company_id": company_id, "call_sid": sid},
                 {"$set": {"channel_id": channel_id, "caller_to": number, **endpoint_update}},
@@ -161,7 +175,7 @@ def run(args: argparse.Namespace) -> None:
             "call_sid": sid,
             "caller_phone": call.get("From"),
             "caller_to": number,
-            "direction": "outbound" if str(call.get("Direction") or "").startswith("outbound") else "inbound",
+            "direction": "outbound" if str(call.get("Direction") or "").lower().startswith("outbound") else "inbound",
             "status": str(call.get("Status") or "completed").lower(),
             "started_at": started,
             "ended_at": ended,
@@ -169,7 +183,10 @@ def run(args: argparse.Namespace) -> None:
             "turn_count": 0,
             "is_archived": False,
             "recording_url": call.get("RecordingUrl") or None,
+            "source_type": "phone_call",
             "import_source": "exotel_api_reconciliation",
+            "provider_verified": True,
+            "provider_direction": call.get("Direction"),
         }
         db.conversations.update_one({"call_sid": sid}, {"$setOnInsert": new_doc}, upsert=True)
 
@@ -177,6 +194,15 @@ def run(args: argparse.Namespace) -> None:
         db.conversations.update_one(
             {"_id": doc["_id"], "company_id": company_id, "channel_id": channel_id},
             {"$set": {"channel_id": str(correct_channel["_id"])}},
+        )
+    for doc in unmatched_channel_records:
+        db.conversations.update_one(
+            {"_id": doc["_id"], "company_id": company_id, "channel_id": channel_id},
+            {"$set": {
+                "is_archived": True,
+                "provider_verified": False,
+                "provider_reconciliation_status": "not_found_in_exotel_window",
+            }},
         )
     print("Reconciliation applied.")
 
