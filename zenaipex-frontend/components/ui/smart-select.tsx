@@ -295,9 +295,7 @@ export function SmartSelect({
                             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#F1F8F3] text-[#087F5B]">
                               {option.icon}
                             </span>
-                          ) : (
-                            <span className="h-7 w-7 shrink-0" />
-                          )}
+                          ) : null}
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-semibold leading-tight">
                               {option.label}
