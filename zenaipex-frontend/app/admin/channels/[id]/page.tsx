@@ -818,7 +818,15 @@ export default function AdminChannelDetailPage({
           });
         }
 
-        const convs = convRes.conversations || [];
+        const rawConvs = convRes.conversations || [];
+        const seenSids = new Set<string>();
+        const convs = rawConvs.filter((item: any) => {
+          if (item.is_archived === true || item.provider_verified === false) return false;
+          const sid = String(item.call_sid || "");
+          if (!sid || seenSids.has(sid)) return false;
+          seenSids.add(sid);
+          return true;
+        });
         setConversations(convs);
         setSelectedCall((previous: any) => {
           if (!previous) return previous;

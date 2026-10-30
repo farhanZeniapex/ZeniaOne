@@ -591,6 +591,8 @@ async def get_channel_conversations(channel_id: str, limit: int = 50, sync_provi
             "call_sid": doc.get("call_sid"),
             "failure_reason": doc.get("failure_reason"),
             "provider_status": doc.get("provider_status"),
+            "provider_verified": doc.get("provider_verified"),
+            "is_archived": bool(doc.get("is_archived", False)),
         }
         
     return {"conversations": [_fmt(c) for c in convs]}
