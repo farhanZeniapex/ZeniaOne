@@ -1257,6 +1257,8 @@ export default function AdminAgentsPage() {
     });
   }, [agents, search, companyFilter, genderFilter, quickFilter]);
 
+  const totalVoiceCount = VOICES.length + GEMINI_VOICES.length + customVoices.length;
+
   return (
     <div className={org.page}>
       {/* Toast Notification */}
@@ -1318,8 +1320,7 @@ export default function AdminAgentsPage() {
               <span>Sarvam AI · Bulbul:v3</span>
             </div>
             <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
-              11 Certified Human Personas (5 Male · 6 Female) with High-Fidelity
-              acoustic neural synthesis.
+              {totalVoiceCount} voices available: {VOICES.length} platform, {GEMINI_VOICES.length} Gemini Live, and {customVoices.length} cloned.
             </p>
           </div>
 
@@ -1395,8 +1396,10 @@ export default function AdminAgentsPage() {
             <Mic size={17} />
           </span>
           <span className={org.metricLabel}>Voice catalog</span>
-          <strong className={org.metricValue}>11 personas</strong>
-          <span className={org.metricSub}>5 male · 6 female</span>
+          <strong className={org.metricValue}>{totalVoiceCount} voices</strong>
+          <span className={org.metricSub}>
+            {VOICES.length} platform · {GEMINI_VOICES.length} Gemini · {customVoices.length} cloned
+          </span>
         </div>
         <div className={org.metric}>
           <span className={org.metricIcon}>
