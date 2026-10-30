@@ -2525,7 +2525,7 @@ export default function AdminChannelDetailPage({
                             >
                               <td className="px-5 py-3.5">
                                 <div className="flex items-center gap-2 mb-1.5">
-                                  {conv.direction === "outbound" ? (
+                                  {String(conv.direction || "inbound").toLowerCase() === "outbound" ? (
                                     <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-blue-50 border border-blue-100 text-blue-700 text-xs font-semibold tracking-wide">
                                       <PhoneOutgoing className="w-3.5 h-3.5" />
                                       OUTBOUND
@@ -2539,13 +2539,15 @@ export default function AdminChannelDetailPage({
                                 </div>
                                 <div className="font-medium text-slate-900 text-sm mb-1.5 flex items-center gap-1.5">
                                   <span className="text-slate-500 font-normal">
-                                    {conv.direction === "outbound"
+                                    {String(conv.direction || "inbound").toLowerCase() === "outbound"
                                       ? "To:"
                                       : "From:"}
                                   </span>
                                   <span className="font-mono font-semibold tracking-tight">
                                     {conv.direction === "outbound"
-                                      ? conv.destination_phone ||
+                                      ? conv.to_phone ||
+                                        conv.destination_phone ||
+                                        conv.caller_to ||
                                         conv.caller_phone ||
                                         "Unknown"
                                       : conv.caller_phone || "Unknown"}
