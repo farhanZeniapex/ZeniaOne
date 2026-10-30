@@ -1836,7 +1836,7 @@ export default function AdminAgentsPage() {
             className="overflow-hidden rounded-2xl border border-[#DCE7DF] bg-white shadow-[0_5px_18px_#1b3b300a]"
             aria-label="Compare voice personas"
           >
-            <div className="border-b border-[#E8EEE9] px-5 py-4 sm:px-6">
+            <div className="border-b border-[#E8EEE9] px-4 py-3 sm:px-5">
               <h2 className="text-[15px] font-bold text-[#172A40]">
                 Compare voice personas
               </h2>
@@ -1845,13 +1845,13 @@ export default function AdminAgentsPage() {
                 one.
               </p>
             </div>
-            <div className="grid grid-cols-1 gap-4 p-4 lg:grid-cols-2 sm:p-5">
+            <div className="grid grid-cols-1 gap-3 p-3 lg:grid-cols-2 sm:p-4">
               {compareVoices.map((voiceId, index) => {
                 const voice =
                   VOICES.find((item) => item.id === voiceId) || VOICES[0];
                 return (
                   <div
-                    className="flex min-w-0 flex-col rounded-xl border border-[#E3ECE5] bg-[#FAFCF9] p-4 sm:p-5"
+                    className="flex min-w-0 flex-col rounded-xl border border-[#E3ECE5] bg-[#FAFCF9] p-3 sm:p-4"
                     key={index}
                   >
                     <div className="flex items-center justify-between gap-3">
@@ -1883,24 +1883,24 @@ export default function AdminAgentsPage() {
                         badge: item.gender,
                         group: `${item.gender} voices`,
                       }))}
-                      className="mt-3"
+                      className="mt-2"
                     />
-                    <div className="mt-4">
-                      <strong className="block text-lg font-bold text-[#17372A]">
+                    <div className="mt-3">
+                      <strong className="block text-base font-bold text-[#17372A]">
                         {voice.name}
                       </strong>
                       <span className="mt-0.5 block text-xs font-medium text-[#648070]">
                         {voice.tone} · {voice.accent || "Indian"}
                       </span>
                     </div>
-                    <p className="mt-3 min-h-10 text-sm leading-relaxed text-[#5C7163]">
+                    <p className="mt-2 min-h-0 text-xs leading-relaxed text-[#5C7163]">
                       {voice.description}
                     </p>
-                    <div className="mt-4 border-t border-[#E3ECE5] pt-4">
+                    <div className="mt-3 border-t border-[#E3ECE5] pt-3">
                       <button
                         type="button"
                         onClick={() => handlePlayVoicePreview(voice)}
-                        className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-[#087F5B] px-3.5 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#066B4C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#087F5B]"
+                        className="inline-flex min-h-8 items-center gap-2 rounded-lg bg-[#087F5B] px-3 py-1.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-[#066B4C] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#087F5B]"
                       >
                         {previewingVoiceId === voice.id ? (
                           <Square size={14} />
@@ -1918,7 +1918,7 @@ export default function AdminAgentsPage() {
             </div>
           </section>
           {/* Header Filter Pill Bar */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                 Gender Filter:
@@ -1961,7 +1961,7 @@ export default function AdminAgentsPage() {
           </div>
 
           {/* 11 Voice Studio Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {VOICES.filter(
               (v) => genderFilter === "all" || v.gender === genderFilter,
             ).map((voice) => {
@@ -1976,7 +1976,7 @@ export default function AdminAgentsPage() {
               return (
                 <div
                   key={voice.id}
-                  className={`bg-white rounded-2xl border transition-all p-5 flex flex-col justify-between space-y-4 shadow-sm relative overflow-hidden ${
+                  className={`bg-white rounded-2xl border transition-all p-4 flex flex-col justify-between space-y-3 shadow-sm relative overflow-hidden ${
                     isPlaying
                       ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg"
                       : "border-slate-200/80 hover:border-slate-300 hover:shadow-md"
@@ -1989,24 +1989,24 @@ export default function AdminAgentsPage() {
 
                   <div>
                     {/* Top Row: Name, Avatar, Gender */}
-                    <div className="flex items-start justify-between gap-3 mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className="h-12 w-12 rounded-2xl flex items-center justify-center font-extrabold text-base shrink-0 shadow-sm border bg-emerald-50 border-emerald-100 text-emerald-800">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-10 w-10 rounded-xl flex items-center justify-center font-extrabold text-sm shrink-0 shadow-sm border bg-emerald-50 border-emerald-100 text-emerald-800">
                           {voice.name.charAt(0)}
                         </div>
                         <div>
                           <div className="flex items-center gap-2">
-                            <h3 className="font-extrabold text-slate-900 text-base">
+                            <h3 className="font-extrabold text-slate-900 text-sm">
                               {voice.name}
                             </h3>
                             <Badge
                               variant="outline"
-                              className="text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border-emerald-100"
+                              className="text-[9px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border-emerald-100"
                             >
                               {voice.gender}
                             </Badge>
                           </div>
-                          <span className="text-xs font-semibold text-emerald-700 bg-emerald-50/80 px-2 py-0.5 rounded-md inline-block mt-1">
+                          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50/80 px-2 py-0.5 rounded-md inline-block mt-1">
                             {voice.tone}
                           </span>
                         </div>
@@ -2015,19 +2015,19 @@ export default function AdminAgentsPage() {
                       {/* Usage Badge */}
                       <Badge
                         variant="secondary"
-                        className="text-xs bg-slate-100 text-slate-700 border-slate-200 font-semibold shrink-0"
+                        className="text-[11px] bg-slate-100 text-slate-700 border-slate-200 font-semibold shrink-0"
                       >
                         {assignedAgents.length}{" "}
                         {assignedAgents.length === 1 ? "Agent" : "Agents"}
                       </Badge>
                     </div>
 
-                    <p className="text-xs text-slate-600 leading-relaxed mb-3.5">
+                    <p className="text-[11px] text-slate-600 leading-relaxed mb-2.5">
                       {voice.description}
                     </p>
 
                     {/* Acoustic Telemetry Pill */}
-                    <div className="flex items-center justify-between text-[11px] font-mono text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-100 mb-3.5">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-600 bg-slate-50 p-2 rounded-xl border border-slate-100 mb-2.5">
                       <span className="text-slate-800 font-bold">
                         Acoustics:
                       </span>
@@ -2041,8 +2041,8 @@ export default function AdminAgentsPage() {
                     </div>
 
                     {/* Sample Dialogue Box */}
-                    <div className="bg-slate-50/90 rounded-xl p-3.5 border border-slate-100 text-xs italic text-slate-700 relative">
-                      <span className="font-bold text-slate-900 not-italic block mb-1 text-[11px] uppercase tracking-wider">
+                    <div className="bg-slate-50/90 rounded-xl p-3 border border-slate-100 text-[11px] italic text-slate-700 relative">
+                      <span className="font-bold text-slate-900 not-italic block mb-1 text-[10px] uppercase tracking-wider">
                         Sample Dialogue:
                       </span>
                       "{voice.sampleText}"
@@ -2050,13 +2050,13 @@ export default function AdminAgentsPage() {
                   </div>
 
                   {/* Bottom Actions */}
-                  <div className="space-y-3 pt-3 border-t border-slate-100">
+                  <div className="space-y-2.5 pt-2.5 border-t border-slate-100">
                     <Button
                       onClick={() => handlePlayVoicePreview(voice)}
                       disabled={
                         isPreviewLoading && previewingVoiceId === voice.id
                       }
-                      className={`w-full text-xs font-bold gap-2 py-2 rounded-xl transition-all ${
+                        className={`w-full text-[11px] font-bold gap-2 py-1.5 rounded-xl transition-all ${
                         isPlaying
                           ? "bg-red-600 hover:bg-red-700 text-white shadow-md shadow-red-500/20"
                           : "bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs"
@@ -2079,7 +2079,7 @@ export default function AdminAgentsPage() {
 
                     {/* Reassign to Agent Selector */}
                     <div className="space-y-1">
-                      <label className="text-[11px] font-semibold text-slate-500 block">
+                      <label className="text-[10px] font-semibold text-slate-500 block">
                         Assign this voice to platform agent:
                       </label>
                       <SmartSelect
@@ -2150,31 +2150,31 @@ export default function AdminAgentsPage() {
                 };
 
                 return (
-                  <div key={voice.id} className={`relative flex min-h-[300px] flex-col justify-between space-y-4 overflow-hidden rounded-2xl border bg-white p-5 shadow-sm transition-all ${previewingVoiceId === voice.id ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg" : "border-slate-200/80 hover:border-emerald-300 hover:shadow-md"}`}>
+                  <div key={voice.id} className={`relative flex min-h-[250px] flex-col justify-between space-y-3 overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition-all ${previewingVoiceId === voice.id ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg" : "border-slate-200/80 hover:border-emerald-300 hover:shadow-md"}`}>
                     {previewingVoiceId === voice.id && <div className="absolute left-0 right-0 top-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 animate-pulse" />}
                     <div>
                       <div className="mb-3 flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-emerald-100 bg-emerald-50 text-base font-extrabold text-emerald-800 shadow-sm">{voice.name.charAt(0)}</div>
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-sm font-extrabold text-emerald-800 shadow-sm">{voice.name.charAt(0)}</div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <h3 className="text-base font-extrabold tracking-tight text-slate-900">{voice.name}</h3>
+                              <h3 className="text-sm font-extrabold tracking-tight text-slate-900">{voice.name}</h3>
                               <span className="rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800">Gemini Live</span>
                             </div>
-                            <span className="mt-1 inline-block rounded-md bg-emerald-50/80 px-2 py-0.5 text-xs font-semibold text-emerald-700">{voice.tone}</span>
+                            <span className="mt-1 inline-block rounded-md bg-emerald-50/80 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{voice.tone}</span>
                           </div>
                         </div>
                         <span className="shrink-0 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{currentAgent ? "1 Agent" : "0 Agents"}</span>
                       </div>
-                      <p className="mb-3.5 text-xs leading-relaxed text-slate-600">{voice.description}</p>
-                      <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/40 p-2.5 text-[11px] font-mono text-emerald-700">
+                      <p className="mb-2.5 text-[11px] leading-relaxed text-slate-600">{voice.description}</p>
+                      <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/40 p-2 text-[10px] font-mono text-emerald-700">
                         <span className="font-bold">Provider:</span>
                         <span>Google Gemini Live</span>
                         <span>Native audio</span>
                       </div>
                     </div>
                     <div className="space-y-3 border-t border-slate-100 pt-3">
-                      <button type="button" onClick={() => handlePlayVoicePreview(previewVoice)} className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${previewingVoiceId === voice.id ? "bg-red-600 text-white hover:bg-red-700" : "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800"}`}>
+                      <button type="button" onClick={() => handlePlayVoicePreview(previewVoice)} className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold transition-all ${previewingVoiceId === voice.id ? "bg-red-600 text-white hover:bg-red-700" : "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800"}`}>
                         {previewingVoiceId === voice.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
                         {previewingVoiceId === voice.id ? "Stop voice sample" : "Listen voice sample"}
                       </button>
