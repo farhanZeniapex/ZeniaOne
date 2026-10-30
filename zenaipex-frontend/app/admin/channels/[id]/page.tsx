@@ -791,7 +791,7 @@ export default function AdminChannelDetailPage({
       try {
         const [chanRes, convRes, anRes, compRes, agentRes, routingRes] = await Promise.all([
           fetchApi<any>(`/admin/channels/${channelId}`),
-          fetchApi<any>(`/admin/channels/${channelId}/conversations?limit=500`),
+          fetchApi<any>(`/admin/channels/${channelId}/conversations?limit=500&sync_provider=true`),
           fetchApi<any>(`/admin/channels/${channelId}/analytics`).catch(
             () => null,
           ),

@@ -17,10 +17,138 @@ from core.database import col_channels, col_conversations, col_messages, col_sub
 from core.exceptions import NotFoundError
 from core.dependencies import require_channel_admin
 from bson import ObjectId
-from services.voice_channel_mapping import channel_conversation_query
+from services.voice_channel_mapping import channel_conversation_query, phone_numbers_match
 
 router = APIRouter()
 _twilio_history_sync_at: dict[str, float] = {}
+_exotel_history_sync_at: dict[str, float] = {}
+
+
+async def _sync_exotel_history(channel: dict) -> dict:
+    """Reconcile the visible Exotel history with provider Call SIDs."""
+    import httpx
+    from datetime import datetime, timedelta, timezone
+    from core.security import decrypt_secret
+
+    config = channel.get("config") or {}
+    credentials = channel.get("credentials") or {}
+    account_sid = str(config.get("exotel_account_sid") or settings.exotel_account_sid or "").strip()
+    api_key = decrypt_secret(credentials.get("api_key_encrypted", "")) or settings.exotel_api_key
+    api_token = decrypt_secret(credentials.get("api_token_encrypted", "")) or settings.exotel_api_token
+    number = str(channel.get("phone_number") or "").strip()
+    if not all((account_sid, api_key, api_token, number)):
+        return {"synced": False, "reason": "missing_provider_credentials"}
+
+    ist = timezone(timedelta(hours=5, minutes=30))
+    now_ist = datetime.now(ist)
+    start = now_ist - timedelta(days=30)
+    host = settings.exotel_subdomain or "api.exotel.com"
+    url = f"https://{host}/v1/Accounts/{account_sid}/Calls.json"
+    params = {
+        "DateCreated": f"gte:{start:%Y-%m-%d %H:%M:%S};lte:{now_ist:%Y-%m-%d %H:%M:%S}",
+        "PageSize": 100,
+    }
+    calls: dict[str, dict] = {}
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for _ in range(20):
+            response = await client.get(url, auth=(api_key, api_token), params=params)
+            response.raise_for_status()
+            payload = response.json()
+            for call in payload.get("Calls") or []:
+                if call.get("Sid") and phone_numbers_match(call.get("PhoneNumber"), number):
+                    calls[str(call["Sid"])] = call
+            metadata = payload.get("Metadata") or {}
+            next_uri = metadata.get("NextPageUri")
+            if not next_uri:
+                break
+            url = f"https://{host}{next_uri}" if str(next_uri).startswith("/") else str(next_uri)
+            params = None
+
+    if not calls:
+        return {"synced": False, "reason": "no_provider_calls"}
+
+    channel_id = str(channel["_id"])
+    company_id = str(channel["company_id"])
+    sids = list(calls)
+    existing = await col_conversations().find({
+        "company_id": company_id,
+        "call_sid": {"$in": sids},
+    }).to_list(length=None)
+    existing_by_sid = {str(doc.get("call_sid")): doc for doc in existing}
+    start_utc = start.astimezone(timezone.utc)
+    archived = 0
+    inserted = 0
+    updated = 0
+
+    for sid, call in calls.items():
+        outbound = str(call.get("Direction") or "").lower().startswith("outbound")
+        direction = "outbound" if outbound else "inbound"
+        from_phone = str(call.get("From") or "")
+        to_phone = str(call.get("To") or number)
+        try:
+            started_at = datetime.strptime(str(call.get("DateCreated")), "%Y-%m-%d %H:%M:%S").replace(tzinfo=ist).astimezone(timezone.utc)
+        except (TypeError, ValueError):
+            started_at = datetime.now(timezone.utc)
+        try:
+            duration = int(call.get("Duration") or 0)
+        except (TypeError, ValueError):
+            duration = 0
+        status = str(call.get("Status") or "completed").lower()
+        normalized_status = {"terminal": "completed", "busy": "busy", "no-answer": "no-answer"}.get(status, status)
+        update = {
+            "company_id": company_id,
+            "channel_id": channel_id,
+            "direction": direction,
+            "from_phone": from_phone,
+            "to_phone": to_phone,
+            "destination_phone": to_phone,
+            "caller_phone": from_phone,
+            "caller_to": to_phone,
+            "status": normalized_status,
+            "duration_seconds": duration,
+            "started_at": started_at,
+            "provider_status": status,
+            "provider_direction": call.get("Direction"),
+            "provider_verified": True,
+            "source_type": "phone_call",
+            "is_archived": False,
+        }
+        if call.get("RecordingUrl"):
+            update["recording_url"] = call["RecordingUrl"]
+        if sid in existing_by_sid:
+            await col_conversations().update_one({"_id": existing_by_sid[sid]["_id"]}, {"$set": update})
+            updated += 1
+        else:
+            update.update({
+                "agent_id": str(channel.get("agent_id") or ""),
+                "call_sid": sid,
+                "turn_count": 0,
+                "is_pinned": False,
+                "is_archived": False,
+            })
+            await col_conversations().insert_one(update)
+            inserted += 1
+
+    unmatched_query = {
+        "company_id": company_id,
+        "channel_id": channel_id,
+        "call_sid": {"$exists": True, "$nin": [None, ""]},
+        "started_at": {"$gte": start_utc},
+    }
+    async for doc in col_conversations().find(unmatched_query):
+        if str(doc.get("call_sid")) in calls:
+            continue
+        result = await col_conversations().update_one(
+            {"_id": doc["_id"]},
+            {"$set": {
+                "is_archived": True,
+                "provider_verified": False,
+                "provider_reconciliation_status": "not_found_in_exotel_window",
+            }},
+        )
+        archived += result.modified_count
+
+    return {"synced": True, "provider_calls": len(calls), "updated": updated, "inserted": inserted, "archived": archived}
 
 class CreateChannelRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
@@ -300,10 +428,21 @@ async def generate_channel_callback_urls(channel_id: str):
     }
 
 @router.get("/channels/{channel_id}/conversations", summary="Get conversations for a channel")
-async def get_channel_conversations(channel_id: str, limit: int = 50):
+async def get_channel_conversations(channel_id: str, limit: int = 50, sync_provider: bool = False):
     channel = await col_channels().find_one({"_id": ObjectId(channel_id)})
     if not channel:
         raise NotFoundError("Channel")
+
+    if sync_provider and channel.get("type") in {"exotel", "exotel_voice"}:
+        now = time.monotonic()
+        last_sync = _exotel_history_sync_at.get(channel_id, 0)
+        if now - last_sync >= 30:
+            _exotel_history_sync_at[channel_id] = now
+            try:
+                result = await _sync_exotel_history(channel)
+                logger.info("[EXOTEL_HISTORY_SYNC] channel=%s result=%s", channel_id, result)
+            except Exception as exc:
+                logger.warning("[EXOTEL_HISTORY_SYNC] skipped: %s", type(exc).__name__)
     
     query = channel_conversation_query(channel)
 
