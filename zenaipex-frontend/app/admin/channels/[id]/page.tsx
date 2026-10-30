@@ -1458,10 +1458,10 @@ export default function AdminChannelDetailPage({
 
       {/* OVERVIEW TAB */}
       {activeTab === "overview" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 xl:gap-3 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-6 gap-2 xl:gap-3 items-start">
           <div className="lg:contents">
             {hasChanges && (
-              <div className="lg:col-span-2 bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex flex-wrap gap-3 items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2">
+              <div className="lg:col-span-6 bg-emerald-50 border border-emerald-200 p-4 rounded-xl flex flex-wrap gap-3 items-center justify-between shadow-sm animate-in fade-in slide-in-from-top-2">
                 <div className="text-sm text-emerald-900">
                   <strong>Review channel impact before saving</strong>
                   {editForm.agent_id !== (channel.agent_id || "") && (
@@ -1507,7 +1507,7 @@ export default function AdminChannelDetailPage({
 
             {saveMessage && (
               <div
-                className={`lg:col-span-2 p-4 rounded-xl flex items-center shadow-sm animate-in fade-in slide-in-from-top-2 ${saveMessage.type === "success" ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-red-50 border border-red-200 text-red-800"}`}
+                className={`lg:col-span-6 p-4 rounded-xl flex items-center shadow-sm animate-in fade-in slide-in-from-top-2 ${saveMessage.type === "success" ? "bg-emerald-50 border border-emerald-200 text-emerald-800" : "bg-red-50 border border-red-200 text-red-800"}`}
               >
                 {saveMessage.type === "success" ? (
                   <CheckCircle2 className="w-5 h-5 mr-3 text-emerald-500" />
@@ -1520,7 +1520,7 @@ export default function AdminChannelDetailPage({
               </div>
             )}
 
-            <div className="lg:col-span-1 lg:order-[10] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="lg:col-span-3 lg:order-[10] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                   <Phone className="w-4 h-4 mr-2 text-emerald-700" /> Telephony
@@ -1580,7 +1580,7 @@ export default function AdminChannelDetailPage({
             </div>
 
             {isVoice && (
-              <div className="lg:col-span-1 lg:order-[50] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="lg:col-span-3 lg:order-[50] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                 <div className="px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                     <Server className="w-4 h-4 mr-2 text-emerald-700" /> {providerName} Integration
@@ -1721,7 +1721,7 @@ export default function AdminChannelDetailPage({
               </div>
             )}
 
-            <div className="lg:col-span-1 lg:order-[60] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="lg:col-span-3 lg:order-[60] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                   <Zap className="w-4 h-4 mr-2 text-emerald-700" /> AI
@@ -1822,8 +1822,8 @@ export default function AdminChannelDetailPage({
               </div>
             </div>
 
-            <div className="lg:col-span-2 lg:order-[30] grid grid-cols-1 md:grid-cols-2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="bg-white overflow-hidden">
+            <div className="lg:contents">
+              <div className="lg:col-span-2 lg:order-[30] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                     <Database className="w-4 h-4 mr-2 text-emerald-700" />{" "}
@@ -1873,7 +1873,7 @@ export default function AdminChannelDetailPage({
                 </div>
               </div>
 
-              <div className="border-t border-slate-100 bg-white overflow-hidden md:border-l md:border-t-0">
+              <div className="lg:col-span-2 lg:order-[30] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
                     <Settings className="w-4 h-4 mr-2 text-slate-500" /> Call
@@ -1916,7 +1916,7 @@ export default function AdminChannelDetailPage({
             </div>
           </div>
 
-            <div className="lg:col-span-1 lg:order-[20] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="lg:col-span-3 lg:order-[20] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="bg-white overflow-hidden">
               <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center">
