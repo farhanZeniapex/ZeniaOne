@@ -478,6 +478,7 @@ export default function AdminAgentsPage() {
 
   const filteredVoices = useMemo(() => {
     let result = customVoices
+      .filter(() => typeFilter === "all" || typeFilter === "cloned")
       .filter((v) => {
         if (voiceFilter === "active") return !v.is_archived;
         if (voiceFilter === "archived") return !!v.is_archived;
@@ -507,7 +508,7 @@ export default function AdminAgentsPage() {
     }
 
     return result;
-  }, [customVoices, voiceFilter, search, sortBy]);
+  }, [customVoices, typeFilter, voiceFilter, search, sortBy]);
 
   // Voice Preview Play / Stop Handler with Calibrated Speed, Volume Boost & Instant Zero-Lag Playback
   const handlePlayVoicePreview = async (voice: Voice, agentObj?: any) => {
@@ -1240,7 +1241,7 @@ export default function AdminAgentsPage() {
 
   // Filtered Agents
   const filteredAgents = useMemo(() => {
-    return agents.filter((agent) => {
+    const result = agents.filter((agent) => {
       const matchesSearch =
         agent.name?.toLowerCase().includes(search.toLowerCase()) ||
         agent.company_name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -1249,6 +1250,18 @@ export default function AdminAgentsPage() {
 
       const matchesCompany =
         companyFilter === "all" || agent.company_id === companyFilter;
+
+      const matchesStatus =
+        voiceFilter === "all" ||
+        (voiceFilter === "active"
+          ? agent.status === "active"
+          : agent.status !== "active");
+
+      const hasAssignedVoice = Boolean(agent.tts_voice);
+      const matchesType =
+        typeFilter === "all" ||
+        (typeFilter === "assigned" && hasAssignedVoice) ||
+        (typeFilter === "unassigned" && !hasAssignedVoice);
 
       const voiceObj =
         platformVoices.find(
@@ -1264,9 +1277,32 @@ export default function AdminAgentsPage() {
       else if (quickFilter === "internal")
         matchesQuick = agent.company_name?.toLowerCase().includes("internal");
 
-      return matchesSearch && matchesCompany && matchesGender && matchesQuick;
+      return (
+        matchesSearch &&
+        matchesCompany &&
+        matchesStatus &&
+        matchesType &&
+        matchesGender &&
+        matchesQuick
+      );
     });
-  }, [agents, search, companyFilter, genderFilter, quickFilter]);
+
+    if (sortBy === "az") {
+      result.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+    } else if (sortBy === "oldest") {
+      result.reverse();
+    }
+    return result;
+  }, [
+    agents,
+    search,
+    companyFilter,
+    typeFilter,
+    voiceFilter,
+    sortBy,
+    genderFilter,
+    quickFilter,
+  ]);
 
   const voicePickerOptions = useMemo(
     () => [
@@ -1334,6 +1370,65 @@ export default function AdminAgentsPage() {
   };
 
   const totalVoiceCount = VOICES.length + GEMINI_VOICES.length + customVoices.length;
+
+  const voiceTypeOptions =
+    activeTab === "voices"
+      ? [
+          { value: "all", label: "All Types" },
+          { value: "platform", label: "Platform" },
+        ]
+      : activeTab === "gemini_voices"
+        ? [
+            { value: "all", label: "All Types" },
+            { value: "gemini", label: "Gemini" },
+          ]
+        : activeTab === "custom_voices"
+          ? [
+              { value: "all", label: "All Types" },
+              { value: "cloned", label: "Cloned" },
+            ]
+          : [
+              { value: "all", label: "All Types" },
+              { value: "assigned", label: "Assigned" },
+              { value: "unassigned", label: "Unassigned" },
+            ];
+
+  const orderedPlatformVoices = [...VOICES]
+    .filter(
+      (voice) =>
+        typeFilter === "all" || typeFilter === "platform",
+    )
+    .filter(
+      (voice) =>
+        !search.trim() ||
+        `${voice.name} ${voice.tone} ${voice.gender}`
+          .toLowerCase()
+          .includes(search.trim().toLowerCase()),
+    )
+    .sort((a, b) =>
+      sortBy === "az"
+        ? a.name.localeCompare(b.name)
+        : sortBy === "oldest"
+          ? b.name.localeCompare(a.name)
+          : 0,
+    );
+
+  const orderedGeminiVoices = [...GEMINI_VOICES]
+    .filter((voice) => typeFilter === "all" || typeFilter === "gemini")
+    .filter(
+      (voice) =>
+        !search.trim() ||
+        `${voice.name} ${voice.tone}`
+          .toLowerCase()
+          .includes(search.trim().toLowerCase()),
+    )
+    .sort((a, b) =>
+      sortBy === "az"
+        ? a.name.localeCompare(b.name)
+        : sortBy === "oldest"
+          ? b.name.localeCompare(a.name)
+          : 0,
+    );
 
   return (
     <div className={org.page}>
@@ -1573,11 +1668,7 @@ export default function AdminAgentsPage() {
               onChange={setTypeFilter}
               searchable={false}
               className="w-24 [&>button]:h-8 [&>button]:border-transparent [&>button]:bg-transparent [&>button]:px-2 [&>button]:shadow-none [&>button]:text-[11px] [&>button]:hover:border-transparent [&>button]:hover:shadow-none"
-              options={[
-                { value: "all", label: "All Types" },
-                { value: "cloned", label: "Cloned" },
-                { value: "professional", label: "Pro" },
-              ]}
+              options={voiceTypeOptions}
             />
             <div className="h-4 w-px bg-slate-200" />
             <SmartSelect
@@ -1736,8 +1827,82 @@ export default function AdminAgentsPage() {
             </div>
           </div>
 
+          {viewMode === "grid" && (
+            <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
+              {filteredAgents.map((agent) => {
+                const voiceObj =
+                  platformVoices.find(
+                    (v) =>
+                      v.id.toLowerCase() ===
+                      (agent.tts_voice || "").toLowerCase(),
+                  ) || getVoiceById(agent.tts_voice);
+                const isPreviewingThis = previewingVoiceId === voiceObj.id;
+                return (
+                  <article
+                    key={agent.id}
+                    className="flex min-h-[235px] flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-emerald-300 hover:shadow-md"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-sm font-extrabold text-emerald-700">
+                            {agent.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="truncate text-sm font-extrabold text-slate-900">
+                              {agent.name}
+                            </h3>
+                            <p className="truncate text-[11px] text-slate-500">
+                              {agent.description || `Configured for ${agent.company_name}`}
+                            </p>
+                          </div>
+                        </div>
+                        {agent.status === "active" && (
+                          <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <div className="mt-4 space-y-2 rounded-xl bg-slate-50/80 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Workspace</span>
+                          <span className="truncate text-xs font-semibold text-slate-800">{agent.company_name}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Voice</span>
+                          <span className="truncate text-xs font-semibold text-emerald-700">{voiceObj.name}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">AI model</span>
+                          <span className="truncate font-mono text-[10px] text-slate-600">{agent.llm_model || "sarvam-105b"}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                      <button
+                        onClick={() => handlePlayVoicePreview(voiceObj, agent)}
+                        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${isPreviewingThis ? "border-red-600 bg-red-600 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"}`}
+                      >
+                        {isPreviewingThis ? <Square className="h-3 w-3 fill-current" /> : <Play className="h-3 w-3 fill-current" />}
+                        {isPreviewingThis ? "Stop" : "Listen"}
+                      </button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditDrawer(agent)}
+                        className="h-8 gap-1.5 rounded-xl text-xs font-semibold text-slate-600 hover:bg-emerald-50 hover:text-emerald-700"
+                      >
+                        <Settings2 className="h-3.5 w-3.5" /> Configure
+                      </Button>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+
           {/* Table */}
-          <div className="overflow-x-auto">
+          {viewMode === "list" && <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="text-[11px] text-slate-500 uppercase bg-slate-50/80 border-b border-slate-200 tracking-wider">
                 <tr>
@@ -1969,7 +2134,7 @@ export default function AdminAgentsPage() {
                 )}
               </tbody>
             </table>
-          </div>
+          </div>}
         </div>
       )}
 
@@ -2099,9 +2264,9 @@ export default function AdminAgentsPage() {
 
           {/* 11 Voice Studio Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {VOICES.filter(
-              (v) => genderFilter === "all" || v.gender === genderFilter,
-            ).map((voice) => {
+            {orderedPlatformVoices
+              .filter((v) => genderFilter === "all" || v.gender === genderFilter)
+              .map((voice) => {
               const isPlaying = previewingVoiceId === voice.id;
               const assignedAgents = assignedAgentsForVoice(agents, voice);
               const acoustics = getVoiceAcoustics(voice.id);
@@ -2274,10 +2439,7 @@ export default function AdminAgentsPage() {
             </div>
 
             <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-3 sm:p-5">
-              {GEMINI_VOICES.filter((voice) => {
-                const query = search.trim().toLowerCase();
-                return !query || `${voice.name} ${voice.tone}`.toLowerCase().includes(query);
-              }).map((voice) => {
+              {orderedGeminiVoices.map((voice) => {
                 const assignedAgents = assignedAgentsForVoice(agents, voice);
                 const previewVoice = {
                   id: voice.id,
