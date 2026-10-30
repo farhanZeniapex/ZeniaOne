@@ -1961,7 +1961,7 @@ export default function AdminAgentsPage() {
           </div>
 
           {/* 11 Voice Studio Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {VOICES.filter(
               (v) => genderFilter === "all" || v.gender === genderFilter,
             ).map((voice) => {
@@ -1976,7 +1976,7 @@ export default function AdminAgentsPage() {
               return (
                 <div
                   key={voice.id}
-                  className={`bg-white rounded-2xl border transition-all p-4 flex flex-col justify-between space-y-3 shadow-sm relative overflow-hidden ${
+                  className={`bg-white rounded-2xl border transition-all p-3 flex flex-col justify-between space-y-2.5 shadow-sm relative overflow-hidden ${
                     isPlaying
                       ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg"
                       : "border-slate-200/80 hover:border-slate-300 hover:shadow-md"
@@ -2022,7 +2022,7 @@ export default function AdminAgentsPage() {
                       </Badge>
                     </div>
 
-                    <p className="text-[11px] text-slate-600 leading-relaxed mb-2.5">
+                    <p className="text-[11px] text-slate-600 leading-relaxed mb-2 line-clamp-2 min-h-[32px]">
                       {voice.description}
                     </p>
 
@@ -2040,13 +2040,9 @@ export default function AdminAgentsPage() {
                       </span>
                     </div>
 
-                    {/* Sample Dialogue Box */}
-                    <div className="bg-slate-50/90 rounded-xl p-3 border border-slate-100 text-[11px] italic text-slate-700 relative">
-                      <span className="font-bold text-slate-900 not-italic block mb-1 text-[10px] uppercase tracking-wider">
-                        Sample Dialogue:
-                      </span>
-                      "{voice.sampleText}"
-                    </div>
+                    <p className="truncate text-[10px] italic text-slate-500" title={voice.sampleText}>
+                      Preview: “{voice.sampleText}”
+                    </p>
                   </div>
 
                   {/* Bottom Actions */}
