@@ -2740,6 +2740,50 @@ export default function AdminAgentsPage() {
                       voice,
                     );
 
+                    if (viewMode === "list") {
+                      const previewVoice = getVoiceForPicker(voice.voice_id || voice.id);
+                      return (
+                        <div
+                          key={voice.id}
+                          onClick={() => setSelectedVoiceId(voice.id)}
+                          className={`flex flex-col gap-3 rounded-xl border bg-white p-3 shadow-sm transition hover:border-emerald-300 hover:shadow-md sm:flex-row sm:items-center ${isSelected ? "border-emerald-500 ring-1 ring-emerald-500/20" : "border-slate-200"}`}
+                        >
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-sm font-extrabold text-emerald-800">{voice.name?.charAt(0)?.toUpperCase() || "C"}</div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <h3 className="truncate text-sm font-extrabold text-slate-900">{voice.name}</h3>
+                                <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700">Cloned</span>
+                              </div>
+                              <p className="truncate text-[11px] text-slate-500">{voice.description || "Custom cloned voice"}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 sm:w-44">
+                            <Users className="h-3 w-3 shrink-0 text-emerald-600" />
+                            <span className="truncate" title={assignedAgents.map((a) => a.name).join(", ")}>{assignedAgents.length > 0 ? assignedAgents.map((a) => a.name).join(", ") : "Unassigned"}</span>
+                          </div>
+                          <div className="min-w-[190px]" onClick={(event) => event.stopPropagation()}>
+                            <SmartSelect
+                              value={assignedAgents[0]?.id || ""}
+                              placeholder={assignedAgents.length > 0 ? assignedAgents[0].name : "Select company agent…"}
+                              searchPlaceholder="Search agents or companies…"
+                              onChange={(agentId) => handleUpdateVoice(agentId, voice.id)}
+                              options={agents.map((agent) => ({
+                                value: agent.id,
+                                label: `${agent.name} · ${agent.company_name}`,
+                                badge: assignedAgents.some((assigned) => assigned.id === agent.id) ? "Current" : undefined,
+                              }))}
+                              className="[&>button]:h-8 [&>button]:text-[10px]"
+                            />
+                          </div>
+                          <Button onClick={(event) => { event.stopPropagation(); return handlePlayVoicePreview(previewVoice); }} className="shrink-0 bg-emerald-700 text-[11px] font-bold hover:bg-emerald-800">
+                            {previewingVoiceId === previewVoice.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
+                            {previewingVoiceId === previewVoice.id ? "Stop" : "Listen"}
+                          </Button>
+                        </div>
+                      );
+                    }
+
                     if (viewMode === "grid") {
                       return (
                         <div
