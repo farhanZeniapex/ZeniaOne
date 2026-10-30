@@ -127,7 +127,7 @@ async def exotel_voice_webhook(company_id: str, agent_id: str, request: Request)
     host = request.headers.get("host", "")
     scheme = "wss" if "localhost" not in host and "127.0.0.1" not in host else "ws"
     http_scheme = "https" if scheme == "wss" else "http"
-    ws_params = {"caller": caller, "CallTo": to_number}
+    ws_params = {"caller": caller, "CallFrom": caller, "From": caller, "CallTo": to_number}
     if channel_id:
         ws_params["channel_id"] = channel_id
     if call_sid:
@@ -208,7 +208,7 @@ async def exotel_voicebot_webhook(company_id: str, agent_id: str, request: Reque
     
     host = request.headers.get("host", "")
     scheme = "wss" if "localhost" not in host and "127.0.0.1" not in host else "ws"
-    ws_params = {"caller": caller, "CallTo": to_number}
+    ws_params = {"caller": caller, "CallFrom": caller, "From": caller, "CallTo": to_number}
     if channel_id: ws_params["channel_id"] = channel_id
     if call_sid: ws_params["call_sid"] = call_sid
     for key in ("contact_name", "topic", "system_prompt", "direction"):
@@ -438,10 +438,14 @@ async def _fetch_configured_voice_response(
 
     context_docs = []
     if rag_pipeline and latest_utterance and latest_utterance != "<unclear_speech>":
-        try:
-            context_docs = await rag_pipeline.retrieve(latest_utterance)
-        except Exception as exc:
-            logger.warning(f"[VOICE_RAG] retrieval_failed={type(exc).__name__}")
+        lang = agent_doc.get("default_language", "en-IN") if agent_doc else "en-IN"
+        if rag_pipeline.should_retrieve(latest_utterance, language=lang):
+            try:
+                context_docs = await rag_pipeline.retrieve(latest_utterance)
+            except Exception as exc:
+                logger.warning(f"[VOICE_RAG] retrieval_failed={type(exc).__name__}")
+        else:
+            logger.info(f"[VOICE_RAG] RAG_SKIPPED query='{latest_utterance}' (conversational turn)")
 
     # The current utterance is already appended by the phone route. Exclude it
     # from history because stream() adds user_message itself.
@@ -558,6 +562,9 @@ async def fetch_llm_response(conversation_history, active_product="ZeniaONE", ra
     resolved_query_info = resolve_rag_query(latest_utterance, active_product, conversation_history)
     CASUAL_WORDS = frozenset({
         "hello", "hi", "hey", "how are you", "how r u", "how are you doing", "how do you do",
+        "awaz aa rahi hai", "aawaz aa rahi hai", "awaz aa rahi", "aawaz aa rahi",
+        "meri awaz aa rahi hai", "meri aawaz aa rahi hai", "sun rahe ho", "sunai de raha hai",
+        "can you hear me", "am i audible", "are you there", "kaun bol raha hai", "aap kaun ho",
         "good morning", "good evening", "good afternoon", "good day",
         "okay", "ok", "thanks", "thank you", "thank u", "haan", "hmm", "hmmm", "achha", "acha",
         "theek hai", "theek", "thik hai", "thik",
@@ -1489,7 +1496,7 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
                             channel_id = websocket.query_params.get("channel_id")
                             
                             # 💾 [DB STEP] Save New Conversation
-                            caller_phone = websocket.query_params.get("CallFrom") or websocket.query_params.get("From") or custom_params.get('From') or start_data.get('CallFrom') or start_data.get('from') or "Unknown"
+                            caller_phone = websocket.query_params.get("CallFrom") or websocket.query_params.get("From") or websocket.query_params.get("caller") or custom_params.get('From') or start_data.get('CallFrom') or start_data.get('from') or "Unknown"
                             caller_to = websocket.query_params.get("CallTo") or websocket.query_params.get("To") or custom_params.get('To') or start_data.get('CallTo') or start_data.get('to') or ""
                             
                             from services.voice_channel_mapping import resolve_exotel_channel
@@ -1720,8 +1727,25 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
                     try:
                         call_dir = websocket.query_params.get("direction", "inbound")
                         lower_text = normalized_text.lower()
-                        goodbye_phrases = ["bye", "goodbye", "alvida", "cut the call", "hang up", "talk to you later", "rakh raha", "phone rakh"]
-                        is_goodbye = any(word in lower_text for word in goodbye_phrases)
+                        def _is_explicit_goodbye(txt: str) -> bool:
+                            c = re.sub(r"[^\w\s]", " ", txt.lower()).strip()
+                            w = c.split()
+                            if not w:
+                                return False
+                            # If greeting or inquiry words are present, it is not a hangup request
+                            if any(greeting_w in w for greeting_w in ["hello", "hi", "hey", "namaste", "suno", "batao", "bataiye", "bhai", "yaar", "sir", "madam"]):
+                                return False
+                            hangup_phrases = [
+                                "cut the call", "call cut", "hang up", "phone rakh", "rakh raha", "rakh rahi",
+                                "talk to you later", "badme baat", "baad me baat", "tata bye bye", "bye bye", "alvida"
+                            ]
+                            if any(hp in c for hp in hangup_phrases):
+                                return True
+                            if c in {"bye", "goodbye", "alvida", "tata"}:
+                                return True
+                            return False
+
+                        is_goodbye = _is_explicit_goodbye(normalized_text)
                         streamed_tts = False
                         speech_queue = None
                         speech_task = None
@@ -1789,8 +1813,7 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
                                     speech_task.cancel()
                         
                         # Manually enforce END_CALL if user clearly said goodbye
-                        lower_text = normalized_text.lower()
-                        if any(word in lower_text for word in goodbye_phrases) and "<END_CALL>" not in ai_response:
+                        if is_goodbye and "<END_CALL>" not in ai_response:
                             ai_response += " <END_CALL>"
                             
                         clean_ai_response = ai_response.replace("<END_CALL>", "").strip()

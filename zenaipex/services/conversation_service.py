@@ -42,18 +42,26 @@ async def create_conversation(
                 last_10 = clean_digits[-10:]
                 try:
                     from core.database import col_leads
+                    phone_pattern = re.compile(rf"{re.escape(last_10)}$")
                     lead = await col_leads().find_one(
-                        {"company_id": company_id, "phone": {"$regex": f"{last_10}$"}}
+                        {"company_id": company_id, "phone": phone_pattern}
                     )
                     if lead and lead.get("name"):
                         resolved_contact_name = lead["name"]
                     else:
+                        cust_phone_query = {
+                            "company_id": company_id,
+                            "$or": [
+                                {"caller_phone": phone_pattern},
+                                {"from_phone": phone_pattern},
+                            ] if direction != "outbound" else [
+                                {"to_phone": phone_pattern},
+                                {"destination_phone": phone_pattern},
+                            ],
+                            "contact_name": {"$exists": True, "$ne": None, "$nin": ["", "Unknown", "inbound", "None"]}
+                        }
                         prior = await col_conversations().find_one(
-                            {
-                                "company_id": company_id,
-                                "caller_phone": {"$regex": f"{last_10}$"},
-                                "contact_name": {"$exists": True, "$ne": None, "$nin": ["", "Unknown", "inbound", "None"]}
-                            },
+                            cust_phone_query,
                             sort=[("started_at", -1)]
                         )
                         if prior and prior.get("contact_name"):

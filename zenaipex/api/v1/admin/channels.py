@@ -587,14 +587,15 @@ async def get_channel_conversations(channel_id: str, limit: int = 50, sync_provi
                     "company_id": str(channel["company_id"]),
                     "contact_name": {"$exists": True, "$ne": None, "$nin": ["", "Unknown", "inbound", "None"]}
                 },
-                {"caller_phone": 1, "from_phone": 1, "to_phone": 1, "contact_name": 1}
+                {"caller_phone": 1, "from_phone": 1, "to_phone": 1, "destination_phone": 1, "direction": 1, "contact_name": 1}
             ).to_list(100)
             for pc in prior_named:
-                for candidate in (pc.get("caller_phone"), pc.get("from_phone"), pc.get("to_phone")):
-                    if candidate:
-                        cand_clean = re.sub(r"\D", "", candidate)[-10:]
-                        if cand_clean and cand_clean not in contact_map and pc.get("contact_name"):
-                            contact_map[cand_clean] = pc["contact_name"]
+                p_dir = pc.get("direction", "inbound")
+                cust_candidate = (pc.get("to_phone") or pc.get("destination_phone")) if p_dir == "outbound" else (pc.get("caller_phone") or pc.get("from_phone"))
+                if cust_candidate:
+                    cand_clean = re.sub(r"\D", "", cust_candidate)[-10:]
+                    if cand_clean and cand_clean not in contact_map and pc.get("contact_name"):
+                        contact_map[cand_clean] = pc["contact_name"]
         except Exception as c_err:
             logger.debug("Contact batch prefetch skipped: %s", c_err)
 
@@ -1109,6 +1110,7 @@ async def get_channel_analytics(channel_id: str):
             "company_id": company_id,
             "caller_phone": c.get("caller_phone") or None,
             "caller_to": c.get("caller_to") or None,
+            "contact_name": c.get("contact_name") or None,
             "direction": c.get("direction", "inbound"),
             "status": c.get("status", "unknown"),
             "created_at": started.isoformat() if started else None,

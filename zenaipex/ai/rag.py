@@ -53,6 +53,16 @@ LIVE_WEB_TERMS = {
 }
 
 
+NON_RAG_CONVERSATIONAL_PATTERNS = {
+    "kaise ho", "kese ho", "how are you", "kya haal", "sab theek",
+    "awaz aa rahi", "aawaz aa rahi", "awaj aa rahi", "sun rahe ho", "sunai de raha",
+    "can you hear", "am i audible", "are you there", "hello", "hi", "namaste",
+    "kem cho", "bhai", "main bol raha", "thik hai", "theek hai", "accha", "achha",
+    "dhanyawad", "shukriya", "thank you", "bye", "goodbye", "alvida",
+    "kya aap sun", "kya meri awaz", "bolo", "ha bolo", "haan bolo", "bataiye"
+}
+
+
 def should_use_rag(query: str, language: str = "en-IN") -> bool:
     """
     Determine if a query should trigger knowledge base retrieval.
@@ -69,12 +79,17 @@ def should_use_rag(query: str, language: str = "en-IN") -> bool:
     if not query_lower or len(query_lower.split()) < 2:
         return False
 
-    has_domain_signal = any(term in query_lower for term in DOCUMENT_INTENT_TERMS)
     strong_domain_signal = any(
         term in query_lower
         for term in DOCUMENT_INTENT_TERMS
         if term not in {"how do i", "how does it work", "what is", "what are"}
     )
+
+    # Conversational smalltalk, audio checks, and greetings bypass Pinecone RAG entirely
+    if any(pat in query_lower for pat in NON_RAG_CONVERSATIONAL_PATTERNS) and not strong_domain_signal:
+        return False
+
+    has_domain_signal = any(term in query_lower for term in DOCUMENT_INTENT_TERMS)
     has_live_web_signal = any(term in query_lower for term in LIVE_WEB_TERMS)
     if has_live_web_signal and not strong_domain_signal:
         return False
@@ -115,6 +130,7 @@ class TenantRAGPipeline:
         self.namespace = namespace
         self.agent = agent_doc or {}
         self._vs: Optional[NamespacedVectorStore] = None
+        self._ready_ids: Optional[set] = None
 
     def _get_vs(self) -> NamespacedVectorStore:
         if self._vs is None:
@@ -132,19 +148,23 @@ class TenantRAGPipeline:
             # Older vectors may not carry a document id. Preserve compatibility
             # rather than silently removing every legacy result.
             return docs
-        from core.database import col_documents
-        company_id = str(self.agent.get("company_id") or self.namespace)
-        knowledge_base_id = self.agent.get("knowledge_base_id")
-        ready_query = {
-            "company_id": company_id,
-            "status": "ready",
-        }
-        if knowledge_base_id:
-            ready_query["knowledge_base_id"] = str(knowledge_base_id)
-        ready_docs = await col_documents().find(ready_query, {"_id": 1}).to_list(length=10000)
-        if not ready_docs and knowledge_base_id:
-            ready_docs = await col_documents().find({"company_id": company_id, "status": "ready"}, {"_id": 1}).to_list(length=10000)
-        ready_ids = {str(doc["_id"]) for doc in ready_docs}
+
+        if self._ready_ids is None:
+            from core.database import col_documents
+            company_id = str(self.agent.get("company_id") or self.namespace)
+            knowledge_base_id = self.agent.get("knowledge_base_id")
+            ready_query = {
+                "company_id": company_id,
+                "status": "ready",
+            }
+            if knowledge_base_id:
+                ready_query["knowledge_base_id"] = str(knowledge_base_id)
+            ready_docs = await col_documents().find(ready_query, {"_id": 1}).to_list(length=10000)
+            if not ready_docs and knowledge_base_id:
+                ready_docs = await col_documents().find({"company_id": company_id, "status": "ready"}, {"_id": 1}).to_list(length=10000)
+            self._ready_ids = {str(doc["_id"]) for doc in ready_docs}
+
+        ready_ids = self._ready_ids
         guarded = [
             doc for doc in docs
             if str(doc.get("document_id") or doc.get("metadata", {}).get("document_id")) in ready_ids

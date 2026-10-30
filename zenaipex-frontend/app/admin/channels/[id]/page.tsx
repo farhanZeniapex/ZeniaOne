@@ -478,6 +478,9 @@ export default function AdminChannelDetailPage({
   // Detail Drawer state
   const [selectedCall, setSelectedCall] = useState<any | null>(null);
   const [callMessages, setCallMessages] = useState<any[]>([]);
+  const [contactEditOpen, setContactEditOpen] = useState(false);
+  const [contactEditName, setContactEditName] = useState("");
+  const [contactEditSaving, setContactEditSaving] = useState(false);
 
   // Config State
   const [editForm, setEditForm] = useState({
@@ -515,6 +518,53 @@ export default function AdminChannelDetailPage({
   const [routingSaving, setRoutingSaving] = useState(false);
   const [voiceModeApplying, setVoiceModeApplying] = useState(false);
   const [isEditChannelModalOpen, setIsEditChannelModalOpen] = useState(false);
+
+  const getCallContactPhone = (call: any) => {
+    if (!call) return "";
+    return call.direction === "outbound"
+      ? call.to_phone || call.destination_phone || call.caller_to || call.caller_phone || ""
+      : call.from_phone || call.caller_phone || call.caller_to || "";
+  };
+
+  const normalizeContactPhone = (value: string) => {
+    const digits = String(value || "").replace(/\D/g, "");
+    return digits.length >= 10 ? digits.slice(-10) : digits;
+  };
+
+  const saveSelectedCallerName = async () => {
+    const name = contactEditName.trim();
+    const phone = getCallContactPhone(selectedCall);
+    if (!name || !phone || !channel?.company_id) return;
+
+    setContactEditSaving(true);
+    try {
+      await fetchApi(
+        `/admin/conversations/caller-profile/${encodeURIComponent(phone)}/save?company_id=${encodeURIComponent(channel.company_id)}`,
+        {
+          method: "POST",
+          body: JSON.stringify({ name }),
+        },
+      );
+
+      const cleanPhone = normalizeContactPhone(phone);
+      setSelectedCall((prev: any) => (prev ? { ...prev, contact_name: name } : prev));
+      setConversations((prev) =>
+        prev.map((conversation) => {
+          const conversationPhone = getCallContactPhone(conversation);
+          return normalizeContactPhone(conversationPhone) === cleanPhone
+            ? { ...conversation, contact_name: name }
+            : conversation;
+        }),
+      );
+      setContactName(name);
+      setContactEditOpen(false);
+    } catch (error) {
+      console.error("Failed to rename caller", error);
+      alert("Caller name save nahi ho paya. Please try again.");
+    } finally {
+      setContactEditSaving(false);
+    }
+  };
 
   useEffect(() => {
     const agent = agentsData[editForm.agent_id];
@@ -3253,9 +3303,14 @@ export default function AdminChannelDetailPage({
                               </div>
                               <div>
                                 <p className="text-sm font-bold text-slate-900 font-mono">
-                                  {call.caller_phone ||
-                                    call.caller_to ||
-                                    "Not available"}
+                                  {call.contact_name ? (
+                                    <span>
+                                      <span className="font-sans text-slate-900">{call.contact_name}</span>{" "}
+                                      <span className="text-xs font-normal text-slate-500 font-mono">({call.caller_phone || call.caller_to || "Not available"})</span>
+                                    </span>
+                                  ) : (
+                                    call.caller_phone || call.caller_to || "Not available"
+                                  )}
                                 </p>
                                 <p className="text-xs text-slate-500 flex items-center gap-2">
                                   <span
@@ -3492,30 +3547,34 @@ export default function AdminChannelDetailPage({
             <div className="p-6 border-b border-[#E7EEE9] shrink-0">
               <div className="flex justify-between items-start gap-4 mb-5">
                 <div>
-                  <h3 className="text-xl font-bold text-slate-900 mb-1 flex items-baseline gap-2">
-                    {selectedCall.contact_name ? (
-                      <>
-                        <span className="text-slate-900">{selectedCall.contact_name}</span>
-                        <span className="text-xs font-normal text-slate-500 font-mono">
-                          ({selectedCall.direction === "outbound"
-                            ? selectedCall.to_phone ||
-                            selectedCall.destination_phone ||
-                            selectedCall.caller_to ||
-                            "Unknown"
-                            : selectedCall.from_phone || selectedCall.caller_phone || "Unknown"})
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xl font-bold text-slate-900 mb-1 flex items-baseline gap-2">
+                      {selectedCall.contact_name ? (
+                        <>
+                          <span className="text-slate-900">{selectedCall.contact_name}</span>
+                          <span className="text-xs font-normal text-slate-500 font-mono">
+                            ({getCallContactPhone(selectedCall) || "Unknown"})
+                          </span>
+                        </>
+                      ) : (
+                        <span className="font-mono">
+                          {getCallContactPhone(selectedCall) || "Unknown"}
                         </span>
-                      </>
-                    ) : (
-                      <span className="font-mono">
-                        {selectedCall.direction === "outbound"
-                          ? selectedCall.to_phone ||
-                          selectedCall.destination_phone ||
-                          selectedCall.caller_to ||
-                          "Unknown"
-                          : selectedCall.from_phone || selectedCall.caller_phone || "Unknown"}
-                      </span>
-                    )}
-                  </h3>
+                      )}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setContactEditName(selectedCall.contact_name || "");
+                        setContactEditOpen(true);
+                      }}
+                      className="mb-1 inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+                      title="Rename caller permanently"
+                    >
+                      <Edit2 className="h-3 w-3" />
+                      Edit name
+                    </button>
+                  </div>
                   <p className="text-slate-500 font-medium text-sm flex items-center gap-2">
                     <span
                       className={`uppercase text-[10px] tracking-wider font-bold border px-2 py-1 rounded-full ${selectedCall.direction === "outbound" ? "text-blue-700 border-blue-200 bg-blue-50" : "text-emerald-700 border-emerald-200 bg-emerald-50"}`}
@@ -3743,6 +3802,47 @@ export default function AdminChannelDetailPage({
           </div>
         </Drawer>
       )}
+
+      {/* PERMANENT CALLER NAME EDITOR */}
+      <Modal
+        open={contactEditOpen}
+        onClose={() => setContactEditOpen(false)}
+        title="Rename caller"
+        description={`Ye naam is number ki live calls, history aur future calls me dikhega: ${getCallContactPhone(selectedCall) || "Unknown number"}`}
+      >
+        <div className="space-y-4 p-6">
+          <div>
+            <label className="mb-1.5 block text-xs font-bold text-slate-700">Caller name</label>
+            <input
+              autoFocus
+              value={contactEditName}
+              onChange={(event) => setContactEditName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void saveSelectedCallerName();
+              }}
+              placeholder="e.g. Farhan Kureshi"
+              className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+            />
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+            <button
+              type="button"
+              onClick={() => setContactEditOpen(false)}
+              className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              disabled={contactEditSaving || !contactEditName.trim()}
+              onClick={() => void saveSelectedCallerName()}
+              className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {contactEditSaving ? "Saving…" : "Save name"}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       {/* LIVE CALL MONITOR */}
       {isMonitorOpen && activeCallId && (

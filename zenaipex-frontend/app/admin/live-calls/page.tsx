@@ -144,20 +144,41 @@ export default function LiveCallsPage() {
       })
       .catch(() => { });
 
-    fetchApi<any>("/admin/conversations?status=active")
-      .then(res => {
-        if (res.conversations && res.conversations.length > 0) {
-          setActiveCalls(res.conversations.map((c: any) => ({
-            ...c,
-            started_at: c.started_at ? new Date(c.started_at).getTime() : Date.now(),
-            status: "active"
-          })));
-          if (!selectedCallId && res.conversations[0]?.id) {
-            setSelectedCallId(res.conversations[0].id);
+    const syncActiveCalls = () => {
+      fetchApi<any>(`/admin/conversations?status=active&_t=${Date.now()}`)
+        .then(res => {
+          if (res.conversations) {
+            const serverActive = res.conversations;
+            const serverIds = new Set(serverActive.map((c: any) => c.id));
+            setActiveCalls(prev => {
+              const updated = prev.map(c => {
+                if (c.status === "active" && !serverIds.has(c.id)) {
+                  return { ...c, status: "completed", ended_at: Date.now() };
+                }
+                return c;
+              }).filter(c => c.status === "active" || (c.ended_at && Date.now() - c.ended_at < 3500));
+              serverActive.forEach((sc: any) => {
+                if (!updated.some(c => c.id === sc.id)) {
+                  updated.push({
+                    ...sc,
+                    started_at: sc.started_at ? new Date(sc.started_at).getTime() : Date.now(),
+                    status: "active"
+                  });
+                }
+              });
+              return updated;
+            });
+            if (serverActive.length > 0) {
+              setSelectedCallId(curr => curr || serverActive[0].id);
+            }
           }
-        }
-      })
-      .catch(() => { });
+        })
+        .catch(() => { });
+    };
+
+    syncActiveCalls();
+    const activeSyncTimer = setInterval(syncActiveCalls, 4000);
+    return () => clearInterval(activeSyncTimer);
   }, []);
 
   useEffect(() => {
@@ -306,7 +327,7 @@ export default function LiveCallsPage() {
     let reconnectTimeout: any = null;
 
     const connectWS = () => {
-      fetchApi<{ ticket?: string }>("/admin/live-monitoring-ticket")
+      fetchApi<{ ticket?: string }>(`/admin/live-monitoring-ticket?t=${Date.now()}`)
         .then(({ ticket }) => {
           if (!ticket || cancelled) return;
           const wsUrl = `${API_BASE_URL.replace("http", "ws")}/admin/live-monitoring?ticket=${encodeURIComponent(ticket)}`;
@@ -334,9 +355,7 @@ export default function LiveCallsPage() {
                   };
                   return [...prev, newCall];
                 });
-                if (!selectedCallId) {
-                  setSelectedCallId(callData.id);
-                }
+                setSelectedCallId(curr => curr || callData.id);
               }
               else if (data.event === "call_state") {
                 const cid = data.data.conversation_id;
@@ -431,7 +450,7 @@ export default function LiveCallsPage() {
       ws?.close();
       wsRef.current = null;
     };
-  }, [selectedCallId]);
+  }, []);
 
   // Polling fallback: If no messages yet, poll conversation messages every 3s
   useEffect(() => {

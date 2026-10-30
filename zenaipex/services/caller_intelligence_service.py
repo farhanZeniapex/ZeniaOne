@@ -141,7 +141,7 @@ async def get_caller_profile(
     contact_email = None
     contact_notes = []
     lead = await col_leads().find_one(
-        {"company_id": company_id, "phone": {"$regex": phone_regex}}
+        {"company_id": company_id, "phone": phone_regex}
     )
     if lead:
         contact_name = lead.get("name")
@@ -149,14 +149,14 @@ async def get_caller_profile(
         if lead.get("notes"):
             contact_notes.append(lead.get("notes"))
 
-    # 2. Query all historical conversations matching this phone
+    # 2. Query all historical conversations matching this customer phone
+    # Only match customer phone (inbound: caller_phone/from_phone; outbound: to_phone/destination_phone)
     query: Dict[str, Any] = {
         "company_id": company_id,
         "$or": [
-            {"caller_phone": {"$regex": phone_regex}},
-            {"from_phone": {"$regex": phone_regex}},
-            {"to_phone": {"$regex": phone_regex}},
-            {"caller_to": {"$regex": phone_regex}},
+            {"$and": [{"direction": "inbound"}, {"$or": [{"caller_phone": phone_regex}, {"from_phone": phone_regex}]}]},
+            {"$and": [{"direction": "outbound"}, {"$or": [{"to_phone": phone_regex}, {"destination_phone": phone_regex}, {"caller_to": phone_regex}]}]},
+            {"$and": [{"direction": {"$nin": ["inbound", "outbound"]}}, {"$or": [{"caller_phone": phone_regex}, {"from_phone": phone_regex}]}]},
         ],
     }
     if exclude_conversation_id:
@@ -293,19 +293,18 @@ async def save_caller_contact(
         "updated_at": now,
     }
     await col_leads().update_one(
-        {"company_id": company_id, "phone": {"$regex": phone_regex}},
+        {"company_id": company_id, "phone": phone_regex},
         {"$set": lead_doc, "$setOnInsert": {"created_at": now}},
         upsert=True,
     )
 
-    # 2. Update all conversations matching this phone
+    # 2. Update customer conversations matching this phone (never overwrite company channels)
     conv_query = {
         "company_id": company_id,
         "$or": [
-            {"caller_phone": {"$regex": phone_regex}},
-            {"from_phone": {"$regex": phone_regex}},
-            {"to_phone": {"$regex": phone_regex}},
-            {"caller_to": {"$regex": phone_regex}},
+            {"$and": [{"direction": "inbound"}, {"$or": [{"caller_phone": phone_regex}, {"from_phone": phone_regex}]}]},
+            {"$and": [{"direction": "outbound"}, {"$or": [{"to_phone": phone_regex}, {"destination_phone": phone_regex}, {"caller_to": phone_regex}]}]},
+            {"$and": [{"direction": {"$nin": ["inbound", "outbound"]}}, {"$or": [{"caller_phone": phone_regex}, {"from_phone": phone_regex}]}]},
         ],
     }
     await col_conversations().update_many(

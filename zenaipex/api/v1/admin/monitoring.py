@@ -113,8 +113,8 @@ async def create_live_monitoring_ticket(_: dict = Depends(get_platform_admin)):
         if expires_at <= now:
             _monitoring_tickets.pop(ticket, None)
     ticket = secrets.token_urlsafe(32)
-    _monitoring_tickets[ticket] = now + 30
-    return {"ticket": ticket, "expires_in": 30}
+    _monitoring_tickets[ticket] = now + 120
+    return {"ticket": ticket, "expires_in": 120}
 
 @router.websocket("/live-monitoring")
 async def live_monitoring_ws(websocket: WebSocket):
@@ -122,12 +122,12 @@ async def live_monitoring_ws(websocket: WebSocket):
     WebSocket endpoint for the Admin Dashboard to receive live call events.
     """
     ticket = websocket.query_params.get("ticket")
-    expires_at = _monitoring_tickets.pop(ticket, 0) if ticket else 0
+    expires_at = _monitoring_tickets.get(ticket, 0) if ticket else 0
     if not expires_at or expires_at <= time.time():
         await websocket.close(code=1008, reason="Platform admin authentication required")
         return
 
-    logger.info(">>> LIVE MONITORING WS CONNECTION ATTEMPT")
+    logger.info(">>> LIVE MONITORING WS CONNECTION ESTABLISHED")
     await monitoring_manager.connect(websocket)
     try:
         while True:
