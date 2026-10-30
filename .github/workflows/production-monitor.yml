@@ -13,7 +13,10 @@ jobs:
   keep-alive:
     name: Ping & Warm Live Services
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Render can take several minutes to wake from a cold start. Keep the
+    # monitor alive long enough for curl's retry budget to complete instead
+    # of reporting a transient startup timeout as an outage.
+    timeout-minutes: 10
     steps:
       - name: Ping Backend & Verify Health
         env:
@@ -25,11 +28,11 @@ jobs:
           # connection and timeout failures, but fail after the retry budget
           # so a real outage still produces an actionable alert.
           curl --fail --silent --show-error --location \
-            --connect-timeout 15 --max-time 45 --retry 4 --retry-all-errors \
-            --retry-delay 8 --retry-max-time 150 "$BACKEND_URL/health" > health.json
+            --connect-timeout 20 --max-time 60 --retry 8 --retry-all-errors \
+            --retry-delay 10 --retry-max-time 300 "$BACKEND_URL/health" > health.json
           curl --fail --silent --show-error --location \
-            --connect-timeout 15 --max-time 45 --retry 4 --retry-all-errors \
-            --retry-delay 8 --retry-max-time 150 "$BACKEND_URL/ready" > ready.json
+            --connect-timeout 20 --max-time 60 --retry 8 --retry-all-errors \
+            --retry-delay 10 --retry-max-time 300 "$BACKEND_URL/ready" > ready.json
           python - <<'PY'
           import json
           health = json.load(open("health.json", encoding="utf-8"))
@@ -48,7 +51,7 @@ jobs:
           set -euo pipefail
           echo "Warming Render frontend ($FRONTEND_URL)..."
           curl --fail --silent --show-error --location -o /dev/null \
-            --connect-timeout 15 --max-time 45 --retry 4 --retry-all-errors \
-            --retry-delay 8 --retry-max-time 150 "$FRONTEND_URL"
+            --connect-timeout 20 --max-time 60 --retry 8 --retry-all-errors \
+            --retry-delay 10 --retry-max-time 300 "$FRONTEND_URL"
           echo "Frontend pinged successfully."
 
