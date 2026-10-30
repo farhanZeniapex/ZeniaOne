@@ -102,42 +102,45 @@ const VOICE_RUNTIME_MODES = [
   },
 ] as const;
 
-const GEMINI_VOICES = [
-  ["Zephyr", "Bright"],
-  ["Puck", "Upbeat"],
-  ["Charon", "Informative"],
-  ["Kore", "Firm"],
-  ["Fenrir", "Excitable"],
-  ["Leda", "Youthful"],
-  ["Orus", "Firm"],
-  ["Aoede", "Breezy"],
-  ["Callirrhoe", "Easy-going"],
-  ["Autonoe", "Bright"],
-  ["Enceladus", "Breathy"],
-  ["Iapetus", "Clear"],
-  ["Umbriel", "Easy-going"],
-  ["Algieba", "Smooth"],
-  ["Despina", "Smooth"],
-  ["Erinome", "Clear"],
-  ["Algenib", "Gravelly"],
-  ["Rasalgethi", "Informative"],
-  ["Laomedeia", "Upbeat"],
-  ["Achernar", "Soft"],
-  ["Alnilam", "Firm"],
-  ["Schedar", "Even"],
-  ["Gacrux", "Mature"],
-  ["Pulcherrima", "Forward"],
-  ["Achird", "Friendly"],
-  ["Zubenelgenubi", "Casual"],
-  ["Vindemiatrix", "Gentle"],
-  ["Sadachbia", "Lively"],
-  ["Sadaltager", "Knowledgeable"],
-  ["Sulafat", "Warm"],
-].map(([name, tone]) => ({
+const GEMINI_VOICES_DATA: [string, string, "Male" | "Female"][] = [
+  ["Zephyr", "Bright", "Female"],
+  ["Puck", "Upbeat", "Male"],
+  ["Charon", "Informative", "Male"],
+  ["Kore", "Firm", "Female"],
+  ["Fenrir", "Excitable", "Male"],
+  ["Leda", "Youthful", "Female"],
+  ["Orus", "Firm", "Male"],
+  ["Aoede", "Breezy", "Female"],
+  ["Callirrhoe", "Easy-going", "Female"],
+  ["Autonoe", "Bright", "Female"],
+  ["Enceladus", "Breathy", "Male"],
+  ["Iapetus", "Clear", "Male"],
+  ["Umbriel", "Easy-going", "Male"],
+  ["Algieba", "Smooth", "Female"],
+  ["Despina", "Smooth", "Female"],
+  ["Erinome", "Clear", "Female"],
+  ["Algenib", "Gravelly", "Male"],
+  ["Rasalgethi", "Informative", "Male"],
+  ["Laomedeia", "Upbeat", "Female"],
+  ["Achernar", "Soft", "Male"],
+  ["Alnilam", "Firm", "Male"],
+  ["Schedar", "Even", "Male"],
+  ["Gacrux", "Mature", "Male"],
+  ["Pulcherrima", "Forward", "Female"],
+  ["Achird", "Friendly", "Male"],
+  ["Zubenelgenubi", "Casual", "Male"],
+  ["Vindemiatrix", "Gentle", "Female"],
+  ["Sadachbia", "Lively", "Female"],
+  ["Sadaltager", "Knowledgeable", "Male"],
+  ["Sulafat", "Warm", "Female"],
+];
+
+const GEMINI_VOICES = GEMINI_VOICES_DATA.map(([name, tone, gender]) => ({
   id: name.toLowerCase(),
   name,
   tone,
-  description: `Gemini Live native voice with a ${tone.toLowerCase()} delivery.`,
+  gender,
+  description: `Gemini Live native ${gender.toLowerCase()} voice with a ${tone.toLowerCase()} delivery.`,
 }));
 
 function CompanyLogo({
@@ -201,6 +204,9 @@ export default function AdminAgentsPage() {
   const [sortBy, setSortBy] = useState("newest");
   const [companyFilter, setCompanyFilter] = useState("all");
   const [genderFilter, setGenderFilter] = useState<"all" | "Male" | "Female">(
+    "all",
+  );
+  const [geminiGenderFilter, setGeminiGenderFilter] = useState<"all" | "Male" | "Female">(
     "all",
   );
   const [compareVoices, setCompareVoices] = useState<[string, string]>([
@@ -351,7 +357,7 @@ export default function AdminAgentsPage() {
       ...GEMINI_VOICES.map((voice) => ({
         id: voice.id,
         name: voice.name,
-        gender: "Female" as const,
+        gender: voice.gender,
         provider: "Google Gemini Live",
         enabled: true,
         sampleText: `Hello, this is ${voice.name}, a ${voice.tone.toLowerCase()} Gemini Live voice.`,
@@ -1422,8 +1428,12 @@ export default function AdminAgentsPage() {
     .filter((voice) => typeFilter === "all" || typeFilter === "gemini")
     .filter(
       (voice) =>
+        geminiGenderFilter === "all" || voice.gender === geminiGenderFilter,
+    )
+    .filter(
+      (voice) =>
         !search.trim() ||
-        `${voice.name} ${voice.tone}`
+        `${voice.name} ${voice.tone} ${voice.gender}`
           .toLowerCase()
           .includes(search.trim().toLowerCase()),
     )
@@ -2340,6 +2350,20 @@ export default function AdminAgentsPage() {
                           {assignedAgents.length > 0 ? assignedAgents.map((a) => a.name).join(", ") : "Unassigned"}
                         </span>
                       </div>
+                      <div className="min-w-[190px]" onClick={(event) => event.stopPropagation()}>
+                        <SmartSelect
+                          value={assignedAgents[0]?.id || ""}
+                          placeholder={assignedAgents.length > 0 ? assignedAgents[0].name : "Select company agent…"}
+                          searchPlaceholder="Search agents or companies…"
+                          onChange={(agentId) => handleUpdateVoice(agentId, voice.id)}
+                          options={agents.map((agent) => ({
+                            value: agent.id,
+                            label: `${agent.name} · ${agent.company_name}`,
+                            badge: assignedAgents.some((assigned) => assigned.id === agent.id) ? "Current" : undefined,
+                          }))}
+                          className="[&>button]:h-8 [&>button]:text-[10px]"
+                        />
+                      </div>
                       <Button
                         onClick={() => handlePlayVoicePreview(voice)}
                         className={`shrink-0 text-[11px] font-bold ${isPlaying ? "bg-red-600 hover:bg-red-700" : "bg-emerald-700 hover:bg-emerald-800"}`}
@@ -2513,8 +2537,54 @@ export default function AdminAgentsPage() {
                   Choose a native Gemini voice for real-time voice-to-voice agents.
                 </p>
               </div>
-              <div className="rounded-xl border border-emerald-100 bg-white px-3 py-2 text-[11px] font-semibold text-emerald-700">
-                Gemini Live · Native audio
+
+              {/* Gender Filter Controls & Badges */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => setGeminiGenderFilter("all")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      geminiGenderFilter === "all"
+                        ? "bg-white text-slate-900 shadow-sm border border-slate-200/60"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    All ({GEMINI_VOICES.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGeminiGenderFilter("Male")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                      geminiGenderFilter === "Male"
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-600 hover:text-blue-700 hover:bg-blue-50/60"
+                    }`}
+                  >
+                    <span>♂ Male</span>
+                    <span className="text-[10px] opacity-80 font-semibold">
+                      ({GEMINI_VOICES.filter((v) => v.gender === "Male").length})
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGeminiGenderFilter("Female")}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                      geminiGenderFilter === "Female"
+                        ? "bg-purple-600 text-white shadow-sm"
+                        : "text-slate-600 hover:text-purple-700 hover:bg-purple-50/60"
+                    }`}
+                  >
+                    <span>♀ Female</span>
+                    <span className="text-[10px] opacity-80 font-semibold">
+                      ({GEMINI_VOICES.filter((v) => v.gender === "Female").length})
+                    </span>
+                  </button>
+                </div>
+
+                <div className="rounded-xl border border-emerald-100 bg-white px-3 py-2 text-[11px] font-semibold text-emerald-700 shadow-xs">
+                  Gemini Live · Native audio
+                </div>
               </div>
             </div>
 
@@ -2524,23 +2594,29 @@ export default function AdminAgentsPage() {
                 const previewVoice = {
                   id: voice.id,
                   name: voice.name,
-                  gender: "Female" as const,
+                  gender: voice.gender,
                   provider: "Google Gemini Live",
                   enabled: true,
                   description: voice.description,
                   tone: voice.tone,
                   sampleText: `Hello, this is ${voice.name}, a ${voice.tone.toLowerCase()} Gemini Live voice.`,
+                  isGemini: true,
                 };
+
+                const isMale = voice.gender === "Male";
 
                 if (viewMode === "list") {
                   return (
                     <div key={voice.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-emerald-300 hover:shadow-md sm:flex-row sm:items-center">
                       <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-sm font-extrabold text-emerald-800">{voice.name.charAt(0)}</div>
+                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-extrabold ${isMale ? "border-blue-200 bg-blue-50 text-blue-800" : "border-purple-200 bg-purple-50 text-purple-800"}`}>{voice.name.charAt(0)}</div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <h3 className="truncate text-sm font-extrabold text-slate-900">{voice.name}</h3>
                             <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-800">Gemini Live</span>
+                            <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${isMale ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-purple-50 text-purple-700 border-purple-200"}`}>
+                              {isMale ? "♂ Male" : "♀ Female"}
+                            </span>
                           </div>
                           <p className="truncate text-[11px] text-emerald-700">{voice.tone}</p>
                           <p className="truncate text-[11px] text-slate-500">{voice.description}</p>
@@ -2549,6 +2625,20 @@ export default function AdminAgentsPage() {
                       <div className="flex items-center gap-1.5 text-[10px] text-slate-500 sm:w-44">
                         <Users className="h-3 w-3 shrink-0 text-emerald-600" />
                         <span className="truncate" title={assignedAgents.map((agent) => agent.name).join(", ")}>{assignedAgents.length > 0 ? assignedAgents.map((agent) => agent.name).join(", ") : "Unassigned"}</span>
+                      </div>
+                      <div className="min-w-[190px]" onClick={(event) => event.stopPropagation()}>
+                        <SmartSelect
+                          value={assignedAgents[0]?.id || ""}
+                          placeholder={assignedAgents.length > 0 ? assignedAgents[0].name : "Select company agent…"}
+                          searchPlaceholder="Search agents or companies…"
+                          onChange={(agentId) => handleUpdateVoice(agentId, voice.id)}
+                          options={agents.map((agent) => ({
+                            value: agent.id,
+                            label: `${agent.name} · ${agent.company_name}`,
+                            badge: assignedAgents.some((assigned) => assigned.id === agent.id) ? "Current" : undefined,
+                          }))}
+                          className="[&>button]:h-8 [&>button]:text-[10px]"
+                        />
                       </div>
                       <button type="button" onClick={() => handlePlayVoicePreview(previewVoice)} className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-[11px] font-bold ${previewingVoiceId === voice.id ? "bg-red-600 text-white" : "bg-emerald-700 text-white"}`}>
                         {previewingVoiceId === voice.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
@@ -2564,11 +2654,14 @@ export default function AdminAgentsPage() {
                     <div>
                       <div className="mb-3 flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-sm font-extrabold text-emerald-800 shadow-sm">{voice.name.charAt(0)}</div>
+                          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-extrabold shadow-sm ${isMale ? "border-blue-200 bg-blue-50 text-blue-800" : "border-purple-200 bg-purple-50 text-purple-800"}`}>{voice.name.charAt(0)}</div>
                           <div>
                             <div className="flex items-center gap-2">
                               <h3 className="text-sm font-extrabold tracking-tight text-slate-900">{voice.name}</h3>
                               <span className="rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800">Gemini Live</span>
+                              <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${isMale ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-purple-50 text-purple-700 border-purple-200"}`}>
+                                {isMale ? "♂ Male" : "♀ Female"}
+                              </span>
                             </div>
                             <span className="mt-1 inline-block rounded-md bg-emerald-50/80 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{voice.tone}</span>
                           </div>
