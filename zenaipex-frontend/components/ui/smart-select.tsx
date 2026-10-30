@@ -241,25 +241,25 @@ export function SmartSelect({
               visibility: menuReady ? "visible" : "hidden",
             }}
             className={cn(
-              "fixed z-[200] w-max min-w-[min(100%,230px)] max-w-[calc(100vw-20px)] overflow-hidden rounded-2xl border border-[#D7E5DB] bg-white p-1.5 shadow-[0_20px_45px_rgba(27,64,46,0.18)]",
+              "fixed z-[200] w-max min-w-[min(100%,230px)] max-w-[calc(100vw-20px)] overflow-hidden rounded-2xl border border-[#D7E5DB] bg-white p-1 shadow-[0_20px_45px_rgba(27,64,46,0.18)]",
               menuClassName,
             )}
           >
             {searchable && (
-              <div className="m-1 flex items-center gap-2 rounded-xl border border-[#E4EEE7] bg-[#F8FBF9] px-3">
-                <Search className="h-4 w-4 shrink-0 text-[#789487]" />
+              <div className="m-1 flex items-center gap-1.5 rounded-xl border border-[#E4EEE7] bg-[#F8FBF9] px-2.5">
+                <Search className="h-3.5 w-3.5 shrink-0 text-[#789487]" />
                 <input
                   ref={searchRef}
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={searchPlaceholder}
-                  className="h-10 min-w-0 flex-1 bg-transparent text-sm text-[#17372A] outline-none placeholder:text-[#91A69A]"
+                  className="h-9 min-w-0 flex-1 bg-transparent text-xs text-[#17372A] outline-none placeholder:text-[#91A69A]"
                 />
               </div>
             )}
             <div
               role="listbox"
-              className="max-h-[min(18rem,calc(100vh-9rem))] overflow-y-auto p-1"
+              className="max-h-[min(18rem,calc(100vh-9rem))] overflow-y-auto p-0.5"
             >
               {filtered.length === 0 ? (
                 <div className="px-3 py-8 text-center text-sm text-[#789487]">
@@ -269,7 +269,7 @@ export function SmartSelect({
                 Object.entries(grouped).map(([group, groupOptions]) => (
                   <div key={group || "ungrouped"}>
                     {group && (
-                      <div className="px-3 pb-1 pt-2 text-[10px] font-extrabold uppercase tracking-[0.12em] text-[#6C8B7B]">
+                      <div className="px-2.5 pb-0.5 pt-1.5 text-[9px] font-extrabold uppercase tracking-[0.12em] text-[#6C8B7B]">
                         {group}
                       </div>
                     )}
@@ -284,7 +284,7 @@ export function SmartSelect({
                           disabled={option.disabled}
                           onClick={() => choose(option)}
                           className={cn(
-                            "flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-150",
+                            "flex min-h-9 w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors duration-150",
                             option.disabled
                               ? "cursor-not-allowed opacity-45"
                               : "hover:bg-[#F0F8F2]",
@@ -297,17 +297,17 @@ export function SmartSelect({
                             </span>
                           ) : null}
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold leading-tight">
+                              <span className="block truncate text-xs font-semibold leading-tight">
                               {option.label}
                             </span>
                             {option.description && (
-                              <span className="block truncate text-[11px] leading-tight text-[#789487]">
+                              <span className="block truncate text-[10px] leading-tight text-[#789487]">
                                 {option.description}
                               </span>
                             )}
                           </span>
                           {option.badge && (
-                            <span className="shrink-0 rounded-full border border-[#D7E5DB] px-2 py-0.5 text-[10px] font-bold uppercase text-[#6C8B7B]">
+                            <span className="shrink-0 rounded-full border border-[#D7E5DB] px-1.5 py-0.5 text-[9px] font-bold uppercase text-[#6C8B7B]">
                               {option.badge}
                             </span>
                           )}
