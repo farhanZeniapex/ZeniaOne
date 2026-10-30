@@ -102,6 +102,44 @@ const VOICE_RUNTIME_MODES = [
   },
 ] as const;
 
+const GEMINI_VOICES = [
+  ["Zephyr", "Bright"],
+  ["Puck", "Upbeat"],
+  ["Charon", "Informative"],
+  ["Kore", "Firm"],
+  ["Fenrir", "Excitable"],
+  ["Leda", "Youthful"],
+  ["Orus", "Firm"],
+  ["Aoede", "Breezy"],
+  ["Callirrhoe", "Easy-going"],
+  ["Autonoe", "Bright"],
+  ["Enceladus", "Breathy"],
+  ["Iapetus", "Clear"],
+  ["Umbriel", "Easy-going"],
+  ["Algieba", "Smooth"],
+  ["Despina", "Smooth"],
+  ["Erinome", "Clear"],
+  ["Algenib", "Gravelly"],
+  ["Rasalgethi", "Informative"],
+  ["Laomedeia", "Upbeat"],
+  ["Achernar", "Soft"],
+  ["Alnilam", "Firm"],
+  ["Schedar", "Even"],
+  ["Gacrux", "Mature"],
+  ["Pulcherrima", "Forward"],
+  ["Achird", "Friendly"],
+  ["Zubenelgenubi", "Casual"],
+  ["Vindemiatrix", "Gentle"],
+  ["Sadachbia", "Lively"],
+  ["Sadaltager", "Knowledgeable"],
+  ["Sulafat", "Warm"],
+].map(([name, tone]) => ({
+  id: name.toLowerCase(),
+  name,
+  tone,
+  description: `Gemini Live native voice with a ${tone.toLowerCase()} delivery.`,
+}));
+
 function CompanyLogo({
   companyId,
   companyName,
@@ -113,9 +151,12 @@ function CompanyLogo({
 }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [logoReference]);
-  // Try the public company-logo endpoint even when the admin list has not
-  // returned a logo reference yet. Missing logos still fall back to initials.
-  const logoUrl = getCompanyLogoUrl(companyId, logoReference || "current");
+  // Do not request a placeholder logo for companies that have no logo. The
+  // old "current" fallback generated repeated 404s while the admin list was
+  // loading and for companies that legitimately have no uploaded logo.
+  const logoUrl = logoReference
+    ? getCompanyLogoUrl(companyId, logoReference)
+    : undefined;
 
   if (logoUrl && !failed) {
     return (
@@ -147,7 +188,7 @@ export default function AdminAgentsPage() {
   >({});
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<
-    "workforce" | "voices" | "custom_voices"
+    "workforce" | "voices" | "gemini_voices" | "custom_voices"
   >("workforce");
   const [isVoiceStudioOpen, setIsVoiceStudioOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -1402,6 +1443,16 @@ export default function AdminAgentsPage() {
             </button>
 
             <button
+              onClick={() => setActiveTab("gemini_voices")}
+              aria-pressed={activeTab === "gemini_voices"}
+              className={org.sectionTab}
+            >
+              <Sparkles className="h-4 w-4" />
+              Gemini Voices
+              <span className={org.tabCount}>{GEMINI_VOICES.length}</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab("custom_voices")}
               aria-pressed={activeTab === "custom_voices"}
               className={org.sectionTab}
@@ -2052,6 +2103,91 @@ export default function AdminAgentsPage() {
               );
             })}
           </div>
+        </div>
+      )}
+
+      {/* ─────────────────── TAB 2B: GEMINI LIVE VOICES ─────────────────── */}
+      {activeTab === "gemini_voices" && (
+        <div className="space-y-6">
+          <section className="overflow-hidden rounded-2xl border border-indigo-100 bg-white shadow-sm">
+            <div className="flex flex-col gap-3 border-b border-slate-100 bg-gradient-to-r from-indigo-50/70 via-white to-white px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-indigo-600" />
+                  <h2 className="text-lg font-extrabold text-slate-900">
+                    Gemini Live Voices
+                  </h2>
+                  <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-700">
+                    {GEMINI_VOICES.length} prebuilt
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  Choose a native Gemini voice for real-time voice-to-voice agents.
+                </p>
+              </div>
+              <div className="rounded-xl border border-indigo-100 bg-white px-3 py-2 text-[11px] font-semibold text-indigo-700">
+                Gemini Live · Native audio
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-3 sm:p-5">
+              {GEMINI_VOICES.filter((voice) => {
+                const query = search.trim().toLowerCase();
+                return !query || `${voice.name} ${voice.tone}`.toLowerCase().includes(query);
+              }).map((voice) => {
+                const currentAgent = agents.find(
+                  (agent) => agent.tts_voice?.toLowerCase() === voice.id,
+                );
+                const previewVoice = {
+                  id: voice.id,
+                  name: voice.name,
+                  gender: "Female" as const,
+                  provider: "Google Gemini Live",
+                  enabled: true,
+                  description: voice.description,
+                  tone: voice.tone,
+                  sampleText: `Hello, this is ${voice.name}, a ${voice.tone.toLowerCase()} Gemini Live voice.`,
+                };
+
+                return (
+                  <div key={voice.id} className="flex min-h-[190px] flex-col justify-between rounded-xl border border-slate-200 bg-slate-50/40 p-4 transition hover:border-indigo-200 hover:bg-indigo-50/30 hover:shadow-sm">
+                    <div>
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-sm font-black text-indigo-700">
+                            {voice.name.charAt(0)}
+                          </div>
+                          <div>
+                            <h3 className="text-sm font-extrabold text-slate-900">{voice.name}</h3>
+                            <p className="text-[11px] font-semibold text-indigo-700">{voice.tone}</p>
+                          </div>
+                        </div>
+                        {currentAgent && <span className="rounded-md bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">In use</span>}
+                      </div>
+                      <p className="mt-3 text-xs leading-relaxed text-slate-500">{voice.description}</p>
+                    </div>
+                    <div className="mt-4 flex items-center gap-2 border-t border-slate-200 pt-3">
+                      <button type="button" onClick={() => handlePlayVoicePreview(previewVoice)} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-white px-2.5 py-2 text-[11px] font-bold text-indigo-700 transition hover:bg-indigo-50">
+                        {previewingVoiceId === voice.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
+                        {previewingVoiceId === voice.id ? "Stop" : "Preview"}
+                      </button>
+                      <SmartSelect
+                        value=""
+                        placeholder={currentAgent ? `Assign to another agent` : "Assign to agent"}
+                        searchPlaceholder="Search agents…"
+                        onChange={(agentId) => handleUpdateVoice(agentId, voice.id)}
+                        options={agents.map((agent) => ({
+                          value: agent.id,
+                          label: `${agent.name} (${agent.company_name})`,
+                        }))}
+                        className="min-w-0 flex-1 [&>button]:h-9 [&>button]:text-[11px]"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         </div>
       )}
 
