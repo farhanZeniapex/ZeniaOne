@@ -2300,6 +2300,7 @@ export default function AdminAgentsPage() {
                           <div className="flex items-center gap-2">
                             <h3 className="truncate text-sm font-extrabold text-slate-900">{voice.name}</h3>
                             <Badge variant="outline" className="text-[9px] font-bold uppercase text-emerald-800">{voice.gender}</Badge>
+                            <span className="hidden rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-700 md:inline">Platform voice</span>
                           </div>
                           <p className="truncate text-[11px] text-emerald-700">{voice.tone} · {voice.accent || "Indian"}</p>
                           <p className="truncate text-[11px] text-slate-500">{voice.description}</p>
