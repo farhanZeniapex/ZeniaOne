@@ -1563,6 +1563,64 @@ export default function AdminAgentsPage() {
             )}
           </div>
         </div>
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/50 px-4 py-2.5">
+          <span className="mr-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            Voice tools
+          </span>
+          <div className="flex items-center gap-1.5 rounded-xl border border-slate-200/80 bg-white p-1 shadow-sm">
+            <SmartSelect
+              value={typeFilter}
+              onChange={setTypeFilter}
+              searchable={false}
+              className="w-24 [&>button]:h-8 [&>button]:border-transparent [&>button]:bg-transparent [&>button]:px-2 [&>button]:shadow-none [&>button]:text-[11px] [&>button]:hover:border-transparent [&>button]:hover:shadow-none"
+              options={[
+                { value: "all", label: "All Types" },
+                { value: "cloned", label: "Cloned" },
+                { value: "professional", label: "Pro" },
+              ]}
+            />
+            <div className="h-4 w-px bg-slate-200" />
+            <SmartSelect
+              value={voiceFilter}
+              onChange={setVoiceFilter}
+              searchable={false}
+              className="w-24 [&>button]:h-8 [&>button]:border-transparent [&>button]:bg-transparent [&>button]:px-2 [&>button]:shadow-none [&>button]:text-[11px] [&>button]:hover:border-transparent [&>button]:hover:shadow-none"
+              options={[
+                { value: "active", label: "Active" },
+                { value: "archived", label: "Archived" },
+                { value: "all", label: "All Status" },
+              ]}
+            />
+            <div className="h-4 w-px bg-slate-200" />
+            <SmartSelect
+              value={sortBy}
+              onChange={setSortBy}
+              searchable={false}
+              className="w-24 [&>button]:h-8 [&>button]:border-transparent [&>button]:bg-transparent [&>button]:px-2 [&>button]:shadow-none [&>button]:text-[11px] [&>button]:hover:border-transparent [&>button]:hover:shadow-none"
+              options={[
+                { value: "newest", label: "Newest" },
+                { value: "oldest", label: "Oldest" },
+                { value: "az", label: "A-Z" },
+              ]}
+            />
+          </div>
+          <div className="flex items-center rounded-xl border border-slate-200/80 bg-white p-1 shadow-sm">
+            <button
+              onClick={() => setViewMode("list")}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors ${viewMode === "list" ? "border border-slate-200/60 bg-slate-50 text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              title="List View"
+            >
+              <List className="h-4 w-4" /> List
+            </button>
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold transition-colors ${viewMode === "grid" ? "border border-slate-200/60 bg-slate-50 text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+              title="Grid View"
+            >
+              <LayoutGrid className="h-4 w-4" /> Grid
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* ─────────────────── TAB 1: ENTERPRISE WORKFORCE DIRECTORY ─────────────────── */}
@@ -2332,71 +2390,6 @@ export default function AdminAgentsPage() {
                     placeholder="Search cloned voices..."
                     className="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-800 shadow-sm h-10"
                   />
-                </div>
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {/* Unified Filter Bar */}
-                  <div className="flex items-center bg-white p-1 rounded-xl border border-slate-200/80 shadow-sm h-10">
-                    <Filter className="h-3.5 w-3.5 text-slate-400 ml-2" />
-                    <SmartSelect
-                      value={typeFilter}
-                      onChange={setTypeFilter}
-                      searchable={false}
-                      className="w-24 [&>button]:h-8 [&>button]:border-transparent [&>button]:bg-transparent [&>button]:px-2 [&>button]:shadow-none [&>button]:text-[11px] [&>button]:hover:border-transparent [&>button]:hover:shadow-none"
-                      options={[
-                        { value: "all", label: "All Types" },
-                        { value: "cloned", label: "Cloned" },
-                        { value: "professional", label: "Pro" },
-                      ]}
-                    />
-                    <div className="w-px h-4 bg-slate-200"></div>
-                    <SmartSelect
-                      value={voiceFilter}
-                      onChange={setVoiceFilter}
-                      searchable={false}
-                      className="w-24 [&>button]:h-8 [&>button]:border-transparent [&>button]:bg-transparent [&>button]:px-2 [&>button]:shadow-none [&>button]:text-[11px] [&>button]:hover:border-transparent [&>button]:hover:shadow-none"
-                      options={[
-                        { value: "active", label: "Active" },
-                        { value: "archived", label: "Archived" },
-                        { value: "all", label: "All Status" },
-                      ]}
-                    />
-                    <div className="w-px h-4 bg-slate-200"></div>
-                    <SmartSelect
-                      value={sortBy}
-                      onChange={setSortBy}
-                      searchable={false}
-                      className="w-24 [&>button]:h-8 [&>button]:border-transparent [&>button]:bg-transparent [&>button]:px-2 [&>button]:shadow-none [&>button]:text-[11px] [&>button]:hover:border-transparent [&>button]:hover:shadow-none"
-                      options={[
-                        { value: "newest", label: "Newest" },
-                        { value: "oldest", label: "Oldest" },
-                        { value: "az", label: "A-Z" },
-                      ]}
-                    />
-                  </div>
-
-                  {/* View Mode Toggle */}
-                  <div className="flex items-center bg-slate-50 border border-slate-200/80 rounded-xl p-1 shadow-inner h-10">
-                    <button
-                      onClick={() => setViewMode("list")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${viewMode === "list" ? "bg-white text-slate-900 shadow-sm border border-slate-200/60 font-bold" : "text-slate-500 hover:text-slate-700 font-semibold"}`}
-                      title="List View"
-                    >
-                      <List className="h-4 w-4" />
-                      <span className="text-[11px] uppercase tracking-wider hidden sm:block">
-                        List
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => setViewMode("grid")}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-colors ${viewMode === "grid" ? "bg-white text-slate-900 shadow-sm border border-slate-200/60 font-bold" : "text-slate-500 hover:text-slate-700 font-semibold"}`}
-                      title="Grid View"
-                    >
-                      <LayoutGrid className="h-4 w-4" />
-                      <span className="text-[11px] uppercase tracking-wider hidden sm:block">
-                        Grid
-                      </span>
-                    </button>
-                  </div>
                 </div>
               </div>
             </div>
