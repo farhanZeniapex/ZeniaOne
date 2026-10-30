@@ -2301,13 +2301,55 @@ export default function AdminAgentsPage() {
           </div>
 
           {/* 11 Voice Studio Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+          <div
+            className={
+              viewMode === "grid"
+                ? "grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                : "flex flex-col gap-2"
+            }
+          >
             {orderedPlatformVoices
               .filter((v) => genderFilter === "all" || v.gender === genderFilter)
               .map((voice) => {
               const isPlaying = previewingVoiceId === voice.id;
               const assignedAgents = assignedAgentsForVoice(agents, voice);
               const acoustics = getVoiceAcoustics(voice.id);
+
+                if (viewMode === "list") {
+                  return (
+                    <div
+                      key={voice.id}
+                      className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-emerald-300 hover:shadow-md sm:flex-row sm:items-center"
+                    >
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-sm font-extrabold text-emerald-800">
+                          {voice.name.charAt(0)}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="truncate text-sm font-extrabold text-slate-900">{voice.name}</h3>
+                            <Badge variant="outline" className="text-[9px] font-bold uppercase text-emerald-800">{voice.gender}</Badge>
+                          </div>
+                          <p className="truncate text-[11px] text-emerald-700">{voice.tone} · {voice.accent || "Indian"}</p>
+                          <p className="truncate text-[11px] text-slate-500">{voice.description}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-500 sm:w-44">
+                        <Users className="h-3 w-3 shrink-0 text-emerald-600" />
+                        <span className="truncate" title={assignedAgents.map((a) => a.name).join(", ")}>
+                          {assignedAgents.length > 0 ? assignedAgents.map((a) => a.name).join(", ") : "Unassigned"}
+                        </span>
+                      </div>
+                      <Button
+                        onClick={() => handlePlayVoicePreview(voice)}
+                        className={`shrink-0 text-[11px] font-bold ${isPlaying ? "bg-red-600 hover:bg-red-700" : "bg-emerald-700 hover:bg-emerald-800"}`}
+                      >
+                        {isPlaying ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
+                        {isPlaying ? "Stop" : "Listen"}
+                      </Button>
+                    </div>
+                  );
+                }
 
               return (
                 <div
@@ -2476,7 +2518,7 @@ export default function AdminAgentsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-3 sm:p-5">
+            <div className={viewMode === "grid" ? "grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-3 sm:p-5" : "flex flex-col gap-2 p-4 sm:p-5"}>
               {orderedGeminiVoices.map((voice) => {
                 const assignedAgents = assignedAgentsForVoice(agents, voice);
                 const previewVoice = {
@@ -2489,6 +2531,32 @@ export default function AdminAgentsPage() {
                   tone: voice.tone,
                   sampleText: `Hello, this is ${voice.name}, a ${voice.tone.toLowerCase()} Gemini Live voice.`,
                 };
+
+                if (viewMode === "list") {
+                  return (
+                    <div key={voice.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-emerald-300 hover:shadow-md sm:flex-row sm:items-center">
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-sm font-extrabold text-emerald-800">{voice.name.charAt(0)}</div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <h3 className="truncate text-sm font-extrabold text-slate-900">{voice.name}</h3>
+                            <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-800">Gemini Live</span>
+                          </div>
+                          <p className="truncate text-[11px] text-emerald-700">{voice.tone}</p>
+                          <p className="truncate text-[11px] text-slate-500">{voice.description}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 sm:w-44">
+                        <Users className="h-3 w-3 shrink-0 text-emerald-600" />
+                        <span className="truncate" title={assignedAgents.map((agent) => agent.name).join(", ")}>{assignedAgents.length > 0 ? assignedAgents.map((agent) => agent.name).join(", ") : "Unassigned"}</span>
+                      </div>
+                      <button type="button" onClick={() => handlePlayVoicePreview(previewVoice)} className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-[11px] font-bold ${previewingVoiceId === voice.id ? "bg-red-600 text-white" : "bg-emerald-700 text-white"}`}>
+                        {previewingVoiceId === voice.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
+                        {previewingVoiceId === voice.id ? "Stop" : "Listen"}
+                      </button>
+                    </div>
+                  );
+                }
 
                 return (
                   <div key={voice.id} className={`relative flex min-h-[250px] flex-col justify-between space-y-3 overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition-all ${previewingVoiceId === voice.id ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg" : "border-slate-200/80 hover:border-emerald-300 hover:shadow-md"}`}>
