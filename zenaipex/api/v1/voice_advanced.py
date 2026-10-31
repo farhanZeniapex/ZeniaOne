@@ -1,4 +1,5 @@
 import asyncio
+import re
 import json
 import base64
 import logging
@@ -2180,16 +2181,26 @@ async def exotel_status_webhook(company_id: str, agent_id: str, request: Request
             
         call_sid = str(form_data.get("CallSid", "")).strip()
         event_type = str(form_data.get("CallType") or form_data.get("EventType") or "").strip().lower()
-        status = str(form_data.get("Status") or form_data.get("DialCallStatus") or "").strip()
+
+        # Exotel Voicebot/Stream flow sends nested parameters like Stream[Status], Stream[RecordingUrl]
+        stream_status = str(form_data.get("Stream[Status]") or form_data.get("Stream[status]") or "").strip()
+        stream_recording = str(form_data.get("Stream[RecordingUrl]") or form_data.get("Stream[recording_url]") or "").strip()
         
+        status = str(
+            form_data.get("Status")
+            or form_data.get("DialCallStatus")
+            or stream_status
+            or ("completed" if stream_recording else "")
+            or ""
+        ).strip()
+
         if not call_sid:
             return {"status": "ok"}
 
         # Exotel sends a `call-attempt` notification before a terminal status.
         # It contains no Status field and DialCallDuration is commonly zero.
-        # Treating the missing field as "completed" used to create false
-        # completed calls and overwrite the real provider outcome.
-        if not status:
+        # BUT if Stream[Status] or Stream[RecordingUrl] is present, it is a terminal event from Voicebot Stream!
+        if not status and not stream_recording:
             logger.info(
                 "[EXOTEL_STATUS] Ignoring non-terminal event without status call_sid=%s event=%s",
                 call_sid,
@@ -2238,25 +2249,37 @@ async def exotel_status_webhook(company_id: str, agent_id: str, request: Request
         # DialCallDuration is actual connected/talk time. Duration may include
         # ringing and applet setup, so only use it when Exotel did not provide
         # the talk-time field at all. Preserve an explicit zero.
-        val_duration = form_data.get("DialCallDuration")
+        # If this is an Exotel Voicebot stream, Stream[Duration] represents actual stream duration
+        val_duration = form_data.get("Stream[Duration]") or form_data.get("Stream[duration]")
         if val_duration is None or str(val_duration).strip() == "":
-            val_duration = (
-                form_data.get("ConversationDuration")
-                or form_data.get("Duration")
-                or form_data.get("CallDuration")
-                or form_data.get("Stream[Duration]")
-            )
+            # DialCallDuration is actual connected/talk time for outbound/transfers. Preserve explicit zero.
+            val_duration = form_data.get("DialCallDuration")
+            if val_duration is None or str(val_duration).strip() == "":
+                val_duration = (
+                    form_data.get("ConversationDuration")
+                    or form_data.get("Duration")
+                    or form_data.get("CallDuration")
+                )
         try:
             if val_duration is not None and str(val_duration).strip() != "":
                 update_data["duration_seconds"] = max(0, int(float(str(val_duration).strip())))
         except (TypeError, ValueError):
             logger.warning("[EXOTEL_STATUS] Invalid duration call_sid=%s value=%r", call_sid, val_duration)
             
-        recording_url = str(form_data.get("RecordingUrl") or form_data.get("Stream[RecordingUrl]", ""))
+        recording_url = str(
+            form_data.get("RecordingUrl")
+            or form_data.get("Stream[RecordingUrl]")
+            or form_data.get("Stream[recording_url]")
+            or ""
+        ).strip()
         if recording_url:
             if not recording_url.endswith(".mp3"):
                 recording_url += ".mp3"
             update_data["recording_url"] = recording_url
+
+        stream_sid = str(form_data.get("Stream[StreamSID]") or form_data.get("RecordingSid") or "").strip()
+        if stream_sid:
+            update_data["recording_sid"] = stream_sid
             
         caller_phone = str(form_data.get("From") or form_data.get("caller", ""))
         if caller_phone and len(caller_phone) >= 10:

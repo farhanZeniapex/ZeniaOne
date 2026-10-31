@@ -8,6 +8,7 @@ from twilio.rest import Client
 import logging
 import time
 import re
+import asyncio
 from html import escape
 
 logger = logging.getLogger(__name__)
@@ -700,6 +701,11 @@ async def get_conversation_by_call_sid(call_sid: str):
         "company_id": str(conv.get("company_id", "")),
         "status": conv.get("status", "in_progress"),
         "recording_url": conv.get("recording_url"),
+        "recording_sid": conv.get("recording_sid"),
+        "contact_name": conv.get("contact_name"),
+        "caller_phone": conv.get("caller_phone") or conv.get("from_phone"),
+        "caller_to": conv.get("caller_to") or conv.get("to_phone"),
+        "direction": conv.get("direction", "inbound"),
         "call_sid": conv.get("call_sid"),
         "agent_id": conv.get("agent_id"),
         "call_started_at": conv.get("started_at"),

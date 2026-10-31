@@ -24,6 +24,10 @@ interface CallData {
   duration_seconds?: number;
   failure_reason?: string;
   recording_url?: string;
+  contact_name?: string;
+  caller_phone?: string;
+  caller_to?: string;
+  direction?: string;
   messages: Message[];
 }
 
@@ -35,6 +39,12 @@ interface Props {
 
 export function LiveCallMonitor({ callSid, contactName, onClose }: Props) {
   const [data, setData] = useState<CallData | null>(null);
+
+  const displayName = (data?.contact_name && data.contact_name !== "Test User" && data.contact_name !== "Unknown")
+    ? data.contact_name
+    : (contactName && contactName !== "Test User" ? contactName : "Caller");
+
+  const displayPhone = data?.caller_phone || (data?.direction === "outbound" ? data?.caller_to : "") || "";
   const [now, setNow] = useState(Date.now());
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
@@ -191,12 +201,15 @@ export function LiveCallMonitor({ callSid, contactName, onClose }: Props) {
           </div>
 
           {/* Caller Identity */}
-          <div className="flex flex-col items-center mt-4">
+          <div className="flex flex-col items-center mt-4 text-center">
             <div className="h-24 w-24 rounded-full bg-gradient-to-br from-sage-200 to-sage-400 flex items-center justify-center shadow-lg text-white mb-4">
               <User className="h-12 w-12" />
             </div>
-            <h2 className="text-2xl font-semibold text-gray-900">{contactName}</h2>
-            <p className="text-lg text-gray-500 font-medium mt-1">
+            <h2 className="text-2xl font-semibold text-gray-900">{displayName}</h2>
+            {displayPhone && (
+              <p className="text-sm font-mono text-gray-500 mt-1">{displayPhone}</p>
+            )}
+            <p className="text-base text-gray-500 font-medium mt-1">
               {["FAILED", "NO_ANSWER", "BUSY", "CANCELED"].includes(state) ? (state === "NO_ANSWER" ? "No answer" : state === "BUSY" ? "Busy" : state === "CANCELED" ? "Canceled" : "Failed") : timerText}
             </p>
           </div>

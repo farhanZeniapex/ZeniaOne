@@ -3912,7 +3912,7 @@ export default function AdminChannelDetailPage({
       {isMonitorOpen && activeCallId && (
         <LiveCallMonitor
           callSid={activeCallId}
-          contactName={contactName || destNumber}
+          contactName={activeCallContact || contactName || destNumber}
           onClose={() => {
             setIsMonitorOpen(false);
             setActiveCallId(null);
