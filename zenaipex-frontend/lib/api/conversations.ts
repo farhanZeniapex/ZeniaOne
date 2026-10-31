@@ -13,7 +13,7 @@ export interface Conversation {
   recording_url?: string;
   recording_sid?: string;
   direction: string;
-  source_type?: "phone_call" | "web_chat" | "voice_chat" | "unverified";
+  source_type?: "phone_call" | "web_chat" | "voice_chat" | "admin_copilot" | "unverified" | string;
   actual_message_count?: number;
   language: string;
   status: string;

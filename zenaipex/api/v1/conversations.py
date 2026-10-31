@@ -33,6 +33,8 @@ def _fmt_conv(doc: dict) -> dict:
         "company_id": doc["company_id"],
         "agent_id": doc.get("agent_id"),
         "caller_phone": doc.get("caller_phone"),
+        "contact_name": doc.get("contact_name"),
+        "source_type": doc.get("source_type"),
         "direction": doc.get("direction", "inbound"),
         "language": doc.get("language", "en-IN"),
         "status": doc.get("status", "completed"),
