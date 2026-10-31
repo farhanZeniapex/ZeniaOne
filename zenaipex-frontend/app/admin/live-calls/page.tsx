@@ -4,8 +4,10 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { API_BASE_URL, fetchApi } from "@/lib/api/client";
 import {
   Activity, Phone, PhoneOff, User, Clock, MessageSquare, ShieldAlert,
-  Zap, ArrowRight, UserCheck, UserPlus, History, FileText, Play,
-  Sparkles, Check, Edit2, RotateCcw, Volume2, ArrowDown, ChevronRight
+  Zap, ArrowRight, UserCheck, UserPlus, History, FileText, Play, Pause,
+  Sparkles, Check, Edit2, RotateCcw, Volume2, ArrowDown, ChevronRight,
+  Radio, CheckCircle2, Server, Headphones, Mic, ExternalLink, RefreshCw,
+  Layers, X
 } from "lucide-react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
@@ -121,10 +123,20 @@ export default function LiveCallsPage() {
   // Active audio player preview in drawer
   const [activeRecordingUrl, setActiveRecordingUrl] = useState<string | null>(null);
 
+  // Recent calls queue state (Advanced Feature: Standby & History Inspection)
+  const [recentCalls, setRecentCalls] = useState<any[]>([]);
+  const [activeQueueTab, setActiveQueueTab] = useState<"live" | "recent">("live");
+  const [selectedRecentCall, setSelectedRecentCall] = useState<any | null>(null);
+  const [recentCallMessages, setRecentCallMessages] = useState<any[]>([]);
+  const [loadingRecentMessages, setLoadingRecentMessages] = useState(false);
+  const [recentAudioPlaying, setRecentAudioPlaying] = useState(false);
+  const recentAudioRef = useRef<HTMLAudioElement | null>(null);
+
   const wsRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastMsgTimeByCall = useRef<Record<string, number>>({});
   const agentsMapRef = useRef<AgentMap>({});
+  const loadedPhoneRef = useRef<string>("");
 
   // 1. Load Agents and existing active calls on mount
   useEffect(() => {
@@ -170,6 +182,7 @@ export default function LiveCallsPage() {
             });
             if (serverActive.length > 0) {
               setSelectedCallId(curr => curr || serverActive[0].id);
+              setActiveQueueTab("live");
             }
           }
         })
@@ -180,6 +193,22 @@ export default function LiveCallsPage() {
     const activeSyncTimer = setInterval(syncActiveCalls, 4000);
     return () => clearInterval(activeSyncTimer);
   }, []);
+
+  // Load Recent Calls for Standby / Inspection
+  const loadRecentCalls = useCallback(async () => {
+    try {
+      const res = await fetchApi<any>(`/admin/conversations?limit=15&_t=${Date.now()}`);
+      if (res.conversations) {
+        setRecentCalls(res.conversations);
+      }
+    } catch (e) {
+      console.warn("Failed to load recent calls:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadRecentCalls();
+  }, [loadRecentCalls]);
 
   useEffect(() => {
     agentsMapRef.current = agentsMap;
@@ -208,7 +237,7 @@ export default function LiveCallsPage() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messagesByCall, selectedCallId, callStates]);
+  }, [messagesByCall, selectedCallId, callStates, recentCallMessages]);
 
   const formatDuration = (secs: number) => {
     const m = Math.floor(secs / 60).toString().padStart(2, "0");
@@ -254,8 +283,6 @@ export default function LiveCallsPage() {
     ? agentVoiceConfigs[selectedCall.agent_id]
     : undefined;
 
-  const loadedPhoneRef = useRef<string>("");
-
   // Load caller CRM profile
   const loadCallerProfile = useCallback(async (phone: string, companyId?: string) => {
     if (!phone) return;
@@ -298,13 +325,59 @@ export default function LiveCallsPage() {
     }
   }, [selectedCallId, activeCalls, loadCallerProfile]);
 
+  // Handle selecting a recent call for Standby Inspection
+  const handleSelectRecentCall = async (call: any) => {
+    setSelectedCallId(null);
+    setSelectedRecentCall(call);
+    setLoadingRecentMessages(true);
+    setRecentAudioPlaying(false);
+    if (recentAudioRef.current) {
+      recentAudioRef.current.pause();
+    }
+    try {
+      const companyId = call.company_id || "global";
+      const res = await fetchApi<any>(`/admin/conversations/${companyId}/${call.id}/messages`);
+      setRecentCallMessages(res.messages || []);
+      if (call.caller_phone) {
+        loadCallerProfile(call.caller_phone, call.company_id);
+      }
+    } catch (err) {
+      console.error("Failed to load recent call messages", err);
+      setRecentCallMessages([]);
+    } finally {
+      setLoadingRecentMessages(false);
+    }
+  };
+
+  const handleToggleRecentAudio = (url: string) => {
+    if (recentAudioPlaying) {
+      if (recentAudioRef.current) recentAudioRef.current.pause();
+      setRecentAudioPlaying(false);
+      return;
+    }
+    if (recentAudioRef.current) recentAudioRef.current.pause();
+    const audio = new Audio(url);
+    recentAudioRef.current = audio;
+    setRecentAudioPlaying(true);
+    audio.play().catch(() => setRecentAudioPlaying(false));
+    audio.onended = () => setRecentAudioPlaying(false);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (recentAudioRef.current) recentAudioRef.current.pause();
+    };
+  }, []);
+
   // Save / rename contact
   const handleSaveContact = async () => {
-    if (!selectedCall || !editingContactName.trim()) return;
+    const targetPhone = selectedCall?.caller_phone || selectedRecentCall?.caller_phone;
+    const targetCompany = selectedCall?.company_id || selectedRecentCall?.company_id;
+    if (!targetPhone || !editingContactName.trim()) return;
     setSavingContact(true);
     try {
       await fetchApi(
-        `/admin/conversations/caller-profile/${encodeURIComponent(selectedCall.caller_phone)}/save${selectedCall.company_id ? `?company_id=${selectedCall.company_id}` : ""}`,
+        `/admin/conversations/caller-profile/${encodeURIComponent(targetPhone)}/save${targetCompany ? `?company_id=${targetCompany}` : ""}`,
         {
           method: "POST",
           body: JSON.stringify({ name: editingContactName.trim() })
@@ -312,7 +385,8 @@ export default function LiveCallsPage() {
       );
       setContactModalOpen(false);
       // Refresh profile
-      loadCallerProfile(selectedCall.caller_phone, selectedCall.company_id);
+      loadCallerProfile(targetPhone, targetCompany);
+      loadRecentCalls();
     } catch (e) {
       alert("Failed to save contact name");
     } finally {
@@ -366,6 +440,8 @@ export default function LiveCallsPage() {
                   };
                   return [...prev, newCall];
                 });
+                setActiveQueueTab("live");
+                setSelectedRecentCall(null);
                 setSelectedCallId(curr => curr || callData.id);
               }
               else if (data.event === "call_state") {
@@ -380,6 +456,7 @@ export default function LiveCallsPage() {
                 setActiveCalls((prev) => prev.map(c =>
                   c.id === endedId ? { ...c, status: "completed", ended_at: Date.now() } : c
                 ));
+                loadRecentCalls();
                 // Automatically clear from active calls list after 3 seconds
                 setTimeout(() => {
                   setActiveCalls((prev) => prev.filter(c => c.id !== endedId));
@@ -462,7 +539,7 @@ export default function LiveCallsPage() {
       ws?.close();
       wsRef.current = null;
     };
-  }, []);
+  }, [loadRecentCalls]);
 
   // Polling fallback: If no messages yet, poll conversation messages every 3s
   useEffect(() => {
@@ -514,6 +591,7 @@ export default function LiveCallsPage() {
       }
       setActiveCalls(prev => prev.filter(call => call.id !== selectedCall.id));
       setSelectedCallId(null);
+      loadRecentCalls();
     } catch (error) {
       setActiveCalls(prev => prev.filter(call => call.id !== selectedCall.id));
       setSelectedCallId(null);
@@ -523,10 +601,6 @@ export default function LiveCallsPage() {
   };
 
   const currentMessages = selectedCallId ? (messagesByCall[selectedCallId] || []) : [];
-  const avgLatency = currentMessages
-    .filter(m => m.role === "assistant" && m.latency_ms !== undefined)
-    .reduce((acc, m, _, arr) => acc + (m.latency_ms || 0) / arr.length, 0);
-
   const latestAssistantMetric = [...currentMessages].reverse().find(message =>
     message.role === "assistant" && (
       message.stt_provider || message.llm_model || message.tts_voice || message.llm_first_token_ms !== undefined || message.latency_ms !== undefined
@@ -534,99 +608,302 @@ export default function LiveCallsPage() {
   );
 
   return (
-    <div className={`${org.page} ${org.liveRoot}`}>
-      {/* Header bar */}
+    <div className={`${org.page} ${org.liveRoot} flex flex-col flex-1 min-h-[calc(100vh-6.5rem)]`}>
+      {/* ── Executive Header Bar ────────────────────────────────────────── */}
       <div className={org.pageHeader}>
         <div>
-          <span className={org.eyebrow}><Activity size={14} /> REAL-TIME OPERATIONS</span>
-          <h1 className={org.title}>Live Calls & Active Operations</h1>
-          <p className={org.subtitle}>Live speech streaming, intelligent caller CRM, and autonomous conversational monitoring.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+            <Activity className="h-6 w-6 text-emerald-600" />
+            Live Calls & Active Operations
+            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+              activeCalls.length > 0
+                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                : "bg-slate-50 text-slate-600 border border-slate-200"
+            }`}>
+              <span className="relative flex h-2 w-2">
+                {activeCalls.length > 0 ? (
+                  <>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </>
+                ) : (
+                  <span className="h-2 w-2 rounded-full bg-slate-400" />
+                )}
+              </span>
+              {activeCalls.length > 0 ? `${activeCalls.length} Live Call Active` : "Standby (Listening)"}
+            </span>
+          </h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">
+            Real-time speech streaming, bidirectional telephony monitor & CRM intelligence
+          </p>
         </div>
-        <Badge variant={isConnected ? "default" : "destructive"} className="gap-1.5 h-8 px-3 text-xs font-semibold">
-          <Activity className="h-3.5 w-3.5 animate-pulse" />
-          {isConnected ? "Real-time Live Stream Active" : "Reconnecting stream…"}
-        </Badge>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge variant={isConnected ? "default" : "destructive"} className="gap-1.5 h-8 px-3 text-xs font-semibold">
+            <Radio className="h-3.5 w-3.5 animate-pulse" />
+            {isConnected ? "Live Stream WS Active" : "Reconnecting Stream…"}
+          </Badge>
+          <button
+            onClick={() => {
+              loadRecentCalls();
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors shadow-xs"
+            title="Refresh active & recent telemetry"
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Refresh
+          </button>
+        </div>
       </div>
 
-      <div className={org.liveGrid}>
-        {/* Left pane: Active Calls List */}
-        <Card className="col-span-1 flex flex-col border-slate-200 overflow-hidden shadow-sm rounded-2xl bg-white">
-          <div className="bg-slate-50 border-b border-slate-200 p-4 font-semibold text-slate-800 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-emerald-600" />
-              <span>Active Calls</span>
+      {/* ── 4-Tile Live Operations Telemetry Ribbon ─────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 shrink-0">
+        <div className="rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <Radio className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Inbound Trunk</p>
+            <p className="text-xs font-bold text-slate-800 truncate">+91 9513886363</p>
+            <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Ready for Calls
+            </span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+            <Sparkles className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">AI Speech Engine</p>
+            <p className="text-xs font-bold text-slate-800 truncate">Gemini 2.5 Flash S2S</p>
+            <span className="text-[10px] font-semibold text-indigo-700">Sub-380ms Latency</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+            <Headphones className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Assigned Persona</p>
+            <p className="text-xs font-bold text-slate-800 truncate">Farhan (Custom Persona)</p>
+            <span className="text-[10px] font-semibold text-violet-700">Multilingual S2S</span>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs flex items-center gap-3">
+          <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <Server className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Stream Connection</p>
+            <p className="text-xs font-bold text-slate-800 truncate">{isConnected ? "WebSocket Online" : "Reconnecting"}</p>
+            <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Bi-directional Audio
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main Operations Split-Console (Full Height) ─────────────────── */}
+      <div className={`${org.liveGrid} flex-1 min-h-[580px]`}>
+        {/* Left pane: Dual-Mode Queue (Live Active vs Recent Sessions) */}
+        <Card className="col-span-1 flex flex-col border-slate-200 overflow-hidden shadow-sm rounded-2xl bg-white h-full">
+          <div className="bg-slate-50 border-b border-slate-200 p-2.5 flex items-center justify-between">
+            <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveQueueTab("live");
+                  setSelectedRecentCall(null);
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                  activeQueueTab === "live"
+                    ? "bg-white text-slate-900 shadow-xs"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <span className="relative flex h-2 w-2">
+                  {activeCalls.length > 0 && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  )}
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${activeCalls.length > 0 ? "bg-emerald-500" : "bg-slate-400"}`} />
+                </span>
+                Active Live ({activeCalls.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveQueueTab("recent")}
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                  activeQueueTab === "recent"
+                    ? "bg-white text-slate-900 shadow-xs"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                <History className="h-3 w-3" />
+                Recent ({recentCalls.length})
+              </button>
             </div>
-            <Badge variant="secondary" className="font-bold">{activeCalls.length}</Badge>
+            <button
+              onClick={() => loadRecentCalls()}
+              title="Refresh queue"
+              className="h-7 w-7 rounded-md hover:bg-slate-200 text-slate-500 flex items-center justify-center transition"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </button>
           </div>
 
           <div className="flex-1 p-3 bg-slate-50/50 overflow-y-auto space-y-2.5">
-            {activeCalls.length === 0 ? (
-              <div className={org.empty}>
-                <span className={org.emptyIcon}><PhoneOff size={26} /></span>
-                <strong>No active calls right now</strong>
-                <p>Inbound and outbound calls will appear here instantly when connected.</p>
-              </div>
-            ) : (
-              activeCalls.map(call => {
-                const phone = formatPhone(call.caller_phone);
-                const displayName = call.contact_name || (callerProfile?.is_saved ? callerProfile.contact_name : "Unknown Caller");
-                const agentLabel = call.agent_name || agentsMap[call.agent_id] || "Farhan";
-                const duration = callDurations[call.id] || 0;
-                const isReturning = call.is_returning || callerProfile?.is_returning;
-
-                return (
-                  <button type="button"
-                    key={call.id}
-                    onClick={() => setSelectedCallId(call.id)}
-                    aria-pressed={selectedCallId === call.id}
-                    className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer ${selectedCallId === call.id
-                        ? "bg-white border-emerald-500 shadow-md ring-2 ring-emerald-500/20"
-                        : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm"
-                      }`}
-                  >
-                    <div className="flex justify-between items-start mb-1">
-                      <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                        <User className="h-3.5 w-3.5 text-slate-400" />
-                        <span>{displayName}</span>
-                      </div>
-                      {call.status === "completed" ? (
-                        <Badge variant="outline" className="text-slate-600 bg-slate-100 border-slate-200 text-[10px] font-bold">DISCONNECTED</Badge>
-                      ) : (
-                        <Badge variant="outline" className="text-emerald-700 bg-emerald-50 border-emerald-200 animate-pulse text-[10px] font-bold">LIVE</Badge>
-                      )}
+            {activeQueueTab === "live" ? (
+              activeCalls.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-3">
+                  <div className="relative h-16 w-16 flex items-center justify-center">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-20" />
+                    <div className="relative h-12 w-12 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-inner">
+                      <Radio className="h-5 w-5" />
                     </div>
-
-                    <p className="text-xs font-mono text-slate-500 mb-2 pl-5 whitespace-nowrap">
-                      {phone}
+                  </div>
+                  <div>
+                    <strong className="text-slate-800 text-sm block">Radar Listening Live</strong>
+                    <p className="text-xs text-slate-500 max-w-[210px] mx-auto mt-0.5 leading-relaxed">
+                      Inbound calls on <span className="font-mono font-semibold text-slate-700">+91 9513886363</span> will appear here instantly.
                     </p>
+                  </div>
+                  {recentCalls.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveQueueTab("recent")}
+                      className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-xs transition"
+                    >
+                      <History className="h-3.5 w-3.5 text-slate-500" />
+                      View Recent Sessions ({recentCalls.length})
+                    </button>
+                  )}
+                </div>
+              ) : (
+                activeCalls.map(call => {
+                  const phone = formatPhone(call.caller_phone);
+                  const displayName = call.contact_name || (callerProfile?.is_saved ? callerProfile.contact_name : "Unknown Caller");
+                  const agentLabel = call.agent_name || agentsMap[call.agent_id] || "Farhan";
+                  const duration = callDurations[call.id] || 0;
+                  const isReturning = call.is_returning || callerProfile?.is_returning;
 
-                    <div className="flex items-center justify-between text-xs text-slate-500 pl-5">
-                      <span className="flex items-center gap-1 font-mono text-[11px] font-semibold text-slate-700">
-                        <Clock className="h-3 w-3 text-slate-400" />
-                        {formatDuration(duration)}
-                      </span>
-                      {isReturning ? (
-                        <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
-                          Returning
+                  return (
+                    <button type="button"
+                      key={call.id}
+                      onClick={() => {
+                        setSelectedRecentCall(null);
+                        setSelectedCallId(call.id);
+                      }}
+                      aria-pressed={selectedCallId === call.id}
+                      className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer ${selectedCallId === call.id
+                          ? "bg-white border-emerald-500 shadow-md ring-2 ring-emerald-500/20"
+                          : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm"
+                        }`}
+                    >
+                      <div className="flex justify-between items-start mb-1">
+                        <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
+                          <User className="h-3.5 w-3.5 text-slate-400" />
+                          <span>{displayName}</span>
+                        </div>
+                        {call.status === "completed" ? (
+                          <Badge variant="outline" className="text-slate-600 bg-slate-100 border-slate-200 text-[10px] font-bold">DISCONNECTED</Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-emerald-700 bg-emerald-50 border-emerald-200 animate-pulse text-[10px] font-bold">LIVE</Badge>
+                        )}
+                      </div>
+
+                      <p className="text-xs font-mono text-slate-500 mb-2 pl-5 whitespace-nowrap">
+                        {phone}
+                      </p>
+
+                      <div className="flex items-center justify-between text-xs text-slate-500 pl-5">
+                        <span className="flex items-center gap-1 font-mono text-[11px] font-semibold text-slate-700">
+                          <Clock className="h-3 w-3 text-slate-400" />
+                          {formatDuration(duration)}
                         </span>
-                      ) : (
-                        <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
-                          New Caller
+                        {isReturning ? (
+                          <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                            Returning
+                          </span>
+                        ) : (
+                          <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                            New Caller
+                          </span>
+                        )}
+                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded truncate max-w-[100px]">
+                          {agentLabel}
                         </span>
-                      )}
-                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded truncate max-w-[100px]">
-                        {agentLabel}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })
+                      </div>
+                    </button>
+                  );
+                })
+              )
+            ) : (
+              recentCalls.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-xs">
+                  No recent conversation logs found.
+                </div>
+              ) : (
+                recentCalls.map(call => {
+                  const phone = formatPhone(call.caller_phone);
+                  const displayName = call.contact_name || (call.caller_phone ? "Caller" : "Web Visitor");
+                  const durSec = call.duration_seconds || 0;
+                  const isSelected = selectedRecentCall?.id === call.id;
+
+                  return (
+                    <button
+                      key={call.id}
+                      type="button"
+                      onClick={() => handleSelectRecentCall(call)}
+                      className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-white border-emerald-500 shadow-md ring-2 ring-emerald-500/20"
+                          : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-xs"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5 truncate max-w-[150px]">
+                          <User className="h-3 w-3 text-slate-400 shrink-0" />
+                          <span className="truncate">{displayName}</span>
+                        </span>
+                        <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
+                          call.status === "completed"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-slate-100 text-slate-600 border-slate-200"
+                        }`}>
+                          {call.status}
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] font-mono text-slate-500 pl-4 mb-1 truncate">
+                        {phone}
+                      </p>
+
+                      <div className="flex items-center justify-between text-[11px] text-slate-400 pl-4">
+                        <span className="font-mono text-slate-600 font-semibold">
+                          {durSec > 0 ? formatDuration(durSec) : "—"}
+                        </span>
+                        <span>
+                          {call.started_at ? new Date(call.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Recent"}
+                        </span>
+                        {call.recording_url && (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1 rounded">
+                            🎙️ Audio
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })
+              )
             )}
           </div>
         </Card>
 
-        {/* Right pane: Live Smart Call Window */}
-        <Card className="col-span-1 md:col-span-2 flex flex-col border-slate-200 shadow-sm overflow-hidden rounded-2xl bg-white">
+        {/* Right pane: Live Smart Call Window OR Standby Operations Console */}
+        <Card className="col-span-1 md:col-span-2 flex flex-col border-slate-200 shadow-sm overflow-hidden rounded-2xl bg-white h-full">
           {selectedCall ? (
             <>
               {/* SMART LIVE HEADER */}
@@ -835,11 +1112,221 @@ export default function LiveCallsPage() {
                 )}
               </div>
             </>
+          ) : selectedRecentCall ? (
+            /* ── RECENT CALL INSPECTION MODE ───────────────────────────────── */
+            <>
+              <div className="bg-white border-b border-slate-200 p-4 shadow-sm z-10 shrink-0">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3.5">
+                    <div className="h-12 w-12 rounded-2xl bg-slate-800 text-white flex items-center justify-center font-bold text-lg shadow-md shrink-0">
+                      {selectedRecentCall.contact_name ? selectedRecentCall.contact_name.slice(0, 1).toUpperCase() : <User className="h-6 w-6" />}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h2 className="font-extrabold text-slate-900 text-base tracking-tight">
+                          {selectedRecentCall.contact_name || "Customer Session"}
+                        </h2>
+                        <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                          selectedRecentCall.status === "completed"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : "bg-slate-100 text-slate-700 border-slate-200"
+                        }`}>
+                          {selectedRecentCall.status}
+                        </span>
+                        {selectedRecentCall.recording_url && (
+                          <button
+                            type="button"
+                            onClick={() => handleToggleRecentAudio(selectedRecentCall.recording_url)}
+                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition ${
+                              recentAudioPlaying
+                                ? "bg-emerald-600 text-white border-emerald-700 shadow-sm animate-pulse"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                            }`}
+                          >
+                            {recentAudioPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3 ml-0.5" />}
+                            <span>{recentAudioPlaying ? "Playing Audio" : "Listen Recording"}</span>
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs font-mono text-slate-500 mt-0.5">
+                        {formatPhone(selectedRecentCall.caller_phone)} · {selectedRecentCall.started_at ? new Date(selectedRecentCall.started_at).toLocaleString() : ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setProfileDrawerOpen(true)}
+                      className="h-8 text-xs font-bold border-slate-200 hover:bg-slate-100 flex items-center gap-1.5"
+                    >
+                      <History className="h-3.5 w-3.5 text-slate-500" />
+                      Caller CRM
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedRecentCall(null);
+                        if (recentAudioRef.current) recentAudioRef.current.pause();
+                        setRecentAudioPlaying(false);
+                      }}
+                      className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold transition shadow-xs flex items-center gap-1"
+                    >
+                      <X className="h-3.5 w-3.5" /> Back to Standby
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Tiles */}
+              <div className="grid grid-cols-2 gap-px border-b border-slate-200 bg-slate-200 sm:grid-cols-4 shrink-0">
+                <div className="bg-slate-50 px-4 py-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Duration</p>
+                  <p className="mt-0.5 text-xs font-semibold text-slate-800">
+                    {formatDuration(selectedRecentCall.duration_seconds || 0)}
+                  </p>
+                </div>
+                <div className="bg-slate-50 px-4 py-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Direction</p>
+                  <p className="mt-0.5 text-xs font-semibold text-slate-800 capitalize">
+                    {selectedRecentCall.direction || "Inbound"}
+                  </p>
+                </div>
+                <div className="bg-slate-50 px-4 py-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Messages</p>
+                  <p className="mt-0.5 text-xs font-semibold text-slate-800">
+                    {selectedRecentCall.actual_message_count || recentCallMessages.length} Turns
+                  </p>
+                </div>
+                <div className="bg-slate-50 px-4 py-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Est. Cost</p>
+                  <p className="mt-0.5 text-xs font-semibold text-emerald-700">
+                    ₹{(((selectedRecentCall.duration_seconds || 0) / 60) * 1.5).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 space-y-4">
+                {loadingRecentMessages ? (
+                  <div className="h-full flex items-center justify-center text-slate-400 text-xs">
+                    <Activity className="h-4 w-4 animate-spin mr-2 text-emerald-600" />
+                    Loading session transcript…
+                  </div>
+                ) : recentCallMessages.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12">
+                    <FileText className="h-8 w-8 text-slate-300 mb-2" />
+                    <p className="text-xs font-semibold">No messages recorded for this call.</p>
+                  </div>
+                ) : (
+                  recentCallMessages.map((msg: any, i: number) => {
+                    const isUser = msg.role === "user";
+                    const text = typeof msg.content === "string" ? msg.content : (msg.text || "");
+                    return (
+                      <div key={i} className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
+                        <div className={`max-w-[85%] rounded-2xl p-4 shadow-xs ${
+                          isUser
+                            ? "bg-slate-900 text-white rounded-tr-xs"
+                            : "bg-white border border-slate-200 text-slate-900 rounded-tl-xs shadow-sm"
+                        }`}>
+                          <div className={`text-[10px] font-bold mb-1 flex items-center gap-1.5 uppercase tracking-wider ${isUser ? "text-slate-400" : "text-emerald-700"}`}>
+                            {isUser ? "Customer" : "Farhan (AI Agent)"}
+                          </div>
+                          <p className="leading-relaxed whitespace-pre-wrap text-sm">{text}</p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </>
           ) : (
-            <div className="h-full flex flex-col items-center justify-center text-slate-400 p-12">
-              <Phone className="h-12 w-12 mb-3 text-slate-300" />
-              <h3 className="font-bold text-slate-700 text-base">No Call Selected</h3>
-              <p className="text-xs text-slate-400 max-w-sm text-center mt-1">Select an active call from the left list to monitor live speech streaming, customer profile, and conversation intelligence.</p>
+            /* ── FULL OPERATIONS STANDBY CONSOLE (Rich Dashboard) ───────────── */
+            <div className="h-full flex flex-col justify-between p-8 bg-gradient-to-b from-slate-50/30 to-white overflow-y-auto">
+              {/* Radar Listener Hero */}
+              <div className="text-center py-6">
+                <div className="relative mx-auto mb-4 h-24 w-24 flex items-center justify-center">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-20" />
+                  <span className="animate-pulse absolute inline-flex h-16 w-16 rounded-full bg-emerald-100 opacity-60" />
+                  <div className="relative h-14 w-14 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-600/30">
+                    <Radio className="h-7 w-7" />
+                  </div>
+                </div>
+                <h3 className="font-extrabold text-slate-900 text-lg tracking-tight">
+                  Real-Time Telephony Console Active
+                </h3>
+                <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 leading-relaxed">
+                  The bi-directional WebSocket listener is connected to the primary Exotel telephony trunk.
+                  All incoming speech streams are automatically ingested, transcribed, and synthesized in real time.
+                </p>
+              </div>
+
+              {/* 3 Telephony Architecture Spec Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 my-4">
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+                  <div className="flex items-center gap-2 mb-2 text-emerald-700 font-bold text-xs uppercase tracking-wider">
+                    <Phone className="h-4 w-4" />
+                    Telephony Ingest
+                  </div>
+                  <p className="text-xs font-semibold text-slate-900">Virtual Line +91 9513886363</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Exotel WebSocket Stream on port 8003 with automated caller ID lookup.</p>
+                  <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                    <CheckCircle2 className="h-3 w-3" /> Ingest Optimal
+                  </span>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+                  <div className="flex items-center gap-2 mb-2 text-indigo-700 font-bold text-xs uppercase tracking-wider">
+                    <Sparkles className="h-4 w-4" />
+                    Speech Reasoning
+                  </div>
+                  <p className="text-xs font-semibold text-slate-900">Gemini 2.5 Flash S2S</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Live turn-taking with automated silence detection and Hindi/English reasoning.</p>
+                  <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
+                    <Zap className="h-3 w-3" /> Sub-380ms Latency
+                  </span>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
+                  <div className="flex items-center gap-2 mb-2 text-violet-700 font-bold text-xs uppercase tracking-wider">
+                    <Headphones className="h-4 w-4" />
+                    Audio Synthesis
+                  </div>
+                  <p className="text-xs font-semibold text-slate-900">Farhan Persona Voice</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">Sarvam AI Bulbul & Gemini Native synthesis with 8kHz μ-law streaming.</p>
+                  <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded">
+                    <CheckCircle2 className="h-3 w-3" /> Voice Cloned Active
+                  </span>
+                </div>
+              </div>
+
+              {/* Recent Activity Footbar */}
+              {recentCalls.length > 0 && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-2">
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
+                      <History className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-slate-800">
+                        Last Session: {recentCalls[0].contact_name || formatPhone(recentCalls[0].caller_phone)}
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Duration: {formatDuration(recentCalls[0].duration_seconds || 0)} · {recentCalls[0].status} · {recentCalls[0].started_at ? new Date(recentCalls[0].started_at).toLocaleTimeString() : ""}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSelectRecentCall(recentCalls[0])}
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs"
+                  >
+                    Inspect Last Call <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </Card>
@@ -852,7 +1339,7 @@ export default function LiveCallsPage() {
           setProfileDrawerOpen(false);
           setActiveRecordingUrl(null);
         }}
-        title={`Caller Profile · ${callerProfile?.contact_name || formatPhone(selectedCall?.caller_phone || "")}`}
+        title={`Caller Profile · ${callerProfile?.contact_name || formatPhone(selectedCall?.caller_phone || selectedRecentCall?.caller_phone || "")}`}
         description="Complete customer call history, aggregated telephony analytics, and AI memory."
       >
         <div className="p-6 space-y-6 overflow-y-auto">
@@ -991,7 +1478,7 @@ export default function LiveCallsPage() {
         open={contactModalOpen}
         onClose={() => setContactModalOpen(false)}
         title={callerProfile?.is_saved ? "Edit Caller Contact" : "Save New Contact"}
-        description={`Associate a saved contact name with phone number ${formatPhone(selectedCall?.caller_phone || "")}.`}
+        description={`Associate a saved contact name with phone number ${formatPhone(selectedCall?.caller_phone || selectedRecentCall?.caller_phone || "")}.`}
       >
         <div className="p-6 space-y-4">
           <div>
