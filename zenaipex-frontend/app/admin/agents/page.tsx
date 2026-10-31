@@ -1528,11 +1528,14 @@ export default function AdminAgentsPage() {
         </div>
         <div className={org.toolbar}>
           <button
-            onClick={() => setActiveTab("workforce")}
-            disabled={loading}
+            onClick={() => {
+              loadAgents();
+              loadCustomVoices();
+            }}
+            disabled={isLoading}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors shadow-xs"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
             Refresh
           </button>
           <button
