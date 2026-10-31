@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { fetchApi } from "@/lib/api/client";
 import { formatSystemDateTime } from "@/lib/utils";
 import {
@@ -152,6 +152,52 @@ function StatusDot({ s }: { s: string }) {
       {s}
     </span>
   );
+}
+
+function getTopicBadge(conv: any) {
+  const text = `${conv.title || ""} ${conv.last_message || ""}`.toLowerCase();
+  const status = conv.status || "";
+
+  if (status === "failed" || status === "hung-up" || status === "no-answer" || status === "busy") {
+    return {
+      label: "Dropped / Missed",
+      cls: "bg-red-50 text-red-700 border-red-200",
+      icon: "📵",
+    };
+  }
+  if (text.includes("appoint") || text.includes("book") || text.includes("schedule") || text.includes("slot") || text.includes("timing")) {
+    return {
+      label: "Appointment",
+      cls: "bg-emerald-50 text-emerald-800 border-emerald-200",
+      icon: "🎯",
+    };
+  }
+  if (text.includes("price") || text.includes("cost") || text.includes("rupee") || text.includes("payment") || text.includes("bill")) {
+    return {
+      label: "Billing / Pricing",
+      cls: "bg-purple-50 text-purple-800 border-purple-200",
+      icon: "💳",
+    };
+  }
+  if (text.includes("help") || text.includes("support") || text.includes("problem") || text.includes("issue") || text.includes("fail")) {
+    return {
+      label: "Support",
+      cls: "bg-amber-50 text-amber-800 border-amber-200",
+      icon: "⚠️",
+    };
+  }
+  if (text.includes("how") || text.includes("what") || text.includes("kya") || text.includes("kaise") || text.includes("info")) {
+    return {
+      label: "Inquiry",
+      cls: "bg-sky-50 text-sky-800 border-sky-200",
+      icon: "❓",
+    };
+  }
+  return {
+    label: "General Chat",
+    cls: "bg-slate-50 text-slate-600 border-slate-200",
+    icon: "💬",
+  };
 }
 
 function AudioPlayer({ url, sid }: { url: string; sid?: string }) {
@@ -451,6 +497,43 @@ export default function AdminConversationsPage() {
   const [companiesMap, setCompaniesMap] = useState<Record<string, string>>({});
   const router = useRouter();
 
+  // Audio inline playback state
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  const handleToggleAudio = (convId: string, url: string) => {
+    if (playingId === convId) {
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause();
+      }
+      setPlayingId(null);
+      return;
+    }
+
+    if (activeAudioRef.current) {
+      activeAudioRef.current.pause();
+    }
+
+    const audio = new Audio(url);
+    activeAudioRef.current = audio;
+    setPlayingId(convId);
+    audio.play().catch((err) => {
+      console.error("Audio playback error:", err);
+      setPlayingId(null);
+    });
+    audio.onended = () => {
+      setPlayingId(null);
+    };
+  };
+
+  useEffect(() => {
+    return () => {
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause();
+      }
+    };
+  }, []);
+
   const handleForceFail = async (companyId: string, convId: string) => {
     try {
       await fetchApi(`/admin/conversations/${companyId}/${convId}/force-fail`, {
@@ -662,6 +745,61 @@ export default function AdminConversationsPage() {
   }, [activeTab, search]);
 
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
+
+  const exportToCSV = () => {
+    if (filtered.length === 0) return;
+    const headers = [
+      "ID",
+      "Channel",
+      "Direction",
+      "Contact Name",
+      "Phone Number",
+      "Recipient Number",
+      "Company",
+      "Title / Topic",
+      "Messages",
+      "Duration (sec)",
+      "Duration",
+      "Cost (INR)",
+      "Status",
+      "Date & Time",
+    ];
+    const rows = filtered.map((c) => {
+      const dur = c.duration_seconds || 0;
+      const cost =
+        c.source_type === "phone_call" && dur > 0
+          ? ((dur / 60) * 1.5).toFixed(2)
+          : "0.00";
+      return [
+        `"${c.id || ""}"`,
+        `"${c.source_type || ""}"`,
+        `"${c.direction || ""}"`,
+        `"${(c.contact_name || "").replace(/"/g, '""')}"`,
+        `"${c.caller_phone || ""}"`,
+        `"${c.caller_to || ""}"`,
+        `"${(companiesMap[c.company_id] || c.company_id || "").replace(/"/g, '""')}"`,
+        `"${(c.title || c.last_message || "").replace(/"/g, '""')}"`,
+        c.actual_message_count || 0,
+        dur,
+        `"${formatDur(dur)}"`,
+        cost,
+        `"${c.status || ""}"`,
+        `"${formatSystemDateTime(c.started_at || c.created_at)}"`,
+      ].join(",");
+    });
+    const csvContent =
+      "data:text/csv;charset=utf-8," + [headers.join(","), ...rows].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute(
+      "download",
+      `zeniaone-conversations-${new Date().toISOString().slice(0, 10)}.csv`,
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   const paginatedRows = filtered.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage,
@@ -748,6 +886,14 @@ export default function AdminConversationsPage() {
                 </button>
               ))}
             </div>
+            <button
+              onClick={exportToCSV}
+              disabled={filtered.length === 0}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors disabled:opacity-40 shadow-xs"
+              title="Export filtered records to CSV"
+            >
+              <Download className="h-3.5 w-3.5 text-slate-500" /> Export CSV
+            </button>
             {!isSelecting && (
               <button
                 onClick={() => setIsSelecting(true)}
@@ -1041,12 +1187,25 @@ export default function AdminConversationsPage() {
                           )}
                         </td>
 
-                        <td className="px-5 py-3.5 max-w-[160px]">
-                          <p className="text-xs text-slate-600 truncate">
-                            {conv.title ||
-                              conv.last_message?.slice(0, 40) ||
-                              "—"}
-                          </p>
+                        <td className="px-5 py-3.5 max-w-[200px]">
+                          {(() => {
+                            const badge = getTopicBadge(conv);
+                            return (
+                              <div className="flex flex-col gap-1">
+                                <span
+                                  className={`inline-flex items-center gap-1 w-fit px-2 py-0.5 rounded-full text-[10px] font-semibold border ${badge.cls}`}
+                                >
+                                  <span>{badge.icon}</span>
+                                  <span>{badge.label}</span>
+                                </span>
+                                <p className="text-xs text-slate-700 truncate font-medium max-w-[190px]" title={conv.title || conv.last_message || ""}>
+                                  {conv.title ||
+                                    conv.last_message?.slice(0, 50) ||
+                                    "—"}
+                                </p>
+                              </div>
+                            );
+                          })()}
                         </td>
                         <td className="px-5 py-3.5">
                           <span className="text-xs font-bold text-slate-700">
@@ -1061,9 +1220,25 @@ export default function AdminConversationsPage() {
                                 : formatDur(dur)}
                             </span>
                             {conv.recording_url && (
-                              <span title="Audio recording available" className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                🎙️
-                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleAudio(conv.id, conv.recording_url);
+                                }}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all ${
+                                  playingId === conv.id
+                                    ? "bg-emerald-600 text-white border-emerald-700 shadow-sm animate-pulse"
+                                    : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300"
+                                }`}
+                                title={playingId === conv.id ? "Pause recording" : "Play call recording"}
+                              >
+                                {playingId === conv.id ? (
+                                  <Pause className="h-2.5 w-2.5" />
+                                ) : (
+                                  <Play className="h-2.5 w-2.5 ml-0.5" />
+                                )}
+                                <span>{playingId === conv.id ? "Playing" : "Audio"}</span>
+                              </button>
                             )}
                           </div>
                         </td>

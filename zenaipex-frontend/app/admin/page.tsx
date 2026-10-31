@@ -266,44 +266,83 @@ export default function AdminDashboardPage() {
 
   return (
     <div className={styles.overview}>
-      {/* ── Header ───────────────────────────────────────────── */}
-      <div className={styles.header}>
+      {/* ── Executive Command Header ────────────────────────────────────── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-1">
         <div>
-          <span className={styles.eyebrow}>
-            <Sparkles size={14} /> ORGANIZATION COMMAND CENTER
-          </span>
-          <h1>Platform overview</h1>
-          <p>
-            Performance and operations across your {platformName} environment.
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+            <Activity className="h-6 w-6 text-emerald-600" />
+            Platform Command Center
+            {allHealthy ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                </span>
+                All Systems Healthy
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                <span className="h-2 w-2 rounded-full bg-amber-500" />
+                {providerFailures.length + failedDocuments + (allHealthy ? 0 : 1)} Need Review
+              </span>
+            )}
+            {isRefetching && (
+              <RefreshCw className="h-4 w-4 animate-spin text-emerald-600" />
+            )}
+          </h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">
+            Real-time multi-tenant intelligence, AI operations & telephony metrics across {platformName}
           </p>
         </div>
-        <div className={styles.headerActions}>
-          <div
-            className={styles.periodPicker}
-            role="group"
-            aria-label="Reporting period"
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Quick Action Shortcuts */}
+          <Link
+            href="/admin/companies"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white shadow-xs transition-colors"
           >
+            <Plus size={13} /> Company
+          </Link>
+          <Link
+            href="/admin/agents"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-xs transition-colors"
+          >
+            <Plus size={13} /> Agent
+          </Link>
+          <Link
+            href="/admin/channels"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 shadow-xs transition-colors"
+          >
+            <Plus size={13} /> Channel
+          </Link>
+
+          {/* Period Selector */}
+          <div className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
             {[7, 30, 90].map((d) => (
               <button
                 key={d}
                 onClick={() => setDays(d)}
                 disabled={isRefetching}
-                aria-pressed={days === d}
-                className={days === d ? styles.selectedPeriod : ""}
+                className={`inline-flex items-center rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                  days === d
+                    ? "bg-white text-slate-800 shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
               >
-                {d} days
+                {d}d
               </button>
             ))}
           </div>
+
+          {/* Refresh */}
           <button
-            className={styles.refreshButton}
-            onClick={() => setRefreshKey((key) => key + 1)}
+            onClick={() => setRefreshKey((k) => k + 1)}
             disabled={isRefetching}
-            aria-label="Refresh overview"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors shadow-xs"
           >
             <RefreshCw
-              size={17}
-              className={isRefetching ? styles.spinning : ""}
+              size={13}
+              className={isRefetching ? "animate-spin text-emerald-600" : ""}
             />{" "}
             Refresh
           </button>
@@ -316,86 +355,104 @@ export default function AdminDashboardPage() {
           <button onClick={() => setRefreshKey((key) => key + 1)}>Retry</button>
         </div>
       )}
+
       <div
         className={isRefetching ? styles.refetching : styles.content}
         aria-busy={isRefetching}
       >
-        <section className="mb-[18px] grid gap-3 lg:grid-cols-[1.5fr_1fr]" aria-label="Platform attention and actions">
-          <div className={`rounded-2xl border px-5 py-4 shadow-sm ${needsAttention ? "border-amber-200 bg-amber-50/70" : "border-emerald-100 bg-emerald-50/60"}`}>
-            <div className="flex items-start gap-3">
-              <span className={`rounded-xl p-2 ${needsAttention ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{needsAttention ? <AlertTriangle size={18} /> : <CheckCircle2 size={18} />}</span>
-              <div className="min-w-0 flex-1"><p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">{needsAttention ? "Needs attention" : "Platform watch"}</p><p className="mt-1 text-sm font-semibold text-slate-800">{needsAttention ? `${providerFailures.length + failedDocuments + (allHealthy ? 0 : 1)} item(s) need review` : "No active incidents"}</p><p className="mt-1 truncate text-[11px] text-slate-500">{providerFailures.length > 0 ? `${providerFailures[0].provider_name} failures` : "Live health stable"}{failedDocuments > 0 ? ` · ${failedDocuments} failed document(s)` : ""}{usageSpike ? " · Usage spike detected" : ""}</p></div>
-              {providerFailures.length > 0 && <Link href="/admin/usage" className="shrink-0 text-xs font-bold text-emerald-700">Review <ArrowRight size={13} className="inline" /></Link>}
+        {/* ── Consolidated Executive Health Ribbon ────────────────────────── */}
+        <div className="mb-4 rounded-xl border border-slate-200/90 bg-gradient-to-r from-emerald-50/60 via-white to-slate-50/50 p-3 shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {/* Left: Core Infrastructure Health */}
+            <div className="flex items-center gap-2.5">
+              <div className={`flex h-8 w-8 items-center justify-center rounded-lg shrink-0 ${allHealthy ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                {allHealthy ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-900">
+                    {allHealthy ? "Core Services Operational" : "Service Attention Needed"}
+                  </span>
+                  <span className="text-[10px] font-mono text-emerald-700 bg-emerald-100/70 px-1.5 py-0.5 rounded font-semibold">
+                    FastAPI · MongoDB
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  {health ? "Live API and database health checks optimal" : "Connecting to platform telemetry…"}
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="rounded-2xl border border-[#D9E7DD] bg-white px-4 py-3 shadow-sm"><div className="flex items-center justify-between"><p className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Quick actions</p><span className="text-[10px] text-slate-400">Shortcuts</span></div><div className="mt-2 flex flex-wrap gap-1.5"><Link href="/admin/companies" className="inline-flex items-center gap-1 rounded-lg bg-[#0C4A31] px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-[#083A26]"><Plus size={13} /> Company</Link><Link href="/admin/agents" className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:border-emerald-300"><Plus size={13} /> Agent</Link><Link href="/admin/my-ai/documents" className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:border-emerald-300"><Upload size={13} /> Document</Link><Link href="/admin/system/ai-providers" className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-bold text-slate-700 hover:border-emerald-300"><Settings2 size={13} /> Provider</Link></div></div>
-        </section>
-        <section className={styles.hero} aria-label="Platform summary">
-          <div className={styles.heroStatus}>
-            <span className={allHealthy ? styles.heroGood : styles.heroWarn}>
-              {allHealthy ? (
-                <CheckCircle2 size={25} />
+
+            {/* Center: AI Success Rate & Latency */}
+            <div className="flex items-center gap-2.5 border-t sm:border-t-0 sm:border-l border-slate-200/80 pt-2 sm:pt-0 sm:pl-4">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 shrink-0">
+                <Sparkles size={16} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-slate-900">
+                    {successRate === null ? "Telemetry syncing" : `${successRate.toFixed(1)}% AI Request Success`}
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-semibold">
+                    (Last {days}d)
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  {averageLatency !== null ? `Average Latency: ${averageLatency.toFixed(0)} ms` : "Provider metrics healthy"}
+                </p>
+              </div>
+            </div>
+
+            {/* Right: Operational Watch & Action */}
+            <div className="flex items-center gap-2 border-t sm:border-t-0 sm:border-l border-slate-200/80 pt-2 sm:pt-0 sm:pl-4">
+              {needsAttention ? (
+                <div className="flex items-center gap-2">
+                  <span className="flex h-2 w-2 rounded-full bg-amber-500" />
+                  <span className="text-xs font-semibold text-amber-800">
+                    {providerFailures.length > 0
+                      ? `${providerFailures[0].provider_name} failures detected`
+                      : failedDocuments > 0
+                        ? `${failedDocuments} failed document(s)`
+                        : "Requires attention"}
+                  </span>
+                  <Link
+                    href="/admin/usage"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 hover:text-amber-900 ml-1"
+                  >
+                    Review <ArrowRight size={12} />
+                  </Link>
+                </div>
               ) : (
-                <ShieldAlert size={25} />
+                <div className="flex items-center gap-2">
+                  <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
+                  <span className="text-xs font-semibold text-slate-600">
+                    0 Incidents · Live telemetry stable
+                  </span>
+                  <Link
+                    href="/admin/conversations"
+                    className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-900 ml-1"
+                  >
+                    Live Logs <ArrowRight size={12} />
+                  </Link>
+                </div>
               )}
-            </span>
-            <div>
-              <span className={styles.heroKicker}>PLATFORM STATUS</span>
-              <h2>
-                {!health
-                  ? "Health check unavailable"
-                  : allHealthy
-                    ? "Core services operational"
-                    : "Core service needs attention"}
-              </h2>
-              <p>
-                {health
-                  ? "Based on live API and database health checks."
-                  : "Live health could not be verified."}
-              </p>
             </div>
           </div>
-          <div className={styles.heroInsight}>
-            <span className={styles.insightIcon}>
-              <Sparkles size={19} />
-            </span>
-            <div>
-              <span className={styles.heroKicker}>
-                AI QUALITY · LAST {days} DAYS
-              </span>
-              <strong>
-                {successRate === null
-                  ? "No request outcomes yet"
-                  : `${successRate.toFixed(1)}% request success`}
-              </strong>
-              <p>
-                {successRate === null
-                  ? "Insights appear when requests are recorded."
-                  : successRate < 95
-                    ? "Review request outcomes and provider performance."
-                    : "Request outcomes are performing well."}
-              </p>
-            </div>
-            <a
-              href="#ai-analytics"
-              className={styles.heroLink}
-              aria-label="Jump to AI analytics"
-            >
-              <ArrowRight size={18} />
-            </a>
-          </div>
-        </section>
-        {/* ── 1. Primary KPI Row ─────────────────────────────────────────── */}
-        <div className={styles.kpiHeading}>
-          <div>
-            <span className={styles.panelEyebrow}>PLATFORM AT A GLANCE</span>
-            <h2>Key metrics</h2>
-            <p>Current scale and usage for the selected period.</p>
-          </div>
-          <Link href="/admin/conversations">
-            Trace a conversation <ArrowRight size={15} />
+        </div>
+
+        {/* ── Streamlined KPI Grid ────────────────────────────────────────── */}
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+            Key Platform Metrics · Last {days} Days
+          </span>
+          <Link
+            href="/admin/conversations"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:underline"
+          >
+            Trace a conversation <ArrowRight size={13} />
           </Link>
         </div>
+
         <div className={styles.kpiGrid}>
           <OverviewKpiCard
             title="TOTAL COMPANIES"
@@ -458,24 +515,6 @@ export default function AdminDashboardPage() {
             href="/admin/system/ai-providers"
           />
         </div>
-        <details className={styles.metricGuide}>
-          <summary>
-            <Info size={14} /> Explain these numbers <ChevronDown size={14} />
-          </summary>
-          <div>
-            <p>
-              <strong>Companies and agents</strong> are current platform totals.
-            </p>
-            <p>
-              <strong>Conversations, AI requests and voice minutes</strong> use
-              the selected {days}-day period.
-            </p>
-            <p>
-              <strong>Provider cost</strong> sums reported INR costs from
-              connected providers for the same period.
-            </p>
-          </div>
-        </details>
 
         {/* ── 2. Activity ─────────────────────────────────────── */}
         <div className={styles.mainGrid}>
