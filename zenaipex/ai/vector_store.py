@@ -26,6 +26,36 @@ logger = logging.getLogger(__name__)
 
 import threading
 
+class GeminiEmbeddingWrapper:
+    """Zero-RAM embedding provider using Gemini 384-dim embeddings.
+    Used as an automatic fallback when heavy PyTorch/SentenceTransformers
+    cannot be loaded on low-memory cloud hosts (e.g. Render 512MB RAM).
+    """
+    def __init__(self, api_key: str):
+        import google.genai as genai
+        self.client = genai.Client(api_key=api_key)
+        self.device = "cloud"
+
+    def encode(self, texts, **kwargs):
+        import numpy as np
+        from google.genai import types
+        if isinstance(texts, str):
+            texts = [texts]
+        embeddings = []
+        for text in texts:
+            try:
+                res = self.client.models.embed_content(
+                    model="gemini-embedding-001",
+                    contents=text,
+                    config=types.EmbedContentConfig(output_dimensionality=384)
+                )
+                embeddings.append(res.embeddings[0].values)
+            except Exception as exc:
+                logger.error("[GEMINI_EMBEDDING_ERROR] %s", exc)
+                embeddings.append([0.0] * 384)
+        return np.array(embeddings)
+
+
 _embedding_model: Optional[Any] = None
 _embedding_lock = threading.Lock()
 
@@ -52,15 +82,23 @@ def _get_embedding_model() -> Any:
                     try:
                         _embedding_model = SentenceTransformer(settings.embedding_model)
                     except Exception as e:
-                        logger.error(
-                            "[EMBEDDING_MODEL_ERROR] Failed to load model: %s. "
-                            "Ensure the model is downloaded to the HuggingFace cache.",
-                            e,
-                        )
-                        raise RuntimeError(f"Embedding model not available: {str(e)}")
+                        if settings.gemini_api_key:
+                            logger.warning(
+                                "[EMBEDDING_MODEL_FALLBACK] SentenceTransformer load failed (%s). "
+                                "Falling back to Gemini Embedding API (384-dim, 0MB RAM).",
+                                e,
+                            )
+                            _embedding_model = GeminiEmbeddingWrapper(settings.gemini_api_key)
+                        else:
+                            logger.error(
+                                "[EMBEDDING_MODEL_ERROR] Failed to load model: %s. "
+                                "Ensure the model is downloaded to the HuggingFace cache.",
+                                e,
+                            )
+                            raise RuntimeError(f"Embedding model not available: {str(e)}")
                     
                 latency_ms = (time.perf_counter() - start_time) * 1000
-                logger.info(f"[EMBEDDING_MODEL_READY] model={settings.embedding_model} device={_embedding_model.device} latency_ms={latency_ms:.2f}")
+                logger.info(f"[EMBEDDING_MODEL_READY] model={settings.embedding_model} device={getattr(_embedding_model, 'device', 'unknown')} latency_ms={latency_ms:.2f}")
     return _embedding_model
 
 

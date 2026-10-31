@@ -148,18 +148,10 @@ async def lifespan(app: FastAPI):
         except Exception as exc:
             logger.warning(f"Admin workspace provisioning failed: {exc}")
 
-        # RAG dependencies are loaded lazily for health checks, but warmed up
-        # asynchronously in the background so the first phone call has 0s latency.
-        async def _warmup_embeddings():
-            try:
-                import asyncio
-                from ai.vector_store import _get_embedding_model
-                await asyncio.to_thread(_get_embedding_model)
-                logger.info("✅ RAG embedding model preloaded in background")
-            except Exception as exc:
-                logger.warning(f"Background RAG warmup skipped: {exc}")
-
-        asyncio.create_task(_warmup_embeddings())
+        # RAG dependencies are loaded lazily on the first knowledge-base request.
+        # Keeping heavy model weights out of startup keeps memory usage under 60MB
+        # (well within Render's 512MB RAM limit) and prevents OOM crash-loops.
+        logger.info("ℹ️ RAG embedding models will be loaded lazily on first knowledge-base request")
 
         # Start background tasks scheduler (e.g., daily KB sync)
         try:
