@@ -12,6 +12,8 @@ logger = logging.getLogger(__name__)
 _worker_task: Optional[asyncio.Task] = None
 _scheduled_call_worker_task: Optional[asyncio.Task] = None
 _stop_event: Optional[asyncio.Event] = None
+_last_job_recovery: float = 0.0
+_last_call_recovery: float = 0.0
 
 
 async def enqueue_scheduled_call(
@@ -59,12 +61,17 @@ async def enqueue_document_processing(
 
 
 async def _claim_job() -> Optional[dict]:
+    global _last_job_recovery
+    import time
     now = datetime.now(timezone.utc)
-    # Recover jobs whose worker died after claiming them.
-    await col_background_jobs().update_many(
-        {"status": "running", "lease_until": {"$lt": now}},
-        {"$set": {"status": "pending", "updated_at": now}, "$unset": {"lease_until": ""}},
-    )
+    now_mono = time.monotonic()
+    # Recover jobs whose worker died after claiming them (throttled to once per minute to avoid Atlas load)
+    if now_mono - _last_job_recovery > 60:
+        _last_job_recovery = now_mono
+        await col_background_jobs().update_many(
+            {"status": "running", "lease_until": {"$lt": now}},
+            {"$set": {"status": "pending", "updated_at": now}, "$unset": {"lease_until": ""}},
+        )
     return await col_background_jobs().find_one_and_update(
         {"status": "pending"},
         {"$set": {
@@ -114,12 +121,17 @@ async def _worker_loop() -> None:
 
 
 async def _claim_scheduled_call() -> Optional[dict]:
+    global _last_call_recovery
+    import time
     now = datetime.now(timezone.utc)
-    # A process can die after claiming a call.  Make the lease recoverable.
-    await col_scheduled_calls().update_many(
-        {"status": "running", "lease_until": {"$lt": now}},
-        {"$set": {"status": "pending", "updated_at": now}, "$unset": {"lease_until": ""}},
-    )
+    now_mono = time.monotonic()
+    # A process can die after claiming a call. Recover leases periodically without pounding the database.
+    if now_mono - _last_call_recovery > 60:
+        _last_call_recovery = now_mono
+        await col_scheduled_calls().update_many(
+            {"status": "running", "lease_until": {"$lt": now}},
+            {"$set": {"status": "pending", "updated_at": now}, "$unset": {"lease_until": ""}},
+        )
     return await col_scheduled_calls().find_one_and_update(
         {
             "status": "pending",

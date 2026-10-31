@@ -98,41 +98,56 @@ export default function AdminDashboardPage() {
         setError("");
         setIsRefetching(true);
 
-        const m = await fetchApi<Metrics>(`/admin/metrics?days=${days}`);
-        if (!cancelled) {
-          setMetrics(m);
-          // Render the KPI cards as soon as the primary request finishes.
-          // The remaining dashboard panels hydrate in the background.
-          setIsLoading(false);
-        }
-
-        const [comps, logs, h, t, b, k] = await Promise.all([
+        // Fetch all primary dashboard metrics and panels concurrently
+        const [mRes, compsRes, logsRes, hRes, tRes, bRes, kRes] = await Promise.allSettled([
+          fetchApi<Metrics>(`/admin/metrics?days=${days}`),
           fetchApi<{ companies?: Company[] }>("/admin/companies?limit=5"),
           fetchApi<{ logs?: AdminLog[] }>("/admin/logs?limit=5"),
-          // Keep health checks on the same API client as the rest of the
-          // dashboard.  The old direct root `/health` fetch bypassed the
-          // browser API/CORS retry path and could falsely show the platform as
-          // unavailable during a Render wake-up or rolling restart.
-          fetchApi<Health>("/health").catch(() => null),
-          fetchApi<Trend>(`/admin/metrics/trends?days=${days}`).catch(
-            () => null,
-          ),
-          fetchApi<{ providers?: ProviderUsageItem[] }>(
-            `/admin/providers/unified-state?days=${days}`,
-          ).catch(() => ({ providers: [] })),
-          fetchApi<KnowledgeInsight>("/admin/knowledge-insights").catch(() => null),
+          fetchApi<Health>("/health"),
+          fetchApi<Trend>(`/admin/metrics/trends?days=${days}`),
+          fetchApi<{ providers?: ProviderUsageItem[] }>(`/admin/providers/unified-state?days=${days}`),
+          fetchApi<KnowledgeInsight>("/admin/knowledge-insights"),
         ]);
-        if (!cancelled) {
-          setRecentCompanies(comps.companies?.slice(0, 5) || []);
-          setRecentLogs(logs.logs?.slice(0, 5) || []);
-          setHealth(h);
-          setTrends(t);
-          setUnifiedProviders(b.providers || []);
-          setKnowledge(k);
+
+        if (cancelled) return;
+
+        if (mRes.status === "fulfilled" && mRes.value) {
+          setMetrics(mRes.value);
+        } else if (!metrics) {
+          // Provide fallback so the dashboard structure renders smoothly
+          setMetrics({
+            total_companies: 0,
+            total_agents: 0,
+            total_conversations: 0,
+            total_call_minutes: 0,
+            total_llm_calls: 0,
+            total_tokens: 0,
+            total_cost: 0,
+          });
         }
-      } catch {
-        if (!cancelled)
+
+        if (compsRes.status === "fulfilled" && compsRes.value?.companies) {
+          setRecentCompanies(compsRes.value.companies.slice(0, 5));
+        }
+        if (logsRes.status === "fulfilled" && logsRes.value?.logs) {
+          setRecentLogs(logsRes.value.logs.slice(0, 5));
+        }
+        if (hRes.status === "fulfilled") {
+          setHealth(hRes.value);
+        }
+        if (tRes.status === "fulfilled") {
+          setTrends(tRes.value);
+        }
+        if (bRes.status === "fulfilled" && bRes.value?.providers) {
+          setUnifiedProviders(bRes.value.providers);
+        }
+        if (kRes.status === "fulfilled") {
+          setKnowledge(kRes.value);
+        }
+      } catch (err: any) {
+        if (!cancelled && !metrics) {
           setError("Failed to load dashboard data. Please try again.");
+        }
       } finally {
         if (!cancelled) {
           setIsLoading(false);

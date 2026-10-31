@@ -189,6 +189,8 @@ async def create_all_indexes():
 
     # conversations
     await db["conversations"].create_indexes([
+        IndexModel([("started_at", DESCENDING)]),
+        IndexModel([("is_archived", ASCENDING), ("started_at", DESCENDING)]),
         IndexModel([("company_id", ASCENDING), ("started_at", DESCENDING)]),
         IndexModel([("company_id", ASCENDING), ("status", ASCENDING)]),
         IndexModel([("caller_phone", ASCENDING)]),

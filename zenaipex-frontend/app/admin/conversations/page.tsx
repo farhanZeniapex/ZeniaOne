@@ -436,6 +436,7 @@ function ConvDetail({ conv, onClose }: { conv: any; onClose: () => void }) {
 export default function AdminConversationsPage() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [viewArchived, setViewArchived] = useState(false);
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -481,26 +482,35 @@ export default function AdminConversationsPage() {
 
   const loadConvs = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const qs = viewArchived ? "?is_archived=true" : "?is_archived=false";
-      const [data, compsData] = await Promise.all([
+      const [dataRes, compsRes] = await Promise.allSettled([
         fetchApi<any>(`/admin/conversations${qs}`),
         fetchApi<any>(`/admin/companies`),
       ]);
-      setConversations(data.conversations || []);
 
-      const compMap: Record<string, string> = {};
-      if (compsData.companies) {
-        compsData.companies.forEach((c: any) => {
+      if (dataRes.status === "fulfilled" && dataRes.value?.conversations) {
+        setConversations(dataRes.value.conversations);
+        if (dataRes.value.conversations.length === 0) setIsSelecting(false);
+      } else {
+        const errorMsg = dataRes.status === "rejected" ? (dataRes.reason?.message || "Failed to load conversations") : "Could not retrieve conversations";
+        console.warn("Conversations fetch status:", errorMsg);
+        setLoadError(errorMsg);
+      }
+
+      if (compsRes.status === "fulfilled" && compsRes.value?.companies) {
+        const compMap: Record<string, string> = {};
+        compsRes.value.companies.forEach((c: any) => {
           compMap[c.id] = c.name;
         });
+        setCompaniesMap(compMap);
       }
-      setCompaniesMap(compMap);
 
       setSelectedIds(new Set());
-      if (data.conversations?.length === 0) setIsSelecting(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to load conversations", err);
+      setLoadError(err?.message || "Connection timeout or server restarting");
     } finally {
       setIsLoading(false);
     }
@@ -939,10 +949,25 @@ export default function AdminConversationsPage() {
                 ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={11} className="px-6 py-16 text-center">
-                      <MessageSquare className="h-8 w-8 text-slate-200 mx-auto mb-2" />
-                      <p className="text-sm text-slate-400">
-                        No conversations found
+                      <MessageSquare className="h-8 w-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-sm font-semibold text-slate-600">
+                        {loadError ? "Conversations temporarily unavailable" : "No conversations found"}
                       </p>
+                      {loadError ? (
+                        <div className="mt-3 flex flex-col items-center gap-2">
+                          <p className="text-xs text-amber-700 max-w-sm">{loadError}</p>
+                          <button
+                            onClick={loadConvs}
+                            className="mt-1 px-4 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700 transition-colors shadow-sm"
+                          >
+                            Retry Loading
+                          </button>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-400 mt-1">
+                          Inbound and outbound calls will appear here automatically.
+                        </p>
+                      )}
                     </td>
                   </tr>
                 ) : (

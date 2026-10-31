@@ -95,7 +95,7 @@ async def list_conversations(
         if is_archived:
             query["is_archived"] = True
         else:
-            query["$or"] = [{"is_archived": False}, {"is_archived": {"$exists": False}}]
+            query["is_archived"] = {"$ne": True}
 
     cursor = col_conversations().find(query).sort("started_at", -1).skip(skip).limit(limit)
     docs = await cursor.to_list(length=limit)

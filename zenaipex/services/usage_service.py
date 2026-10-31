@@ -5,9 +5,17 @@ Tracks call minutes and API usage per company per month.
 Enforces call minute limits. Provides dashboard summary data.
 """
 import logging
+import asyncio
+import time
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from bson import ObjectId
+
+_canonical_analytics_cache: dict[str, tuple[float, Dict[str, Any]]] = {}
+CANONICAL_ANALYTICS_CACHE_TTL = 30  # seconds
+
+def clear_canonical_analytics_cache() -> None:
+    _canonical_analytics_cache.clear()
 
 from core.database import (
     col_usage_records, col_agents, col_channels,
@@ -271,6 +279,12 @@ async def get_canonical_analytics(company_id: str, days: int = 30) -> Dict[str, 
     from datetime import datetime, timedelta, timezone
     from models.subscription import PLAN_LIMITS
 
+    cache_key = f"{company_id}:{days}"
+    now_ts = time.time()
+    cached = _canonical_analytics_cache.get(cache_key)
+    if cached and (now_ts - cached[0] < CANONICAL_ANALYTICS_CACHE_TTL):
+        return cached[1]
+
     now = datetime.now(timezone.utc)
     start_date = (now - timedelta(days=days)).replace(hour=0, minute=0, second=0, microsecond=0)
     
@@ -284,24 +298,42 @@ async def get_canonical_analytics(company_id: str, days: int = 30) -> Dict[str, 
             d.update(extra)
         return d
 
-    # Resource counts
-    total_agents = await col_agents().count_documents(_c({"status": {"$ne": "deleted"}}))
-    active_agents = await col_agents().count_documents(_c({"status": "active"}))
-    total_conversations = await col_conversations().count_documents(_c({"status": {"$nin": ["deleted", "demo", "test"]}}))
-    total_documents = await col_documents().count_documents(_c({"status": {"$ne": "deleted"}}))
-    total_knowledge_bases = await col_knowledge_bases().count_documents(_c({"status": {"$ne": "deleted"}}))
-    total_messages = await col_messages().count_documents(_c({}))
-    
-    # Platform specific counts
+    # Resource counts gathered concurrently to minimize round-trips
+    count_tasks = [
+        col_agents().count_documents(_c({"status": {"$ne": "deleted"}})),
+        col_agents().count_documents(_c({"status": "active"})),
+        col_conversations().count_documents(_c({"status": {"$nin": ["deleted", "demo", "test"]}})),
+        col_documents().count_documents(_c({"status": {"$ne": "deleted"}})),
+        col_knowledge_bases().count_documents(_c({"status": {"$ne": "deleted"}})),
+        col_messages().count_documents(_c({})),
+    ]
+    if company_id == "all":
+        count_tasks.extend([
+            col_companies().count_documents({}),
+            col_companies().count_documents({"is_active": True}),
+            col_companies().count_documents({"is_active": False}),
+            col_subscriptions().count_documents({"plan": "free_trial"}),
+            col_users().count_documents({}),
+            col_users().count_documents({"is_platform_admin": True}),
+        ])
+
+    count_results = await asyncio.gather(*count_tasks)
+    total_agents = count_results[0]
+    active_agents = count_results[1]
+    total_conversations = count_results[2]
+    total_documents = count_results[3]
+    total_knowledge_bases = count_results[4]
+    total_messages = count_results[5]
+
     total_companies = active_companies = suspended_companies = trial_companies = total_users = customer_users = platform_admin_count = 0
     if company_id == "all":
-        total_companies = await col_companies().count_documents({})
-        active_companies = await col_companies().count_documents({"is_active": True})
-        suspended_companies = await col_companies().count_documents({"is_active": False})
-        trial_companies = await col_subscriptions().count_documents({"plan": "free_trial"})
-        total_users = await col_users().count_documents({})
-        platform_admin_count = await col_users().count_documents({"is_platform_admin": True})
-        customer_users = total_users - platform_admin_count
+        total_companies = count_results[6]
+        active_companies = count_results[7]
+        suspended_companies = count_results[8]
+        trial_companies = count_results[9]
+        total_users = count_results[10]
+        platform_admin_count = count_results[11]
+        customer_users = max(0, total_users - platform_admin_count)
 
     # Non-LLM from usage_records (which is monthly)
     total_call_minutes = 0.0
@@ -337,20 +369,25 @@ async def get_canonical_analytics(company_id: str, days: int = 30) -> Dict[str, 
             "status": {"$nin": ["deleted", "demo", "test"]},
             "call_sid": {"$exists": True},
         })
-        async for call in col_conversations().find(
-            call_filter,
-            {"duration_seconds": 1, "billed_duration_seconds": 1, "call_duration_seconds": 1},
-        ):
-            duration_seconds = (
-                call.get("billed_duration_seconds")
-                or call.get("duration_seconds")
-                or call.get("call_duration_seconds")
-                or 0
-            )
+        duration_agg = await col_conversations().aggregate([
+            {"$match": call_filter},
+            {"$group": {
+                "_id": None,
+                "total_sec": {
+                    "$sum": {
+                        "$ifNull": [
+                            "$billed_duration_seconds",
+                            {"$ifNull": ["$duration_seconds", "$call_duration_seconds"]}
+                        ]
+                    }
+                }
+            }}
+        ]).to_list(1)
+        if duration_agg and duration_agg[0].get("total_sec"):
             try:
-                total_call_minutes += float(duration_seconds) / 60.0
+                total_call_minutes += float(duration_agg[0]["total_sec"]) / 60.0
             except (TypeError, ValueError):
-                continue
+                pass
 
     # Detailed LLM requests
     llm_match: Dict[str, Any] = {"timestamp": {"$gte": start_date}}
@@ -532,7 +569,7 @@ async def get_canonical_analytics(company_id: str, days: int = 30) -> Dict[str, 
     
     total_api_calls = total_stt_calls + total_tts_calls + final_llm_calls
     
-    return {
+    result_payload = {
         # Overview stats
         "total_companies": total_companies,
         "active_companies": active_companies,
@@ -562,6 +599,8 @@ async def get_canonical_analytics(company_id: str, days: int = 30) -> Dict[str, 
         "exchange_rate": exchange_rate,
         "pricing_configured": len(pricing_conf) > 0,
     }
+    _canonical_analytics_cache[cache_key] = (now_ts, result_payload)
+    return result_payload
 
 async def get_usage_summary(company_id: str) -> Dict[str, Any]:
     """

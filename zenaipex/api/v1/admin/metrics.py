@@ -1,3 +1,5 @@
+import asyncio
+import time
 from fastapi import APIRouter
 from core.database import (
     col_companies, col_users, col_agents, col_conversations,
@@ -9,6 +11,9 @@ from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 
 router = APIRouter(prefix="/metrics")
+
+_trends_cache: dict[str, tuple[float, dict]] = {}
+TRENDS_CACHE_TTL = 30  # seconds
 
 @router.get("")
 async def get_metrics(company_id: Optional[str] = None, days: int = 30):
@@ -30,6 +35,12 @@ async def get_provider_balances(force_refresh: bool = False):
 async def get_trends(days: int = 30, company_id: Optional[str] = None):
     """Get aggregated trend data for the last N days."""
     from datetime import datetime, timedelta, timezone
+
+    cache_key = f"{company_id}:{days}"
+    now_ts = time.time()
+    cached = _trends_cache.get(cache_key)
+    if cached and (now_ts - cached[0] < TRENDS_CACHE_TTL):
+        return cached[1]
     
     now = datetime.now(timezone.utc)
     # Start of day for the oldest date
@@ -51,9 +62,7 @@ async def get_trends(days: int = 30, company_id: Optional[str] = None):
         }},
         {"$sort": {"_id": 1}}
     ]
-    companies_data = await col_companies().aggregate(companies_pipeline).to_list(None)
-    
-    # 2. Conversations Activity
+    # 2. Conversations Activity pipeline
     conversations_pipeline = [
         {"$match": {**company_match, "started_at": {"$gte": start_date}}},
         {"$group": {
@@ -62,12 +71,8 @@ async def get_trends(days: int = 30, company_id: Optional[str] = None):
         }},
         {"$sort": {"_id": 1}}
     ]
-    conversations_data = await col_conversations().aggregate(conversations_pipeline).to_list(None)
     
-    # 3. AI Usage Trend (from the same LLM request ledger used by the
-    # canonical analytics endpoint).  Counting assistant messages here made
-    # the Overview chart disagree with Usage analytics because one request can
-    # produce more than one assistant message.
+    # 3. AI Usage Trend pipeline
     ai_pipeline = [
         {"$match": {**company_match, "timestamp": {"$gte": start_date}}},
         {"$group": {
@@ -76,7 +81,13 @@ async def get_trends(days: int = 30, company_id: Optional[str] = None):
         }},
         {"$sort": {"_id": 1}}
     ]
-    ai_data = await col_llm_requests().aggregate(ai_pipeline).to_list(None)
+
+    # Run all 3 trend aggregation pipelines concurrently
+    companies_data, conversations_data, ai_data = await asyncio.gather(
+        col_companies().aggregate(companies_pipeline).to_list(None),
+        col_conversations().aggregate(conversations_pipeline).to_list(None),
+        col_llm_requests().aggregate(ai_pipeline).to_list(None),
+    )
 
     # Canonical analytics also reconciles historical monthly usage records
     # that predate the detailed llm_requests ledger. Add that legacy remainder
@@ -233,7 +244,7 @@ async def get_trends(days: int = 30, company_id: Optional[str] = None):
         p["failed"] += row.get("failed", 0)
         p["cost"] += cost
 
-    return {
+    result_payload = {
         "companies": companies_data,
         "conversations": conversations_data,
         "ai_requests": ai_data,
@@ -241,3 +252,5 @@ async def get_trends(days: int = 30, company_id: Optional[str] = None):
         "provider_usage": list(provider_aggregated.values()),
         "failure_reasons": final_fail_data
     }
+    _trends_cache[cache_key] = (now_ts, result_payload)
+    return result_payload
