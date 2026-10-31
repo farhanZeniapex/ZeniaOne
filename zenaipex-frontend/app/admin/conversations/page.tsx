@@ -437,7 +437,8 @@ export default function AdminConversationsPage() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [viewArchived, setViewArchived] = useState(false);
+  const [viewMode, setViewMode] = useState<"all" | "active" | "archived">("all");
+  const viewArchived = viewMode === "archived";
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
@@ -484,7 +485,11 @@ export default function AdminConversationsPage() {
     setIsLoading(true);
     setLoadError(null);
     try {
-      const qs = viewArchived ? "?is_archived=true" : "?is_archived=false";
+      const qs = viewMode === "all"
+        ? ""
+        : viewMode === "archived"
+          ? "?is_archived=true"
+          : "?is_archived=false";
       const [dataRes, compsRes] = await Promise.allSettled([
         fetchApi<any>(`/admin/conversations${qs}`),
         fetchApi<any>(`/admin/companies`),
@@ -518,7 +523,7 @@ export default function AdminConversationsPage() {
 
   useEffect(() => {
     loadConvs();
-  }, [viewArchived]);
+  }, [viewMode]);
 
   const handleArchive = async (cid: string, id: string) => {
     await fetchApi(`/admin/conversations/${cid}/${id}/archive`, {
@@ -721,13 +726,18 @@ export default function AdminConversationsPage() {
             >
               <RefreshCw className="h-3.5 w-3.5" /> Refresh
             </button>
-            <button
-              onClick={() => setViewArchived(!viewArchived)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${viewArchived ? "bg-slate-800 text-white border-slate-800" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
-            >
-              <Archive className="h-3.5 w-3.5" />{" "}
-              {viewArchived ? "Archived" : "Active View"}
-            </button>
+            <div className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+              {(["all", "active", "archived"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors ${viewMode === mode ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-800"}`}
+                >
+                  {mode === "archived" && <Archive className="h-3.5 w-3.5" />}
+                  {mode === "all" ? "All Records" : mode === "active" ? "Active" : "Archived"}
+                </button>
+              ))}
+            </div>
             {!isSelecting && (
               <button
                 onClick={() => setIsSelecting(true)}
