@@ -478,6 +478,9 @@ export default function AdminChannelDetailPage({
   // Detail Drawer state
   const [selectedCall, setSelectedCall] = useState<any | null>(null);
   const [callMessages, setCallMessages] = useState<any[]>([]);
+  const [callDetailProgress, setCallDetailProgress] = useState(0);
+  const [callDetailStep, setCallDetailStep] = useState("Preparing call details…");
+  const [callDetailLoadError, setCallDetailLoadError] = useState<string | null>(null);
   const [contactEditOpen, setContactEditOpen] = useState(false);
   const [contactEditName, setContactEditName] = useState("");
   const [contactEditSaving, setContactEditSaving] = useState(false);
@@ -1127,23 +1130,47 @@ export default function AdminChannelDetailPage({
     setSelectedCall(call);
     setCallMessages([]);
     setRecordingToken(null);
+    setCallDetailProgress(8);
+    setCallDetailStep("Loading call details…");
+    setCallDetailLoadError(null);
     const callId = call.id || call._id;
-    try {
-      const res = await fetchApi<any>(
-        `/admin/conversations/${companyId}/${callId}/messages`,
-      );
-      setCallMessages(res.messages || []);
-    } catch (e) {
-      console.error(e);
-    }
+    const hasRecording = Boolean(call.recording_url);
+    setCallDetailProgress(hasRecording ? 15 : 50);
+    setCallDetailStep(hasRecording ? "Loading recording and transcript…" : "Loading transcript…");
 
-    if (call.recording_url) {
-      fetchApi<{ token: string }>(
+    const messagesRequest = fetchApi<any>(
+      `/admin/conversations/${companyId}/${callId}/messages`,
+    )
+      .then((res) => {
+        setCallMessages(res.messages || []);
+        setCallDetailProgress(hasRecording ? 62 : 88);
+        setCallDetailStep(hasRecording ? "Loading recording player…" : "Finalizing transcript…");
+      })
+      .catch((e) => {
+        console.error(e);
+        setCallDetailLoadError("Transcript could not be loaded. You can still view the call summary.");
+        setCallDetailProgress(hasRecording ? 62 : 88);
+      });
+
+    const recordingRequest = hasRecording
+      ? fetchApi<{ token: string }>(
         `/admin/conversations/${companyId}/${callId}/recording-token`,
       )
-        .then((res) => setRecordingToken(res.token))
-        .catch((err) => console.error("Failed to fetch recording token:", err));
-    }
+        .then((res) => {
+          setRecordingToken(res.token);
+          setCallDetailProgress(88);
+          setCallDetailStep("Almost ready…");
+        })
+        .catch((err) => {
+          console.error("Failed to fetch recording token:", err);
+          setCallDetailLoadError("Recording player could not be loaded. The call details are still available.");
+          setCallDetailProgress(88);
+        })
+      : Promise.resolve();
+
+    await Promise.all([messagesRequest, recordingRequest]);
+    setCallDetailProgress(100);
+    setCallDetailStep("Call details ready");
   };
 
   if (isLoading)
@@ -3718,6 +3745,33 @@ export default function AdminChannelDetailPage({
               </div>
             </div>
 
+            {callDetailProgress < 100 && (
+              <div className="px-6 md:px-8 pt-5 bg-white shrink-0">
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-4 shadow-sm">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-emerald-600" />
+                      <span className="truncate text-xs font-bold text-emerald-800">
+                        {callDetailStep}
+                      </span>
+                    </div>
+                    <span className="shrink-0 text-sm font-bold text-emerald-700">
+                      {callDetailProgress}%
+                    </span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-emerald-100">
+                    <div
+                      className="h-full rounded-full bg-emerald-500 transition-[width] duration-500 ease-out"
+                      style={{ width: `${callDetailProgress}%` }}
+                    />
+                  </div>
+                  <p className="mt-2 text-[11px] text-emerald-700">
+                    Recording aur transcript ko prepare kiya ja raha hai…
+                  </p>
+                </div>
+              </div>
+            )}
+
             {selectedCall.recording_url ? (
               <div className="p-6 md:p-8 border-b border-slate-100 bg-slate-50/50 shrink-0">
                 <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center">
@@ -3728,8 +3782,12 @@ export default function AdminChannelDetailPage({
                   <CustomAudioPlayer
                     src={`${API_BASE_URL}/admin/conversations/${companyId}/${selectedCall.id || selectedCall._id}/recording?token=${recordingToken}`}
                   />
+                ) : callDetailLoadError ? (
+                  <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    Recording player unavailable right now. Please retry by reopening the call.
+                  </div>
                 ) : (
-                  <div className="animate-pulse bg-slate-200 h-10 w-full rounded-md"></div>
+                  <div className="h-10 w-full animate-pulse rounded-md bg-slate-200" aria-label="Loading recording" />
                 )}
               </div>
             ) : (
@@ -3749,11 +3807,17 @@ export default function AdminChannelDetailPage({
                 <MessageSquare className="w-4 h-4 mr-1.5" /> Full Transcript
               </h4>
               <div className="w-full max-w-[720px] mx-auto px-4 md:px-6 space-y-6 pb-12 flex-1">
-                {callMessages.length === 0 ? (
+                {callDetailProgress < 100 ? (
+                  <div className="flex flex-col items-center justify-center py-10 opacity-80">
+                    <Loader2 className="mb-3 h-8 w-8 animate-spin text-emerald-500" />
+                    <p className="text-sm font-medium text-slate-500">Preparing transcript…</p>
+                    <p className="mt-1 text-xs text-slate-400">{callDetailProgress}% complete</p>
+                  </div>
+                ) : callMessages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10 opacity-70">
                     <MessageSquare className="w-8 h-8 text-slate-300 mb-3" />
                     <p className="text-sm text-slate-500 italic text-center">
-                      No transcript available for this call.
+                      {callDetailLoadError || "No transcript available for this call."}
                     </p>
                   </div>
                 ) : (
