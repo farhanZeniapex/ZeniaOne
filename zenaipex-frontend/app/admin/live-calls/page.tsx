@@ -384,7 +384,6 @@ export default function LiveCallsPage() {
         }
       );
       setContactModalOpen(false);
-      // Refresh profile
       loadCallerProfile(targetPhone, targetCompany);
       loadRecentCalls();
     } catch (e) {
@@ -457,7 +456,6 @@ export default function LiveCallsPage() {
                   c.id === endedId ? { ...c, status: "completed", ended_at: Date.now() } : c
                 ));
                 loadRecentCalls();
-                // Automatically clear from active calls list after 3 seconds
                 setTimeout(() => {
                   setActiveCalls((prev) => prev.filter(c => c.id !== endedId));
                   setSelectedCallId((curr) => (curr === endedId ? null : curr));
@@ -472,7 +470,6 @@ export default function LiveCallsPage() {
 
                 setMessagesByCall((prev) => {
                   const msgs = prev[cid] || [];
-                  // Deduplicate identical sequential messages
                   if (msgs.length > 0 && msgs[msgs.length - 1].content === data.data.content) {
                     return prev;
                   }
@@ -608,17 +605,17 @@ export default function LiveCallsPage() {
   );
 
   return (
-    <div className={`${org.page} ${org.liveRoot} flex flex-col flex-1 min-h-[calc(100vh-6.5rem)]`}>
+    <div className="flex flex-col h-[calc(100vh-4.75rem)] max-h-[calc(100vh-4.75rem)] overflow-hidden max-w-[1640px] mx-auto w-full gap-2.5 px-0.5 pb-2 text-[#13243b]">
       {/* ── Executive Header Bar ────────────────────────────────────────── */}
-      <div className={org.pageHeader}>
+      <div className="flex items-center justify-between gap-3 shrink-0 py-0.5">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
-            <Activity className="h-6 w-6 text-emerald-600" />
-            Live Calls & Active Operations
-            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
+            <Activity className="h-5 w-5 text-emerald-600 shrink-0" />
+            <span>Live Calls & Active Operations</span>
+            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
               activeCalls.length > 0
                 ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                : "bg-slate-50 text-slate-600 border border-slate-200"
+                : "bg-slate-100 text-slate-600 border border-slate-200"
             }`}>
               <span className="relative flex h-2 w-2">
                 {activeCalls.length > 0 ? (
@@ -633,92 +630,94 @@ export default function LiveCallsPage() {
               {activeCalls.length > 0 ? `${activeCalls.length} Live Call Active` : "Standby (Listening)"}
             </span>
           </h1>
-          <p className="text-xs text-slate-500 font-medium mt-1">
+          <p className="text-[11px] text-slate-500 font-medium">
             Real-time speech streaming, bidirectional telephony monitor & CRM intelligence
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge variant={isConnected ? "default" : "destructive"} className="gap-1.5 h-8 px-3 text-xs font-semibold">
-            <Radio className="h-3.5 w-3.5 animate-pulse" />
-            {isConnected ? "Live Stream WS Active" : "Reconnecting Stream…"}
-          </Badge>
+        <div className="flex items-center gap-2 shrink-0">
+          <span className={`inline-flex items-center gap-1.5 h-7 px-2.5 text-[11px] font-bold rounded-lg border ${
+            isConnected
+              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+              : "bg-red-50 text-red-800 border-red-200"
+          }`}>
+            <Radio className="h-3 w-3 animate-pulse text-emerald-600" />
+            {isConnected ? "WS Stream Active" : "Reconnecting…"}
+          </span>
           <button
-            onClick={() => {
-              loadRecentCalls();
-            }}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors shadow-xs"
+            onClick={() => loadRecentCalls()}
+            className="inline-flex items-center gap-1 h-7 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-[11px] font-semibold transition shadow-xs"
             title="Refresh active & recent telemetry"
           >
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh
+            <RefreshCw className="h-3 w-3" /> Refresh
           </button>
         </div>
       </div>
 
-      {/* ── 4-Tile Live Operations Telemetry Ribbon ─────────────────────── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4 shrink-0">
-        <div className="rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-            <Radio className="h-4 w-4" />
+      {/* ── 4-Tile Live Operations Telemetry Ribbon (Compact) ─────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 shrink-0">
+        <div className="rounded-xl border border-slate-200/90 bg-white px-3 py-2 shadow-xs flex items-center gap-2.5">
+          <div className="h-7 w-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <Radio className="h-3.5 w-3.5" />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Inbound Trunk</p>
-            <p className="text-xs font-bold text-slate-800 truncate">+91 9513886363</p>
-            <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
+            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 leading-tight">Inbound Trunk</p>
+            <p className="text-xs font-bold text-slate-800 truncate leading-tight">+91 9513886363</p>
+            <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1 leading-tight">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" /> Ready for Calls
             </span>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
-            <Sparkles className="h-4 w-4" />
+        <div className="rounded-xl border border-slate-200/90 bg-white px-3 py-2 shadow-xs flex items-center gap-2.5">
+          <div className="h-7 w-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+            <Sparkles className="h-3.5 w-3.5" />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">AI Speech Engine</p>
-            <p className="text-xs font-bold text-slate-800 truncate">Gemini 2.5 Flash S2S</p>
-            <span className="text-[10px] font-semibold text-indigo-700">Sub-380ms Latency</span>
+            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 leading-tight">AI Speech Engine</p>
+            <p className="text-xs font-bold text-slate-800 truncate leading-tight">Gemini 2.5 Flash S2S</p>
+            <span className="text-[10px] font-semibold text-indigo-700 leading-tight">Sub-380ms Latency</span>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
-            <Headphones className="h-4 w-4" />
+        <div className="rounded-xl border border-slate-200/90 bg-white px-3 py-2 shadow-xs flex items-center gap-2.5">
+          <div className="h-7 w-7 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center shrink-0">
+            <Headphones className="h-3.5 w-3.5" />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Assigned Persona</p>
-            <p className="text-xs font-bold text-slate-800 truncate">Farhan (Custom Persona)</p>
-            <span className="text-[10px] font-semibold text-violet-700">Multilingual S2S</span>
+            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 leading-tight">Assigned Persona</p>
+            <p className="text-xs font-bold text-slate-800 truncate leading-tight">Farhan (Persona)</p>
+            <span className="text-[10px] font-semibold text-violet-700 leading-tight">Multilingual Voice</span>
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200/80 bg-white p-3 shadow-xs flex items-center gap-3">
-          <div className="h-8 w-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-            <Server className="h-4 w-4" />
+        <div className="rounded-xl border border-slate-200/90 bg-white px-3 py-2 shadow-xs flex items-center gap-2.5">
+          <div className="h-7 w-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <Server className="h-3.5 w-3.5" />
           </div>
           <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Stream Connection</p>
-            <p className="text-xs font-bold text-slate-800 truncate">{isConnected ? "WebSocket Online" : "Reconnecting"}</p>
-            <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Bi-directional Audio
+            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400 leading-tight">Stream Protocol</p>
+            <p className="text-xs font-bold text-slate-800 truncate leading-tight">{isConnected ? "WebSocket Online" : "Reconnecting"}</p>
+            <span className="text-[10px] font-semibold text-emerald-700 flex items-center gap-1 leading-tight">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Bi-directional
             </span>
           </div>
         </div>
       </div>
 
-      {/* ── Main Operations Split-Console (Full Height) ─────────────────── */}
-      <div className={`${org.liveGrid} flex-1 min-h-[580px]`}>
-        {/* Left pane: Dual-Mode Queue (Live Active vs Recent Sessions) */}
-        <Card className="col-span-1 flex flex-col border-slate-200 overflow-hidden shadow-sm rounded-2xl bg-white h-full">
-          <div className="bg-slate-50 border-b border-slate-200 p-2.5 flex items-center justify-between">
-            <div className="inline-flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
+      {/* ── Main Operations Split-Console (Strict Viewport Fill, No Outer Scroll) ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 flex-1 min-h-0 overflow-hidden">
+        {/* Left pane: Dual-Mode Queue (Only this card scrolls internally!) */}
+        <Card className="col-span-1 flex flex-col border-slate-200 overflow-hidden shadow-sm rounded-2xl bg-white h-full min-h-0">
+          <div className="bg-slate-50 border-b border-slate-200 p-2 flex items-center justify-between shrink-0">
+            <div className="inline-flex items-center gap-1 bg-slate-200/60 p-0.5 rounded-lg">
               <button
                 type="button"
                 onClick={() => {
                   setActiveQueueTab("live");
                   setSelectedRecentCall(null);
                 }}
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
                   activeQueueTab === "live"
                     ? "bg-white text-slate-900 shadow-xs"
                     : "text-slate-500 hover:text-slate-800"
@@ -735,7 +734,7 @@ export default function LiveCallsPage() {
               <button
                 type="button"
                 onClick={() => setActiveQueueTab("recent")}
-                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
                   activeQueueTab === "recent"
                     ? "bg-white text-slate-900 shadow-xs"
                     : "text-slate-500 hover:text-slate-800"
@@ -748,25 +747,26 @@ export default function LiveCallsPage() {
             <button
               onClick={() => loadRecentCalls()}
               title="Refresh queue"
-              className="h-7 w-7 rounded-md hover:bg-slate-200 text-slate-500 flex items-center justify-center transition"
+              className="h-6 w-6 rounded-md hover:bg-slate-200 text-slate-500 flex items-center justify-center transition"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
+              <RotateCcw className="h-3 w-3" />
             </button>
           </div>
 
-          <div className="flex-1 p-3 bg-slate-50/50 overflow-y-auto space-y-2.5">
+          {/* Internal Scrollable Queue List */}
+          <div className="flex-1 min-h-0 p-2.5 bg-slate-50/50 overflow-y-auto space-y-2">
             {activeQueueTab === "live" ? (
               activeCalls.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full text-center p-6 space-y-3">
-                  <div className="relative h-16 w-16 flex items-center justify-center">
+                <div className="flex flex-col items-center justify-center h-full text-center p-5 space-y-2.5">
+                  <div className="relative h-14 w-14 flex items-center justify-center">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-20" />
-                    <div className="relative h-12 w-12 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-inner">
-                      <Radio className="h-5 w-5" />
+                    <div className="relative h-11 w-11 rounded-full bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 shadow-inner">
+                      <Radio className="h-4.5 w-4.5" />
                     </div>
                   </div>
                   <div>
-                    <strong className="text-slate-800 text-sm block">Radar Listening Live</strong>
-                    <p className="text-xs text-slate-500 max-w-[210px] mx-auto mt-0.5 leading-relaxed">
+                    <strong className="text-slate-800 text-xs sm:text-sm block">Radar Listening Live</strong>
+                    <p className="text-[11px] text-slate-500 max-w-[200px] mx-auto mt-0.5 leading-snug">
                       Inbound calls on <span className="font-mono font-semibold text-slate-700">+91 9513886363</span> will appear here instantly.
                     </p>
                   </div>
@@ -774,9 +774,9 @@ export default function LiveCallsPage() {
                     <button
                       type="button"
                       onClick={() => setActiveQueueTab("recent")}
-                      className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-xs transition"
+                      className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold text-slate-700 hover:bg-slate-50 shadow-xs transition"
                     >
-                      <History className="h-3.5 w-3.5 text-slate-500" />
+                      <History className="h-3 w-3 text-slate-500" />
                       View Recent Sessions ({recentCalls.length})
                     </button>
                   )}
@@ -797,42 +797,42 @@ export default function LiveCallsPage() {
                         setSelectedCallId(call.id);
                       }}
                       aria-pressed={selectedCallId === call.id}
-                      className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer ${selectedCallId === call.id
+                      className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer ${selectedCallId === call.id
                           ? "bg-white border-emerald-500 shadow-md ring-2 ring-emerald-500/20"
-                          : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm"
+                          : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-xs"
                         }`}
                     >
                       <div className="flex justify-between items-start mb-1">
-                        <div className="font-bold text-slate-900 text-sm flex items-center gap-1.5">
-                          <User className="h-3.5 w-3.5 text-slate-400" />
+                        <div className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                          <User className="h-3 w-3 text-slate-400" />
                           <span>{displayName}</span>
                         </div>
                         {call.status === "completed" ? (
-                          <Badge variant="outline" className="text-slate-600 bg-slate-100 border-slate-200 text-[10px] font-bold">DISCONNECTED</Badge>
+                          <Badge variant="outline" className="text-slate-600 bg-slate-100 border-slate-200 text-[9px] font-bold">DISCONNECTED</Badge>
                         ) : (
-                          <Badge variant="outline" className="text-emerald-700 bg-emerald-50 border-emerald-200 animate-pulse text-[10px] font-bold">LIVE</Badge>
+                          <Badge variant="outline" className="text-emerald-700 bg-emerald-50 border-emerald-200 animate-pulse text-[9px] font-bold">LIVE</Badge>
                         )}
                       </div>
 
-                      <p className="text-xs font-mono text-slate-500 mb-2 pl-5 whitespace-nowrap">
+                      <p className="text-[11px] font-mono text-slate-500 mb-1.5 pl-4 whitespace-nowrap">
                         {phone}
                       </p>
 
-                      <div className="flex items-center justify-between text-xs text-slate-500 pl-5">
-                        <span className="flex items-center gap-1 font-mono text-[11px] font-semibold text-slate-700">
+                      <div className="flex items-center justify-between text-[11px] text-slate-500 pl-4">
+                        <span className="flex items-center gap-1 font-mono font-semibold text-slate-700">
                           <Clock className="h-3 w-3 text-slate-400" />
                           {formatDuration(duration)}
                         </span>
                         {isReturning ? (
-                          <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">
+                          <span className="text-[9px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1 py-0.2 rounded">
                             Returning
                           </span>
                         ) : (
-                          <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                          <span className="text-[9px] font-semibold text-slate-600 bg-slate-100 px-1 py-0.2 rounded">
                             New Caller
                           </span>
                         )}
-                        <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded truncate max-w-[100px]">
+                        <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100/70 px-1.5 py-0.2 rounded truncate max-w-[85px]">
                           {agentLabel}
                         </span>
                       </div>
@@ -842,7 +842,7 @@ export default function LiveCallsPage() {
               )
             ) : (
               recentCalls.length === 0 ? (
-                <div className="text-center py-12 text-slate-400 text-xs">
+                <div className="text-center py-10 text-slate-400 text-xs">
                   No recent conversation logs found.
                 </div>
               ) : (
@@ -857,18 +857,18 @@ export default function LiveCallsPage() {
                       key={call.id}
                       type="button"
                       onClick={() => handleSelectRecentCall(call)}
-                      className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer ${
+                      className={`w-full text-left p-2.5 rounded-xl border transition-all cursor-pointer ${
                         isSelected
                           ? "bg-white border-emerald-500 shadow-md ring-2 ring-emerald-500/20"
                           : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-xs"
                       }`}
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5 truncate max-w-[150px]">
+                      <div className="flex items-center justify-between mb-0.5">
+                        <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5 truncate max-w-[140px]">
                           <User className="h-3 w-3 text-slate-400 shrink-0" />
                           <span className="truncate">{displayName}</span>
                         </span>
-                        <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
+                        <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded border ${
                           call.status === "completed"
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                             : "bg-slate-100 text-slate-600 border-slate-200"
@@ -881,15 +881,15 @@ export default function LiveCallsPage() {
                         {phone}
                       </p>
 
-                      <div className="flex items-center justify-between text-[11px] text-slate-400 pl-4">
-                        <span className="font-mono text-slate-600 font-semibold">
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 pl-4">
+                        <span className="font-mono text-slate-700 font-semibold">
                           {durSec > 0 ? formatDuration(durSec) : "—"}
                         </span>
                         <span>
                           {call.started_at ? new Date(call.started_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Recent"}
                         </span>
                         {call.recording_url && (
-                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1 rounded">
+                          <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1 rounded">
                             🎙️ Audio
                           </span>
                         )}
@@ -902,31 +902,31 @@ export default function LiveCallsPage() {
           </div>
         </Card>
 
-        {/* Right pane: Live Smart Call Window OR Standby Operations Console */}
-        <Card className="col-span-1 md:col-span-2 flex flex-col border-slate-200 shadow-sm overflow-hidden rounded-2xl bg-white h-full">
+        {/* Right pane: Sticky Live Smart Call Window OR Standby Operations Console */}
+        <Card className="col-span-1 md:col-span-2 flex flex-col border-slate-200 shadow-sm overflow-hidden rounded-2xl bg-white h-full min-h-0">
           {selectedCall ? (
             <>
               {/* SMART LIVE HEADER */}
-              <div className="bg-white border-b border-slate-200 p-4 shadow-sm z-10 shrink-0">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="bg-white border-b border-slate-200 p-3.5 shadow-xs z-10 shrink-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
 
                   {/* Caller Identity */}
-                  <div className="flex min-w-0 items-center gap-3.5">
-                    <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white shadow-md shadow-emerald-700/20 shrink-0">
-                      <User className="h-6 w-6" />
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center text-white shadow-md shadow-emerald-700/20 shrink-0">
+                      <User className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h2 className="font-extrabold text-slate-900 text-base tracking-tight">
+                        <h2 className="font-extrabold text-slate-900 text-sm sm:text-base tracking-tight">
                           {selectedCall.contact_name || (callerProfile?.is_saved ? callerProfile.contact_name : "Unknown Caller")}
                         </h2>
                         {callerProfile?.is_returning ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 shadow-xs">
-                            <RotateCcw className="h-2.5 w-2.5" /> Returning caller
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.2 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                            <RotateCcw className="h-2 w-2" /> Returning
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-                            First-time caller
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.2 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                            First-time
                           </span>
                         )}
                         <button
@@ -935,20 +935,20 @@ export default function LiveCallsPage() {
                             setEditingContactName(selectedCall.contact_name || callerProfile?.contact_name || "");
                             setContactModalOpen(true);
                           }}
-                          className="inline-flex items-center gap-1 text-[11px] text-emerald-700 hover:text-emerald-800 font-semibold underline underline-offset-2 ml-1"
+                          className="inline-flex items-center gap-1 text-[10px] text-emerald-700 hover:text-emerald-800 font-semibold underline underline-offset-2 ml-1"
                         >
-                          <Edit2 className="h-2.5 w-2.5" />
+                          <Edit2 className="h-2 w-2" />
                           {callerProfile?.is_saved ? "Edit name" : "Save contact"}
                         </button>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-slate-500 mt-0.5">
-                        <span className="whitespace-nowrap font-mono font-semibold text-slate-700">
+                      <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
+                        <span className="whitespace-nowrap font-mono font-semibold text-slate-700 text-[11px]">
                           {formatPhone(selectedCall.caller_phone)}
                         </span>
                         {callerProfile?.last_conversation?.topic && (
                           <>
                             <span className="text-slate-300">•</span>
-                            <span className="text-slate-600 truncate max-w-[200px]" title={callerProfile.last_conversation.topic}>
+                            <span className="text-slate-600 truncate max-w-[180px] text-[11px]" title={callerProfile.last_conversation.topic}>
                               Topic: <strong className="text-slate-800">{callerProfile.last_conversation.topic}</strong>
                             </span>
                           </>
@@ -958,28 +958,28 @@ export default function LiveCallsPage() {
                   </div>
 
                   {/* Real-time State & Controls */}
-                  <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
                     {/* Live State Pill */}
                     {selectedCallState === "thinking" ? (
-                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-300 bg-amber-50 text-amber-800 text-xs font-bold shadow-xs animate-pulse">
-                        <Sparkles className="h-3.5 w-3.5 text-amber-600 animate-spin" />
+                      <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-amber-300 bg-amber-50 text-amber-800 text-[11px] font-bold animate-pulse">
+                        <Sparkles className="h-3 w-3 text-amber-600 animate-spin" />
                         AI Thinking…
                       </div>
                     ) : selectedCallState === "speaking" ? (
-                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-300 bg-emerald-50 text-emerald-800 text-xs font-bold shadow-xs">
-                        <Volume2 className="h-3.5 w-3.5 text-emerald-600 animate-bounce" />
+                      <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-emerald-300 bg-emerald-50 text-emerald-800 text-[11px] font-bold">
+                        <Volume2 className="h-3 w-3 text-emerald-600 animate-bounce" />
                         Speaking
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1.5 px-3 py-1 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 text-xs font-bold">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
+                      <div className="flex items-center gap-1 px-2.5 py-0.5 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 text-[11px] font-bold">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
                         Listening Live
                       </div>
                     )}
 
                     {/* Timer */}
-                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg border border-slate-200 bg-slate-50 font-mono text-xs font-bold text-slate-800">
-                      <Clock className="h-3.5 w-3.5 text-slate-500" />
+                    <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg border border-slate-200 bg-slate-50 font-mono text-[11px] font-bold text-slate-800">
+                      <Clock className="h-3 w-3 text-slate-500" />
                       {formatDuration(callDurations[selectedCall.id] || 0)}
                     </div>
 
@@ -988,10 +988,10 @@ export default function LiveCallsPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => setProfileDrawerOpen(true)}
-                      className="h-8 text-xs font-bold border-slate-200 hover:bg-slate-100 flex items-center gap-1.5"
+                      className="h-7 text-[11px] font-bold border-slate-200 hover:bg-slate-100 flex items-center gap-1 px-2"
                     >
-                      <History className="h-3.5 w-3.5 text-slate-500" />
-                      Caller CRM & History
+                      <History className="h-3 w-3 text-slate-500" />
+                      CRM
                     </Button>
 
                     {/* End Call */}
@@ -999,9 +999,9 @@ export default function LiveCallsPage() {
                       type="button"
                       onClick={endSelectedCall}
                       disabled={endingCallId === selectedCall.id}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 px-3 py-1 text-xs font-bold transition disabled:opacity-50"
+                      className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 px-2.5 py-1 text-[11px] font-bold transition disabled:opacity-50"
                     >
-                      <PhoneOff className="h-3.5 w-3.5" />
+                      <PhoneOff className="h-3 w-3" />
                       {endingCallId === selectedCall.id ? "Ending…" : "End call"}
                     </button>
                   </div>
@@ -1009,18 +1009,16 @@ export default function LiveCallsPage() {
 
                 {/* Sub-header: Quick CRM Summary */}
                 {callerProfile && (
-                  <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 flex-wrap gap-2">
-                    <div className="flex items-center gap-3">
+                  <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
                       <span>Total calls: <strong className="text-slate-900">{callerProfile.stats.total_calls}</strong></span>
                       <span className="text-slate-300">•</span>
                       <span>Talk time: <strong className="text-slate-900">{Math.round(callerProfile.stats.total_talk_time_seconds / 60)} min</strong></span>
                       <span className="text-slate-300">•</span>
                       <span>Inbound: <strong className="text-slate-900">{callerProfile.stats.inbound_calls}</strong></span>
-                      <span className="text-slate-300">•</span>
-                      <span>Outbound: <strong className="text-slate-900">{callerProfile.stats.outbound_calls}</strong></span>
                     </div>
                     {callerProfile.last_conversation?.date && (
-                      <div className="text-slate-500 text-[11px]">
+                      <div className="text-slate-500 text-[10px]">
                         Last call: <strong className="text-slate-700">{new Date(callerProfile.last_conversation.date).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}</strong>
                       </div>
                     )}
@@ -1030,18 +1028,18 @@ export default function LiveCallsPage() {
 
               {/* 4 STATUS METRICS TILES */}
               <div className="grid grid-cols-2 gap-px border-b border-slate-200 bg-slate-200 sm:grid-cols-4 shrink-0">
-                <div className="bg-slate-50 px-4 py-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Listen</p>
-                  <p className="mt-0.5 truncate text-xs font-semibold text-slate-800" title="Gemini Live real-time audio">{providerLabel(latestAssistantMetric?.stt_provider)}</p>
+                <div className="bg-slate-50 px-3 py-1.5">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Listen</p>
+                  <p className="truncate text-[11px] font-semibold text-slate-800" title="Gemini Live real-time audio">{providerLabel(latestAssistantMetric?.stt_provider)}</p>
                 </div>
-                <div className="bg-slate-50 px-4 py-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Reason</p>
-                  <p className="mt-0.5 truncate text-xs font-semibold text-slate-800" title="Gemini 2.5 Flash">{latestAssistantMetric?.llm_model || "Gemini 2.5 Flash"}</p>
+                <div className="bg-slate-50 px-3 py-1.5">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Reason</p>
+                  <p className="truncate text-[11px] font-semibold text-slate-800" title="Gemini 2.5 Flash">{latestAssistantMetric?.llm_model || "Gemini 2.5 Flash"}</p>
                 </div>
-                <div className="bg-slate-50 px-4 py-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Speak</p>
+                <div className="bg-slate-50 px-3 py-1.5">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Speak</p>
                   <p
-                    className="mt-0.5 truncate text-xs font-semibold text-slate-800"
+                    className="truncate text-[11px] font-semibold text-slate-800"
                     title={voiceLabel(latestAssistantMetric?.tts_voice || selectedCall?.tts_voice || selectedAgentVoice?.tts_voice, selectedCall?.voice_engine || selectedAgentVoice?.voice_engine)}
                   >
                     {voiceLabel(
@@ -1050,21 +1048,21 @@ export default function LiveCallsPage() {
                     )}
                   </p>
                 </div>
-                <div className="bg-slate-50 px-4 py-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">First audio</p>
-                  <p className="mt-0.5 text-xs font-semibold text-emerald-700">
+                <div className="bg-slate-50 px-3 py-1.5">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">First audio</p>
+                  <p className="text-[11px] font-semibold text-emerald-700">
                     {latestAssistantMetric?.latency_ms !== undefined ? `${Math.round(latestAssistantMetric.latency_ms)}ms` : "380ms"}
                   </p>
                 </div>
               </div>
 
-              {/* LIVE CONVERSATION STREAM (Auto-scroll, real-time) */}
-              <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 bg-slate-50/50 space-y-4">
+              {/* LIVE CONVERSATION STREAM (Internal Scroll Only) */}
+              <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 bg-slate-50/50 space-y-3">
                 {currentMessages.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12">
-                    <MessageSquare className="h-10 w-10 mb-3 opacity-25" />
-                    <p className="text-sm font-semibold">Waiting for conversation to start…</p>
-                    <p className="text-xs text-slate-400 mt-1">Customer and AI messages will appear here live in real time without refreshing.</p>
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 py-8">
+                    <MessageSquare className="h-8 w-8 mb-2 opacity-25" />
+                    <p className="text-xs font-semibold">Waiting for conversation to start…</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Speech turns will stream here in real time.</p>
                   </div>
                 ) : (
                   currentMessages.map((msg, i) => {
@@ -1072,27 +1070,27 @@ export default function LiveCallsPage() {
                     const isUser = msg.role === "user";
                     return (
                       <div key={i} className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
-                        <div className={`max-w-[85%] rounded-2xl p-4 shadow-xs transition-all ${isUser
+                        <div className={`max-w-[85%] rounded-2xl p-3 shadow-xs transition-all ${isUser
                             ? "bg-slate-900 text-white rounded-tr-xs"
-                            : "bg-white border border-slate-200 text-slate-900 rounded-tl-xs shadow-sm"
+                            : "bg-white border border-slate-200 text-slate-900 rounded-tl-xs shadow-xs"
                           }`}>
-                          <div className={`text-[10px] font-bold mb-1.5 flex items-center gap-1.5 uppercase tracking-wider ${isUser ? "text-slate-400" : "text-emerald-700"}`}>
+                          <div className={`text-[9px] font-bold mb-1 flex items-center gap-1 uppercase tracking-wider ${isUser ? "text-slate-400" : "text-emerald-700"}`}>
                             {isUser ? (
                               <>
                                 <span>{selectedCall.contact_name || (callerProfile?.is_saved ? callerProfile.contact_name : "Customer")}</span>
-                                <User className="h-3 w-3" />
+                                <User className="h-2.5 w-2.5" />
                               </>
                             ) : (
                               <>
-                                <Activity className="h-3 w-3" />
+                                <Activity className="h-2.5 w-2.5" />
                                 <span>{agentLabel} (AI Agent)</span>
                               </>
                             )}
                           </div>
-                          <p className="leading-relaxed whitespace-pre-wrap text-sm font-normal">{msg.content}</p>
+                          <p className="leading-relaxed whitespace-pre-wrap text-xs sm:text-sm font-normal">{msg.content}</p>
                         </div>
                         {msg.role === "assistant" && msg.latency_ms !== undefined && (
-                          <span className="text-[10px] font-bold text-slate-400 mt-1 pl-1">
+                          <span className="text-[9px] font-bold text-slate-400 mt-0.5 pl-1">
                             Turn latency: {Math.round(msg.latency_ms)}ms
                           </span>
                         )}
@@ -1104,9 +1102,9 @@ export default function LiveCallsPage() {
                 {/* Live Thinking Indicator */}
                 {selectedCallState === "thinking" && (
                   <div className="flex items-start">
-                    <div className="bg-white border border-amber-200 rounded-2xl rounded-tl-xs p-3.5 shadow-xs flex items-center gap-2.5 text-xs text-amber-800 font-semibold animate-pulse">
-                      <Sparkles className="h-4 w-4 text-amber-600 animate-spin" />
-                      <span>Farhan is thinking and assembling knowledge…</span>
+                    <div className="bg-white border border-amber-200 rounded-xl rounded-tl-xs p-2.5 shadow-xs flex items-center gap-2 text-xs text-amber-800 font-semibold animate-pulse">
+                      <Sparkles className="h-3.5 w-3.5 text-amber-600 animate-spin" />
+                      <span>Farhan is assembling knowledge…</span>
                     </div>
                   </div>
                 )}
@@ -1115,18 +1113,18 @@ export default function LiveCallsPage() {
           ) : selectedRecentCall ? (
             /* ── RECENT CALL INSPECTION MODE ───────────────────────────────── */
             <>
-              <div className="bg-white border-b border-slate-200 p-4 shadow-sm z-10 shrink-0">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3.5">
-                    <div className="h-12 w-12 rounded-2xl bg-slate-800 text-white flex items-center justify-center font-bold text-lg shadow-md shrink-0">
-                      {selectedRecentCall.contact_name ? selectedRecentCall.contact_name.slice(0, 1).toUpperCase() : <User className="h-6 w-6" />}
+              <div className="bg-white border-b border-slate-200 p-3.5 shadow-xs z-10 shrink-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-slate-800 text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0">
+                      {selectedRecentCall.contact_name ? selectedRecentCall.contact_name.slice(0, 1).toUpperCase() : <User className="h-5 w-5" />}
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h2 className="font-extrabold text-slate-900 text-base tracking-tight">
+                        <h2 className="font-extrabold text-slate-900 text-sm sm:text-base tracking-tight">
                           {selectedRecentCall.contact_name || "Customer Session"}
                         </h2>
-                        <span className={`inline-flex items-center gap-1 text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.2 rounded-full border ${
                           selectedRecentCall.status === "completed"
                             ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                             : "bg-slate-100 text-slate-700 border-slate-200"
@@ -1137,19 +1135,19 @@ export default function LiveCallsPage() {
                           <button
                             type="button"
                             onClick={() => handleToggleRecentAudio(selectedRecentCall.recording_url)}
-                            className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold border transition ${
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition ${
                               recentAudioPlaying
                                 ? "bg-emerald-600 text-white border-emerald-700 shadow-sm animate-pulse"
                                 : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
                             }`}
                           >
-                            {recentAudioPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3 ml-0.5" />}
-                            <span>{recentAudioPlaying ? "Playing Audio" : "Listen Recording"}</span>
+                            {recentAudioPlaying ? <Pause className="h-2.5 w-2.5" /> : <Play className="h-2.5 w-2.5 ml-0.5" />}
+                            <span>{recentAudioPlaying ? "Playing" : "Recording"}</span>
                           </button>
                         )}
                       </div>
-                      <p className="text-xs font-mono text-slate-500 mt-0.5">
-                        {formatPhone(selectedRecentCall.caller_phone)} · {selectedRecentCall.started_at ? new Date(selectedRecentCall.started_at).toLocaleString() : ""}
+                      <p className="text-[11px] font-mono text-slate-500 mt-0.5">
+                        {formatPhone(selectedRecentCall.caller_phone)} · {selectedRecentCall.started_at ? new Date(selectedRecentCall.started_at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : ""}
                       </p>
                     </div>
                   </div>
@@ -1159,10 +1157,10 @@ export default function LiveCallsPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => setProfileDrawerOpen(true)}
-                      className="h-8 text-xs font-bold border-slate-200 hover:bg-slate-100 flex items-center gap-1.5"
+                      className="h-7 text-[11px] font-bold border-slate-200 hover:bg-slate-100 flex items-center gap-1 px-2"
                     >
-                      <History className="h-3.5 w-3.5 text-slate-500" />
-                      Caller CRM
+                      <History className="h-3 w-3 text-slate-500" />
+                      CRM
                     </Button>
                     <button
                       type="button"
@@ -1171,9 +1169,9 @@ export default function LiveCallsPage() {
                         if (recentAudioRef.current) recentAudioRef.current.pause();
                         setRecentAudioPlaying(false);
                       }}
-                      className="h-8 px-3 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold transition shadow-xs flex items-center gap-1"
+                      className="h-7 px-2.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-[11px] font-semibold transition shadow-xs flex items-center gap-1"
                     >
-                      <X className="h-3.5 w-3.5" /> Back to Standby
+                      <X className="h-3 w-3" /> Standby
                     </button>
                   </div>
                 </div>
@@ -1181,42 +1179,42 @@ export default function LiveCallsPage() {
 
               {/* Status Tiles */}
               <div className="grid grid-cols-2 gap-px border-b border-slate-200 bg-slate-200 sm:grid-cols-4 shrink-0">
-                <div className="bg-slate-50 px-4 py-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Duration</p>
-                  <p className="mt-0.5 text-xs font-semibold text-slate-800">
+                <div className="bg-slate-50 px-3 py-1.5">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Duration</p>
+                  <p className="text-[11px] font-semibold text-slate-800">
                     {formatDuration(selectedRecentCall.duration_seconds || 0)}
                   </p>
                 </div>
-                <div className="bg-slate-50 px-4 py-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Direction</p>
-                  <p className="mt-0.5 text-xs font-semibold text-slate-800 capitalize">
+                <div className="bg-slate-50 px-3 py-1.5">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Direction</p>
+                  <p className="text-[11px] font-semibold text-slate-800 capitalize">
                     {selectedRecentCall.direction || "Inbound"}
                   </p>
                 </div>
-                <div className="bg-slate-50 px-4 py-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Messages</p>
-                  <p className="mt-0.5 text-xs font-semibold text-slate-800">
+                <div className="bg-slate-50 px-3 py-1.5">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Messages</p>
+                  <p className="text-[11px] font-semibold text-slate-800">
                     {selectedRecentCall.actual_message_count || recentCallMessages.length} Turns
                   </p>
                 </div>
-                <div className="bg-slate-50 px-4 py-2.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Est. Cost</p>
-                  <p className="mt-0.5 text-xs font-semibold text-emerald-700">
+                <div className="bg-slate-50 px-3 py-1.5">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Est. Cost</p>
+                  <p className="text-[11px] font-semibold text-emerald-700">
                     ₹{(((selectedRecentCall.duration_seconds || 0) / 60) * 1.5).toFixed(2)}
                   </p>
                 </div>
               </div>
 
-              {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-6 bg-slate-50/50 space-y-4">
+              {/* Messages (Internal Scroll Only) */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 bg-slate-50/50 space-y-3">
                 {loadingRecentMessages ? (
                   <div className="h-full flex items-center justify-center text-slate-400 text-xs">
-                    <Activity className="h-4 w-4 animate-spin mr-2 text-emerald-600" />
+                    <Activity className="h-4 w-4 animate-spin mr-1.5 text-emerald-600" />
                     Loading session transcript…
                   </div>
                 ) : recentCallMessages.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 py-12">
-                    <FileText className="h-8 w-8 text-slate-300 mb-2" />
+                  <div className="h-full flex flex-col items-center justify-center text-slate-400 py-10">
+                    <FileText className="h-7 w-7 text-slate-300 mb-1" />
                     <p className="text-xs font-semibold">No messages recorded for this call.</p>
                   </div>
                 ) : (
@@ -1225,15 +1223,15 @@ export default function LiveCallsPage() {
                     const text = typeof msg.content === "string" ? msg.content : (msg.text || "");
                     return (
                       <div key={i} className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
-                        <div className={`max-w-[85%] rounded-2xl p-4 shadow-xs ${
+                        <div className={`max-w-[85%] rounded-2xl p-3 shadow-xs ${
                           isUser
                             ? "bg-slate-900 text-white rounded-tr-xs"
-                            : "bg-white border border-slate-200 text-slate-900 rounded-tl-xs shadow-sm"
+                            : "bg-white border border-slate-200 text-slate-900 rounded-tl-xs shadow-xs"
                         }`}>
-                          <div className={`text-[10px] font-bold mb-1 flex items-center gap-1.5 uppercase tracking-wider ${isUser ? "text-slate-400" : "text-emerald-700"}`}>
+                          <div className={`text-[9px] font-bold mb-0.5 flex items-center gap-1 uppercase tracking-wider ${isUser ? "text-slate-400" : "text-emerald-700"}`}>
                             {isUser ? "Customer" : "Farhan (AI Agent)"}
                           </div>
-                          <p className="leading-relaxed whitespace-pre-wrap text-sm">{text}</p>
+                          <p className="leading-relaxed whitespace-pre-wrap text-xs sm:text-sm">{text}</p>
                         </div>
                       </div>
                     );
@@ -1242,77 +1240,82 @@ export default function LiveCallsPage() {
               </div>
             </>
           ) : (
-            /* ── FULL OPERATIONS STANDBY CONSOLE (Rich Dashboard) ───────────── */
-            <div className="h-full flex flex-col justify-between p-8 bg-gradient-to-b from-slate-50/30 to-white overflow-y-auto">
-              {/* Radar Listener Hero */}
-              <div className="text-center py-6">
-                <div className="relative mx-auto mb-4 h-24 w-24 flex items-center justify-center">
+            /* ── FULL OPERATIONS STANDBY CONSOLE (Guaranteed to Fit Without Scroll!) ── */
+            <div className="h-full flex flex-col justify-between p-4 sm:p-5 bg-gradient-to-b from-slate-50/40 via-white to-slate-50/30 overflow-hidden">
+              {/* Radar Listener Hero (Compact) */}
+              <div className="text-center py-2 shrink-0">
+                <div className="relative mx-auto mb-2 h-14 w-14 flex items-center justify-center">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-20" />
-                  <span className="animate-pulse absolute inline-flex h-16 w-16 rounded-full bg-emerald-100 opacity-60" />
-                  <div className="relative h-14 w-14 rounded-2xl bg-emerald-600 flex items-center justify-center text-white shadow-lg shadow-emerald-600/30">
-                    <Radio className="h-7 w-7" />
+                  <span className="animate-pulse absolute inline-flex h-11 w-11 rounded-full bg-emerald-100 opacity-60" />
+                  <div className="relative h-9 w-9 rounded-xl bg-emerald-600 flex items-center justify-center text-white shadow-md shadow-emerald-600/30">
+                    <Radio className="h-4.5 w-4.5" />
                   </div>
                 </div>
-                <h3 className="font-extrabold text-slate-900 text-lg tracking-tight">
+                <h3 className="font-extrabold text-slate-900 text-sm sm:text-base tracking-tight">
                   Real-Time Telephony Console Active
                 </h3>
-                <p className="text-xs text-slate-500 max-w-md mx-auto mt-1 leading-relaxed">
-                  The bi-directional WebSocket listener is connected to the primary Exotel telephony trunk.
-                  All incoming speech streams are automatically ingested, transcribed, and synthesized in real time.
+                <p className="text-[11px] text-slate-500 max-w-sm mx-auto mt-0.5 leading-snug">
+                  WebSocket listener connected to Exotel virtual trunk <span className="font-mono font-bold text-slate-700">+91 9513886363</span>. Ready to ingest and transcribe live speech.
                 </p>
               </div>
 
-              {/* 3 Telephony Architecture Spec Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 my-4">
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
-                  <div className="flex items-center gap-2 mb-2 text-emerald-700 font-bold text-xs uppercase tracking-wider">
-                    <Phone className="h-4 w-4" />
-                    Telephony Ingest
+              {/* 3 Telephony Architecture Spec Cards (High Density) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 my-2 shrink-0">
+                <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1 text-emerald-700 font-bold text-[10px] uppercase tracking-wider">
+                      <Phone className="h-3 w-3" />
+                      Telephony Ingest
+                    </div>
+                    <p className="text-xs font-bold text-slate-900">+91 9513886363</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Exotel streaming trunk with caller CRM lookup.</p>
                   </div>
-                  <p className="text-xs font-semibold text-slate-900">Virtual Line +91 9513886363</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Exotel WebSocket Stream on port 8003 with automated caller ID lookup.</p>
-                  <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                    <CheckCircle2 className="h-3 w-3" /> Ingest Optimal
+                  <span className="inline-flex items-center gap-1 mt-2 text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded w-fit">
+                    <CheckCircle2 className="h-2.5 w-2.5" /> Ingest Optimal
                   </span>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
-                  <div className="flex items-center gap-2 mb-2 text-indigo-700 font-bold text-xs uppercase tracking-wider">
-                    <Sparkles className="h-4 w-4" />
-                    Speech Reasoning
+                <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1 text-indigo-700 font-bold text-[10px] uppercase tracking-wider">
+                      <Sparkles className="h-3 w-3" />
+                      Speech Reasoning
+                    </div>
+                    <p className="text-xs font-bold text-slate-900">Gemini 2.5 Flash</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Live turn-taking with automated silence detection.</p>
                   </div>
-                  <p className="text-xs font-semibold text-slate-900">Gemini 2.5 Flash S2S</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Live turn-taking with automated silence detection and Hindi/English reasoning.</p>
-                  <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded">
-                    <Zap className="h-3 w-3" /> Sub-380ms Latency
+                  <span className="inline-flex items-center gap-1 mt-2 text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded w-fit">
+                    <Zap className="h-2.5 w-2.5" /> Sub-380ms
                   </span>
                 </div>
 
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs">
-                  <div className="flex items-center gap-2 mb-2 text-violet-700 font-bold text-xs uppercase tracking-wider">
-                    <Headphones className="h-4 w-4" />
-                    Audio Synthesis
+                <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-xs flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1 text-violet-700 font-bold text-[10px] uppercase tracking-wider">
+                      <Headphones className="h-3 w-3" />
+                      Audio Synthesis
+                    </div>
+                    <p className="text-xs font-bold text-slate-900">Farhan Persona</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">Sarvam Bulbul & Gemini Cloned voice stream.</p>
                   </div>
-                  <p className="text-xs font-semibold text-slate-900">Farhan Persona Voice</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Sarvam AI Bulbul & Gemini Native synthesis with 8kHz μ-law streaming.</p>
-                  <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-bold text-violet-700 bg-violet-50 px-2 py-0.5 rounded">
-                    <CheckCircle2 className="h-3 w-3" /> Voice Cloned Active
+                  <span className="inline-flex items-center gap-1 mt-2 text-[9px] font-bold text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded w-fit">
+                    <CheckCircle2 className="h-2.5 w-2.5" /> Cloned Active
                   </span>
                 </div>
               </div>
 
-              {/* Recent Activity Footbar */}
+              {/* Recent Activity Footbar (Compact) */}
               {recentCalls.length > 0 && (
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-2">
-                  <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
-                      <History className="h-4 w-4" />
+                <div className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 flex items-center justify-between gap-3 shrink-0">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="h-7 w-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-600 shrink-0">
+                      <History className="h-3.5 w-3.5" />
                     </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-800">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-800 truncate">
                         Last Session: {recentCalls[0].contact_name || formatPhone(recentCalls[0].caller_phone)}
                       </p>
-                      <p className="text-[11px] text-slate-500">
+                      <p className="text-[10px] text-slate-500 truncate">
                         Duration: {formatDuration(recentCalls[0].duration_seconds || 0)} · {recentCalls[0].status} · {recentCalls[0].started_at ? new Date(recentCalls[0].started_at).toLocaleTimeString() : ""}
                       </p>
                     </div>
@@ -1321,9 +1324,9 @@ export default function LiveCallsPage() {
                   <button
                     type="button"
                     onClick={() => handleSelectRecentCall(recentCalls[0])}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs"
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs shrink-0"
                   >
-                    Inspect Last Call <ArrowRight className="h-3.5 w-3.5" />
+                    Inspect Call <ArrowRight className="h-3 w-3" />
                   </button>
                 </div>
               )}
