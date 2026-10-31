@@ -1909,7 +1909,22 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
                         logger.info("[LLM_GENERATION] Cancelled due to barge-in.")
                     except Exception as e:
                         logger.error(f"[VOICE_PIPELINE_ERROR] stage=LLM_RESPONSE error_type={type(e).__name__} error=\"{e}\"")
-                        # DO NOT CRASH THE PIPELINE. Allow the loop to continue.
+                        # DO NOT LEAVE THE CALLER IN SILENCE: Speak emergency fallback message to the caller
+                        emergency_reply = "Maaf kijiyega, aawaz thodi kat rahi hai, kya aap dobara bolenge?"
+                        try:
+                            if stream_sid and not cancel_event.is_set():
+                                await text_to_speech_and_stream(
+                                    emergency_reply,
+                                    websocket,
+                                    stream_sid,
+                                    cancel_event,
+                                    agent_doc=agent_doc,
+                                    ai_speaking_state=ai_speaking_state,
+                                )
+                                if conversation_id:
+                                    _track_bg_task(_persist_and_broadcast(company_id, conversation_id, "assistant", emergency_reply), name="persist_emergency_assistant_message")
+                        except Exception as speak_err:
+                            logger.error(f"[EMERGENCY_TTS_ERROR] {speak_err}")
                 
                 async def _delayed_flush():
                     """Flush an incomplete utterance after the configured silence window."""

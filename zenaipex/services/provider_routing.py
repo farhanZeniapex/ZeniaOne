@@ -16,12 +16,12 @@ from core.database import col_activity_logs, col_platform_settings
 DEFAULT_ROUTING: dict[str, Any] = {
     "phone_voice": {
         "stt": ["gemini_live", "deepgram"],
-        "llm": ["gemini", "groq"],
+        "llm": ["groq", "gemini"],
         "tts": ["sarvam_clone", "neural_tts"],
     },
     "browser_voice": {
         "stt": ["gemini_live", "sarvam_stt"],
-        "llm": ["gemini", "groq"],
+        "llm": ["groq", "gemini"],
         "tts": ["sarvam_clone", "neural_tts"],
     },
     "text_chat": {"llm": ["gemini", "groq"]},

@@ -880,8 +880,8 @@ Description: The human resources management product that handles policies, payro
             if "nvidia" in p_name.lower() or "nemotron" in model.lower():
                 p_max_tokens = max(self.max_tokens, 2500)
             
-            if p_name == "groq" and model in ["mixtral-8x7b-32768"]:
-                model = "llama-3.3-70b-versatile"
+            if p_name == "groq" and model in ["mixtral-8x7b-32768", "llama-3.1-70b-versatile", "llama-3.3-70b-versatile", "llama3-8b-8192", "openai/gpt-oss-20b", "openai/gpt-oss-120b"]:
+                model = "qwen/qwen3.8-27b"
 
             payload = {
                 "model": model,
@@ -1223,8 +1223,8 @@ Description: The human resources management product that handles policies, payro
                 
             endpoint = f"{api_url}/chat/completions"
             
-            if p_name == "groq" and model in ["mixtral-8x7b-32768", "llama-3.1-70b-versatile", "llama-3.3-70b-versatile", "llama3-8b-8192"]:
-                model = "openai/gpt-oss-20b"
+            if p_name == "groq" and model in ["mixtral-8x7b-32768", "llama-3.1-70b-versatile", "llama-3.3-70b-versatile", "llama3-8b-8192", "openai/gpt-oss-20b", "openai/gpt-oss-120b"]:
+                model = "qwen/qwen3.8-27b"
                 
             stream_max_tokens = max_tokens or (self.max_tokens if is_voice else min(max(self.max_tokens, 420), 600))
             payload = {
@@ -1705,8 +1705,8 @@ Description: The human resources management product that handles policies, payro
                 
             endpoint = f"{api_url}/chat/completions"
             
-            if p_name == "groq" and model in ["mixtral-8x7b-32768"]:
-                model = "llama-3.3-70b-versatile"
+            if p_name == "groq" and model in ["mixtral-8x7b-32768", "llama-3.1-70b-versatile", "llama-3.3-70b-versatile", "llama3-8b-8192", "openai/gpt-oss-20b", "openai/gpt-oss-120b"]:
+                model = "qwen/qwen3.8-27b"
                 
             payload = {
                 "model": model,
