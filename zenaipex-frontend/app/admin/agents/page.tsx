@@ -1512,67 +1512,82 @@ export default function AdminAgentsPage() {
         />
       )}
 
-      {/* ─────────────────── SLEEK COMPACT KPI BAR ─────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5">
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-xs backdrop-blur-sm transition-all hover:border-emerald-300 hover:shadow-sm">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
-            <Bot className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-lg font-black tracking-tight text-slate-900">{agents.length}</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Agents</span>
-            </div>
-            <p className="truncate text-[11px] text-slate-500 font-medium">
-              {agents.filter((a) => a.status === "active").length} active deployed
-            </p>
-          </div>
+      {/* ── Executive Header ───────────────────────────────────────────── */}
+      <div className={org.pageHeader}>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+            <Bot className="h-6 w-6 text-emerald-600" />
+            Agents & Voices
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              {agents.length} agents · {totalVoiceCount} voices
+            </span>
+          </h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">
+            Autonomous AI personas, neural cloned voices & conversational models
+          </p>
+        </div>
+        <div className={org.toolbar}>
+          <button
+            onClick={() => setActiveTab("workforce")}
+            disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors shadow-xs"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </button>
+          <button
+            onClick={() => setIsCloneModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-semibold transition-colors shadow-xs"
+          >
+            <Mic className="h-3.5 w-3.5" /> Clone Voice
+          </button>
+        </div>
+      </div>
+
+      {/* ── Standard Unified KPI Cards ─────────────────────────────────── */}
+      <div className={org.metrics} aria-label="Agent summary">
+        <div className={org.metric}>
+          <span className={org.metricIcon}>
+            <Bot size={17} />
+          </span>
+          <span className={org.metricLabel}>Total Agents</span>
+          <strong className={org.metricValue}>{agents.length}</strong>
+          <span className={org.metricSub}>
+            {agents.filter((a) => a.status === "active").length} active deployed
+          </span>
         </div>
 
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-xs backdrop-blur-sm transition-all hover:border-emerald-300 hover:shadow-sm">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 border border-teal-100">
-            <Building2 className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-lg font-black tracking-tight text-slate-900">{uniqueCompanies.length}</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Workspaces</span>
-            </div>
-            <p className="truncate text-[11px] text-slate-500 font-medium">
-              Distinct enterprise tenants
-            </p>
-          </div>
+        <div className={org.metric}>
+          <span className={org.metricIcon}>
+            <Building2 size={17} />
+          </span>
+          <span className={org.metricLabel}>Workspaces</span>
+          <strong className={org.metricValue}>{uniqueCompanies.length}</strong>
+          <span className={org.metricSub}>Distinct enterprise tenants</span>
         </div>
 
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-xs backdrop-blur-sm transition-all hover:border-emerald-300 hover:shadow-sm">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-700 border border-blue-100">
-            <Mic className="h-4 w-4" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-lg font-black tracking-tight text-slate-900">{totalVoiceCount}</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Voices</span>
-            </div>
-            <p className="truncate text-[11px] text-slate-500 font-medium">
-              {VOICES.length} platform · {GEMINI_VOICES.length} Gemini · {AZURE_VOICES.length} Azure · {customVoices.length} cloned
-            </p>
-          </div>
+        <div className={org.metric}>
+          <span className={org.metricIcon}>
+            <Mic size={17} />
+          </span>
+          <span className={org.metricLabel}>Voice Library</span>
+          <strong className={org.metricValue}>{totalVoiceCount}</strong>
+          <span className={org.metricSub}>
+            {GEMINI_VOICES.length} Gemini · {VOICES.length} Studio · {customVoices.length} Cloned
+          </span>
         </div>
 
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white/90 p-3 shadow-xs backdrop-blur-sm transition-all hover:border-emerald-300 hover:shadow-sm">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-100">
-            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-lg font-black tracking-tight text-slate-900">
-                {attentionCount ? `${attentionCount} Review` : "All Healthy"}
-              </span>
-            </div>
-            <p className="truncate text-[11px] text-slate-500 font-medium">
-              {attentionCount ? "Agents need review" : "Active & operational"}
-            </p>
-          </div>
+        <div className={org.metric}>
+          <span className={org.metricIcon}>
+            <CheckCircle2 size={17} />
+          </span>
+          <span className={org.metricLabel}>Status Review</span>
+          <strong className={org.metricValue}>
+            {attentionCount ? `${attentionCount} Review` : "All Healthy"}
+          </strong>
+          <span className={org.metricSub}>
+            {attentionCount ? "Agents need review" : "Active & operational"}
+          </span>
         </div>
       </div>
 

@@ -17,6 +17,7 @@ import {
   Server,
   Hash,
   Activity,
+  Radio,
   X,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -238,19 +239,18 @@ export default function AdminChannelsPage() {
       {/* ── Header ───────────────────────────────────────────── */}
       <div className={org.pageHeader}>
         <div>
-          <span className={org.eyebrow}>
-            <Activity size={14} /> COMMUNICATION OPERATIONS
-          </span>
-          <div className="flex items-center gap-3">
-            <h1 className={org.title}>
-              Channels
-              {isLoading && (
-                <RefreshCw className="h-5 w-5 animate-spin text-sage-500" />
-              )}
-            </h1>
-          </div>
-          <p className={org.subtitle}>
-            Monitor voice and chat connections across your organization.
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+            <Radio className="h-6 w-6 text-emerald-600" />
+            Communication Channels
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              {totalChannels} lines
+            </span>
+            {isLoading && (
+              <RefreshCw className="h-4 w-4 animate-spin text-emerald-600" />
+            )}
+          </h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">
+            Voicebot telephony lines, webchat endpoints & studio flows
           </p>
         </div>
         <div className={org.toolbar}>

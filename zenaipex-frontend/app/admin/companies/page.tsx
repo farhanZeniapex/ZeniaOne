@@ -214,12 +214,15 @@ export default function AdminCompaniesPage() {
     <div className={org.page}>
       <div className={org.pageHeader}>
         <div>
-          <span className={org.eyebrow}>
-            <Building2 size={14} /> ORGANIZATION DIRECTORY
-          </span>
-          <h1 className={org.title}>Companies & users</h1>
-          <p className={org.subtitle}>
-            Manage tenant companies and their owners across {platformName}.
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+            <Building2 className="h-6 w-6 text-emerald-600" />
+            Companies & Users
+            <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              {companies.length} tenants
+            </span>
+          </h1>
+          <p className="text-xs text-slate-500 font-medium mt-1">
+            Tenant workspaces, quotas & platform accounts
           </p>
         </div>
         <div className={org.toolbar}>
