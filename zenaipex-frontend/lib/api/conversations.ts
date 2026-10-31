@@ -44,7 +44,7 @@ export interface Message {
 export const conversationsApi = {
   list: (companyId: string, opts?: { limit?: number; agentId?: string; status?: string; is_archived?: boolean }) => {
     const params = new URLSearchParams();
-    if (opts?.limit) params.set("limit", String(opts.limit));
+    if (opts?.limit) params.set("limit", String(Math.min(Math.max(1, opts.limit), 200)));
     if (opts?.agentId) params.set("agent_id", opts.agentId);
     if (opts?.status) params.set("status", opts.status);
     if (opts?.is_archived !== undefined) params.set("is_archived", String(opts.is_archived));

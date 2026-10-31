@@ -75,7 +75,7 @@ async def list_conversations(
     status: Optional[str] = Query(default=None),
     is_archived: Optional[bool] = Query(default=False),
     skip: int = Query(default=0, ge=0),
-    limit: int = Query(default=50, le=200),
+    limit: int = Query(default=50, le=1000),
     ctx: AuthContext = Depends(get_auth_context),
 ):
     """

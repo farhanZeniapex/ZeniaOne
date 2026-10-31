@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useState, useMemo, Suspense, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -142,7 +142,7 @@ function AdvancedHistoryPageContent() {
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
 
-    conversationsApi.list(companyId, { limit: 300, is_archived: viewArchived })
+    conversationsApi.list(companyId, { limit: 200, is_archived: viewArchived })
       .then(res => {
         setAllConversations(res.conversations || []);
         setSelectedIds(new Set());
