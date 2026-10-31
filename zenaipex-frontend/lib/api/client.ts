@@ -108,7 +108,7 @@ async function fetchApiUncached<T = any>(endpoint: string, options: RequestInit 
 
   const method = String(options.method || "GET").toUpperCase();
   const canRetry = method === "GET" || method === "HEAD" || method === "OPTIONS";
-  const retryDelays = canRetry ? [0, 500, 1500] : [0];
+  const retryDelays = canRetry ? [0, 800, 2000, 3500, 5000] : [0];
   const transientStatuses = new Set([502, 503, 504]);
   let response: Response | undefined;
   let lastError: any = null;
