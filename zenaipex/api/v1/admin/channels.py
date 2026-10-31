@@ -99,7 +99,15 @@ async def _sync_exotel_history(channel: dict) -> dict:
         except (TypeError, ValueError):
             started_at = datetime.now(timezone.utc)
         try:
-            duration = int(call.get("Duration") or 0)
+            # Exotel Duration includes ringing/setup time. DialCallDuration is
+            # the connected talk time shown in the provider dashboard and must
+            # win even when its explicit value is zero.
+            raw_duration = call.get("DialCallDuration")
+            if raw_duration is None or str(raw_duration).strip() == "":
+                raw_duration = call.get("ConversationDuration")
+            if raw_duration is None or str(raw_duration).strip() == "":
+                raw_duration = call.get("Duration")
+            duration = max(0, int(float(raw_duration or 0)))
         except (TypeError, ValueError):
             duration = 0
         status = str(call.get("Status") or "completed").lower()

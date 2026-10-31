@@ -99,6 +99,12 @@ async def exotel_voice_webhook(company_id: str, agent_id: str, request: Request)
     caller = form.get("From") or form.get("CallFrom") or request.query_params.get("From") or request.query_params.get("CallFrom", "Unknown")
     to_number = form.get("To") or form.get("CallTo") or request.query_params.get("To") or request.query_params.get("CallTo", "Unknown")
     call_sid = form.get("CallSid") or request.query_params.get("CallSid", "")
+    channel_id_hint = str(request.query_params.get("channel_id") or "").strip()
+    logger.info(
+        "[EXOTEL][VOICE] request_received call_sid=%s channel=%s",
+        call_sid or "missing",
+        channel_id_hint or "missing",
+    )
     raw_dir = str(form.get("Direction") or request.query_params.get("Direction") or request.query_params.get("direction") or "inbound").lower()
     direction = "outbound" if "outbound" in raw_dir else "inbound"
     caller_to = to_number
@@ -106,8 +112,21 @@ async def exotel_voice_webhook(company_id: str, agent_id: str, request: Request)
 
     from core.database import col_agents
     from bson import ObjectId
+    # Exotel gives the Voicebot callback only a short response window. A slow
+    # Mongo round trip must not make the carrier receive an empty WebSocket URL.
+    # HMAC is already verified above and the media-stream route performs the
+    # same tenant-scoped agent validation again before processing any audio.
     try:
-        agent_doc = await col_agents().find_one({"_id": ObjectId(agent_id), "company_id": company_id})
+        agent_doc = await asyncio.wait_for(
+            col_agents().find_one({"_id": ObjectId(agent_id), "company_id": company_id}),
+            timeout=0.75,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "[EXOTEL][VOICE] agent_lookup_timeout call_sid=%s; deferring validation to media stream",
+            call_sid or "missing",
+        )
+        agent_doc = {"_id": agent_id, "company_id": company_id, "validation_deferred": True}
     except Exception:
         agent_doc = None
     if not agent_doc:
@@ -117,10 +136,18 @@ async def exotel_voice_webhook(company_id: str, agent_id: str, request: Request)
     from services.voice_channel_mapping import resolve_exotel_channel
     from urllib.parse import urlencode
     from html import escape
-    channel = await resolve_exotel_channel(
-        company_id, agent_id, to_number, request.query_params.get("channel_id")
-    )
-    channel_id = str(channel["_id"]) if channel else None
+    try:
+        channel = await asyncio.wait_for(
+            resolve_exotel_channel(company_id, agent_id, to_number, channel_id_hint or None),
+            timeout=0.75,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "[EXOTEL][VOICE] channel_lookup_timeout call_sid=%s; using signed channel hint",
+            call_sid or "missing",
+        )
+        channel = None
+    channel_id = str(channel["_id"]) if channel else (channel_id_hint or None)
     if channel:
         to_number = channel["phone_number"].strip()
 
@@ -140,8 +167,6 @@ async def exotel_voice_webhook(company_id: str, agent_id: str, request: Request)
 
     # Pre-create conversation in DB so caller info is preserved
     from services.conversation_service import create_conversation
-    import asyncio
-    
     # Find the channel to get channel_id for inbound calls
     async def _pre_create():
         direction = str(request.query_params.get("direction") or "inbound").lower()
@@ -189,11 +214,26 @@ async def exotel_voicebot_webhook(company_id: str, agent_id: str, request: Reque
     caller = form.get("From") or form.get("CallFrom") or request.query_params.get("From") or request.query_params.get("CallFrom", "Unknown")
     to_number = form.get("To") or form.get("CallTo") or request.query_params.get("To") or request.query_params.get("CallTo", "Unknown")
     call_sid = form.get("CallSid") or request.query_params.get("CallSid", "")
+    channel_id_hint = str(request.query_params.get("channel_id") or "").strip()
+    logger.info(
+        "[EXOTEL][VOICEBOT] request_received call_sid=%s channel=%s",
+        call_sid or "missing",
+        channel_id_hint or "missing",
+    )
     
     from core.database import col_agents
     from bson import ObjectId
     try:
-        agent_doc = await col_agents().find_one({"_id": ObjectId(agent_id), "company_id": company_id})
+        agent_doc = await asyncio.wait_for(
+            col_agents().find_one({"_id": ObjectId(agent_id), "company_id": company_id}),
+            timeout=0.75,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "[EXOTEL][VOICEBOT] agent_lookup_timeout call_sid=%s; deferring validation to media stream",
+            call_sid or "missing",
+        )
+        agent_doc = {"_id": agent_id, "company_id": company_id, "validation_deferred": True}
     except Exception:
         agent_doc = None
     if not agent_doc:
@@ -203,8 +243,18 @@ async def exotel_voicebot_webhook(company_id: str, agent_id: str, request: Reque
     from services.voice_channel_mapping import resolve_exotel_channel
     from urllib.parse import urlencode
     
-    channel = await resolve_exotel_channel(company_id, agent_id, to_number, request.query_params.get("channel_id"))
-    channel_id = str(channel["_id"]) if channel else None
+    try:
+        channel = await asyncio.wait_for(
+            resolve_exotel_channel(company_id, agent_id, to_number, channel_id_hint or None),
+            timeout=0.75,
+        )
+    except asyncio.TimeoutError:
+        logger.warning(
+            "[EXOTEL][VOICEBOT] channel_lookup_timeout call_sid=%s; using signed channel hint",
+            call_sid or "missing",
+        )
+        channel = None
+    channel_id = str(channel["_id"]) if channel else (channel_id_hint or None)
     
     host = request.headers.get("host", "")
     scheme = "wss" if "localhost" not in host and "127.0.0.1" not in host else "ws"
@@ -220,7 +270,6 @@ async def exotel_voicebot_webhook(company_id: str, agent_id: str, request: Reque
     ws_url = f"{scheme}://{host}/api/v1/webhook/exotel/advanced/{company_id}/{agent_id}/media-stream?{urlencode(ws_params)}"
     
     from services.conversation_service import create_conversation
-    import asyncio
     direction = str(request.query_params.get("direction") or "inbound").lower()
     async def _pre_create():
         await create_conversation(
@@ -240,7 +289,7 @@ async def exotel_voicebot_webhook(company_id: str, agent_id: str, request: Reque
     
     # Exotel Studio Voicebot Applet expects JSON response
     response_data = {"url": ws_url}
-    logger.info(f"[EXOTEL][VOICEBOT] Returning JSON:\n{response_data}")
+    logger.info("[EXOTEL][VOICEBOT] response_ready call_sid=%s websocket_url_present=true", call_sid or "missing")
     return JSONResponse(content=response_data)
 @router.post("/webhook/exotel/advanced/{company_id}/{agent_id}/recording-status")
 async def exotel_recording_status(company_id: str, agent_id: str, request: Request):
@@ -2134,11 +2183,24 @@ async def exotel_status_webhook(company_id: str, agent_id: str, request: Request
         else:
             form_data = request.query_params
             
-        call_sid = str(form_data.get("CallSid", ""))
-        status = str(form_data.get("Status", form_data.get("DialCallStatus", "completed")))
+        call_sid = str(form_data.get("CallSid", "")).strip()
+        event_type = str(form_data.get("CallType") or form_data.get("EventType") or "").strip().lower()
+        status = str(form_data.get("Status") or form_data.get("DialCallStatus") or "").strip()
         
-        if not call_sid or not status:
+        if not call_sid:
             return {"status": "ok"}
+
+        # Exotel sends a `call-attempt` notification before a terminal status.
+        # It contains no Status field and DialCallDuration is commonly zero.
+        # Treating the missing field as "completed" used to create false
+        # completed calls and overwrite the real provider outcome.
+        if not status:
+            logger.info(
+                "[EXOTEL_STATUS] Ignoring non-terminal event without status call_sid=%s event=%s",
+                call_sid,
+                event_type or "unspecified",
+            )
+            return {"status": "ok", "ignored": event_type or "missing_status"}
             
         logger.info("\n📡 EXOTEL STATUS CALLBACK")
         logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -2152,8 +2214,8 @@ async def exotel_status_webhook(company_id: str, agent_id: str, request: Request
         
         # Determine internal status based on Exotel status
         internal_status = status.lower()
-        if internal_status in ["completed"]:
-            pass # Usually handled by websocket close, but good to catch
+        if internal_status in ["completed", "terminal"]:
+            internal_status = "completed"
         elif internal_status in ["failed", "busy", "no-answer", "canceled", "cancelled"]:
             if internal_status == "canceled":
                 internal_status = "cancelled"
@@ -2171,14 +2233,29 @@ async def exotel_status_webhook(company_id: str, agent_id: str, request: Request
 
         update_data = {
             "status": internal_status,
-            "ended_at": datetime.now(timezone.utc)
+            "provider_status": status.lower(),
+            "provider_event": event_type or None,
         }
+        if internal_status in ["completed", "failed", "cancelled", "busy", "no-answer"]:
+            update_data["ended_at"] = datetime.now(timezone.utc)
         
         # Capture Talk Time if provided by Exotel
-        val_duration = form_data.get("Duration") or form_data.get("CallDuration") or form_data.get("Stream[Duration]")
-        duration = str(val_duration) if val_duration else ""
-        if duration and duration.isdigit():
-            update_data["duration_seconds"] = int(duration)
+        # DialCallDuration is actual connected/talk time. Duration may include
+        # ringing and applet setup, so only use it when Exotel did not provide
+        # the talk-time field at all. Preserve an explicit zero.
+        val_duration = form_data.get("DialCallDuration")
+        if val_duration is None or str(val_duration).strip() == "":
+            val_duration = (
+                form_data.get("ConversationDuration")
+                or form_data.get("Duration")
+                or form_data.get("CallDuration")
+                or form_data.get("Stream[Duration]")
+            )
+        try:
+            if val_duration is not None and str(val_duration).strip() != "":
+                update_data["duration_seconds"] = max(0, int(float(str(val_duration).strip())))
+        except (TypeError, ValueError):
+            logger.warning("[EXOTEL_STATUS] Invalid duration call_sid=%s value=%r", call_sid, val_duration)
             
         recording_url = str(form_data.get("RecordingUrl") or form_data.get("Stream[RecordingUrl]", ""))
         if recording_url:
