@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef } from "react";
-import { fetchApi } from "@/lib/api/client";
+import { fetchApi, getPlayableRecordingUrl } from "@/lib/api/client";
 import { formatSystemDateTime } from "@/lib/utils";
 import {
   MessageSquare,
@@ -200,21 +200,40 @@ function getTopicBadge(conv: any) {
   };
 }
 
-function AudioPlayer({ url, sid }: { url: string; sid?: string }) {
+function AudioPlayer({ convId, companyId, sid }: { convId: string; companyId?: string; sid?: string }) {
   const [playing, setPlaying] = useState(false);
-  const [audio] = useState(() =>
-    typeof window !== "undefined" ? new Audio(url) : null,
-  );
+  const [loading, setLoading] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
 
-  const toggle = () => {
-    if (!audio) return;
-    if (playing) {
-      audio.pause();
+  const toggle = async () => {
+    if (playing && audioRef.current) {
+      audioRef.current.pause();
       setPlaying(false);
-    } else {
-      audio.play();
-      setPlaying(true);
+      return;
+    }
+    if (audioRef.current) {
+      audioRef.current.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+      return;
+    }
+    setLoading(true);
+    try {
+      const url = await getPlayableRecordingUrl(convId, companyId);
+      if (!url) {
+        alert("Recording unavailable or processing.");
+        return;
+      }
+      setStreamUrl(url);
+      const audio = new Audio(url);
+      audioRef.current = audio;
       audio.onended = () => setPlaying(false);
+      audio.onerror = () => { setPlaying(false); alert("Unable to load audio."); };
+      await audio.play();
+      setPlaying(true);
+    } catch {
+      alert("Unable to play recording.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -222,10 +241,13 @@ function AudioPlayer({ url, sid }: { url: string; sid?: string }) {
     <div className="flex items-center gap-2 bg-slate-900 text-white rounded-xl px-3 py-2 w-full mt-2">
       <button
         onClick={toggle}
+        disabled={loading}
         aria-label="Play or pause recording"
-        className="h-8 w-8 rounded-full bg-emerald-500 hover:bg-emerald-400 flex items-center justify-center shrink-0 transition-colors"
+        className="h-8 w-8 rounded-full bg-emerald-500 hover:bg-emerald-400 flex items-center justify-center shrink-0 transition-colors disabled:opacity-60"
       >
-        {playing ? (
+        {loading ? (
+          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+        ) : playing ? (
           <Pause className="h-3.5 w-3.5" />
         ) : (
           <Play className="h-3.5 w-3.5 ml-0.5" />
@@ -235,19 +257,21 @@ function AudioPlayer({ url, sid }: { url: string; sid?: string }) {
         <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
           <div
             className="h-full bg-emerald-500 rounded-full w-0 animate-none"
-            style={{ width: playing ? "30%" : "0%" }}
+            style={{ width: playing ? "40%" : "0%" }}
           />
         </div>
-        <p className="text-[10px] text-slate-400 mt-1">MP3 Recording</p>
+        <p className="text-[10px] text-slate-400 mt-1">{loading ? "Preparing audio stream..." : "Encrypted MP3 Stream"}</p>
       </div>
-      <a
-        href={url}
-        download={`recording-${sid || "call"}.mp3`}
-        className="text-slate-400 hover:text-white transition-colors"
-        title="Download MP3"
-      >
-        <Download className="h-4 w-4" />
-      </a>
+      {streamUrl && (
+        <a
+          href={streamUrl}
+          download={`recording-${sid || "call"}.mp3`}
+          className="text-slate-400 hover:text-white transition-colors"
+          title="Download MP3"
+        >
+          <Download className="h-4 w-4" />
+        </a>
+      )}
     </div>
   );
 }
@@ -409,7 +433,8 @@ function ConvDetail({ conv, onClose }: { conv: any; onClose: () => void }) {
               </div>
               <div className="p-4">
                 <AudioPlayer
-                  url={conv.recording_url}
+                  convId={conv.id}
+                  companyId={conv.company_id}
                   sid={conv.recording_sid}
                 />
               </div>
@@ -501,7 +526,7 @@ export default function AdminConversationsPage() {
   const [playingId, setPlayingId] = useState<string | null>(null);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  const handleToggleAudio = (convId: string, url: string) => {
+  const handleToggleAudio = async (convId: string, companyId?: string) => {
     if (playingId === convId) {
       if (activeAudioRef.current) {
         activeAudioRef.current.pause();
@@ -514,16 +539,29 @@ export default function AdminConversationsPage() {
       activeAudioRef.current.pause();
     }
 
-    const audio = new Audio(url);
-    activeAudioRef.current = audio;
     setPlayingId(convId);
-    audio.play().catch((err) => {
-      console.error("Audio playback error:", err);
+    try {
+      const playableUrl = await getPlayableRecordingUrl(convId, companyId);
+      if (!playableUrl) {
+        setPlayingId(null);
+        alert("Recording audio is not available or still processing.");
+        return;
+      }
+      const audio = new Audio(playableUrl);
+      activeAudioRef.current = audio;
+      audio.play().catch((err) => {
+        console.error("Audio playback error:", err);
+        setPlayingId(null);
+      });
+      audio.onended = () => {
+        setPlayingId(null);
+      };
+      audio.onerror = () => {
+        setPlayingId(null);
+      };
+    } catch {
       setPlayingId(null);
-    });
-    audio.onended = () => {
-      setPlayingId(null);
-    };
+    }
   };
 
   useEffect(() => {
@@ -1223,7 +1261,7 @@ export default function AdminConversationsPage() {
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleToggleAudio(conv.id, conv.recording_url);
+                                  handleToggleAudio(conv.id, conv.company_id);
                                 }}
                                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-all ${
                                   playingId === conv.id

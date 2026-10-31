@@ -6,6 +6,7 @@ from core.exceptions import NotFoundError
 from services import conversation_service
 from typing import Optional
 from bson import ObjectId
+from datetime import datetime, timedelta, timezone
 import httpx
 import jwt
 import ipaddress
@@ -250,19 +251,15 @@ async def bulk_delete(
     return {"success": True, "count": count}
 
 
-@router.get("/detail/{company_id}/{conv_id}")
-async def get_admin_conversation(
-    company_id: str = Path(...),
+@router.get("/detail/{conv_id}")
+async def get_admin_conversation_by_id(
     conv_id: str = Path(...),
     user: dict = Depends(get_platform_admin),
 ):
-    """Load one conversation in the platform-wide admin view."""
+    """Load one conversation in the platform-wide admin view by conv_id alone."""
     if not ObjectId.is_valid(conv_id):
         raise NotFoundError("Conversation")
-    doc = await col_conversations().find_one({
-        "_id": ObjectId(conv_id),
-        "company_id": None if company_id == "None" else company_id,
-    })
+    doc = await col_conversations().find_one({"_id": ObjectId(conv_id)})
     if not doc:
         raise NotFoundError("Conversation")
     result = _fmt_conv(doc)
@@ -273,6 +270,60 @@ async def get_admin_conversation(
     return result
 
 
+@router.get("/detail/{company_id}/{conv_id}")
+async def get_admin_conversation(
+    company_id: str = Path(...),
+    conv_id: str = Path(...),
+    user: dict = Depends(get_platform_admin),
+):
+    """Load one conversation in the platform-wide admin view."""
+    if not ObjectId.is_valid(conv_id):
+        raise NotFoundError("Conversation")
+    query = {"_id": ObjectId(conv_id)}
+    if company_id and company_id not in ("None", "undefined"):
+        query["company_id"] = company_id
+    doc = await col_conversations().find_one(query)
+    if not doc:
+        # Fallback without company filter since ObjectId is globally unique
+        doc = await col_conversations().find_one({"_id": ObjectId(conv_id)})
+    if not doc:
+        raise NotFoundError("Conversation")
+    result = _fmt_conv(doc)
+    result["source_type"] = _source_type(doc)
+    result["actual_message_count"] = await col_messages().count_documents({
+        "conversation_id": conv_id,
+    })
+    return result
+
+
+@router.get("/messages/{conv_id}")
+@router.get("/{conv_id}/messages")
+async def get_conversation_messages_by_id(
+    conv_id: str = Path(...),
+    user: dict = Depends(get_platform_admin),
+):
+    """Get transcript messages for a specific conversation by conv_id alone."""
+    if not ObjectId.is_valid(conv_id):
+        raise NotFoundError("Conversation")
+    doc = await col_conversations().find_one({"_id": ObjectId(conv_id)})
+    if not doc:
+        raise NotFoundError("Conversation")
+    cursor = col_messages().find(
+        {"conversation_id": conv_id}
+    ).sort("timestamp", 1)
+    msgs = []
+    async for mdoc in cursor:
+        msgs.append({
+            "id": str(mdoc["_id"]),
+            "role": mdoc.get("role", "user"),
+            "content": mdoc.get("text") or mdoc.get("content") or "",
+            "text": mdoc.get("text") or mdoc.get("content") or "",
+            "timestamp": mdoc.get("timestamp"),
+            "sources": mdoc.get("sources", []),
+        })
+    return {"messages": msgs, "count": len(msgs)}
+
+
 @router.get("/{company_id}/{conv_id}/messages")
 async def get_conversation_messages(
     company_id: str = Path(...),
@@ -280,11 +331,10 @@ async def get_conversation_messages(
     user: dict = Depends(get_platform_admin),
 ):
     """Get transcript messages for a specific conversation (admin access, any company)."""
-    from core.database import col_messages
-    if not ObjectId.is_valid(conv_id) or not await col_conversations().find_one({
-        "_id": ObjectId(conv_id),
-        "company_id": None if company_id == "None" else company_id,
-    }):
+    if not ObjectId.is_valid(conv_id):
+        raise NotFoundError("Conversation")
+    doc = await col_conversations().find_one({"_id": ObjectId(conv_id)})
+    if not doc:
         raise NotFoundError("Conversation")
     cursor = col_messages().find(
         {"conversation_id": conv_id}
@@ -301,9 +351,30 @@ async def get_conversation_messages(
         })
     return {"messages": msgs, "count": len(msgs)}
 
-from fastapi.responses import StreamingResponse
-import httpx
-from fastapi import HTTPException
+
+@router.get("/token/recording/{conv_id}")
+async def get_recording_token_single(
+    conv_id: str = Path(...),
+    user: dict = Depends(get_platform_admin),
+):
+    """Generate a short-lived scoped JWT for secure browser audio streaming using conv_id."""
+    if not ObjectId.is_valid(conv_id):
+        raise HTTPException(status_code=400, detail="Invalid ID")
+    doc = await col_conversations().find_one({"_id": ObjectId(conv_id)})
+    if not doc or not doc.get("recording_url"):
+        raise HTTPException(status_code=404, detail="Recording not found")
+
+    company_id = str(doc.get("company_id") or "global")
+    payload = {
+        "sub": "recording",
+        "company_id": company_id,
+        "conv_id": str(conv_id),
+        "url": doc["recording_url"],
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=60),
+    }
+    token = jwt.encode(payload, settings.app_secret_key, algorithm="HS256")
+    return {"token": token, "company_id": company_id, "conv_id": str(conv_id)}
+
 
 @router.get("/{company_id}/{conv_id}/recording-token")
 async def get_recording_token(
@@ -312,24 +383,23 @@ async def get_recording_token(
     user: dict = Depends(get_platform_admin),
 ):
     """Generate a short-lived scoped JWT for secure browser audio streaming."""
-    from bson import ObjectId
-    doc = await col_conversations().find_one({"_id": ObjectId(conv_id), "company_id": company_id})
+    if not ObjectId.is_valid(conv_id):
+        raise HTTPException(status_code=400, detail="Invalid ID")
+    doc = await col_conversations().find_one({"_id": ObjectId(conv_id)})
     if not doc or not doc.get("recording_url"):
         raise HTTPException(status_code=404, detail="Recording not found")
-        
-    import jwt
-    from datetime import datetime, timedelta, timezone
-    from core.config import settings
-    
+
+    comp_id = str(doc.get("company_id") or company_id or "global")
     payload = {
         "sub": "recording",
-        "company_id": str(company_id),
+        "company_id": comp_id,
         "conv_id": str(conv_id),
         "url": doc["recording_url"],
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=15)
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=60),
     }
     token = jwt.encode(payload, settings.app_secret_key, algorithm="HS256")
-    return {"token": token}
+    return {"token": token, "company_id": comp_id, "conv_id": str(conv_id)}
+
 
 @public_router.get("/{company_id}/{conv_id}/recording")
 async def proxy_recording(
@@ -341,13 +411,12 @@ async def proxy_recording(
     token = request.query_params.get("token")
     if not token:
         raise HTTPException(status_code=401, detail="Token required")
-        
+
     try:
         payload = jwt.decode(token, settings.app_secret_key, algorithms=["HS256"])
         if payload.get("sub") != "recording":
             raise ValueError("Invalid token subject")
-        # Tenant & Conversation Scoping Validation
-        if payload.get("company_id") and str(payload.get("company_id")) != str(company_id):
+        if payload.get("company_id") and company_id and str(payload.get("company_id")) != str(company_id):
             raise HTTPException(status_code=403, detail="Unauthorized: Token not valid for this tenant")
         if payload.get("conv_id") and str(payload.get("conv_id")) != str(conv_id):
             raise HTTPException(status_code=403, detail="Unauthorized: Token not valid for this conversation")
@@ -383,19 +452,17 @@ async def proxy_recording(
         if not url.endswith(".mp3"):
             url = url + ".mp3"
     else:
-        # Recordings are owned by the channel's Exotel account. The global
-        # fallback credentials can belong to another tenant/account, which
-        # causes Exotel to return 401 even when the call itself succeeded.
         recording_auth = (settings.exotel_api_key, settings.exotel_api_token)
         if all(recording_auth):
             recording_auths.append(recording_auth)
         try:
             conv = await col_conversations().find_one(
-                {"_id": ObjectId(conv_id), "company_id": company_id},
-                {"channel_id": 1},
+                {"_id": ObjectId(conv_id)},
+                {"channel_id": 1, "company_id": 1},
             )
             channel_ref = str((conv or {}).get("channel_id") or "")
-            if channel_ref:
+            conv_company_id = str((conv or {}).get("company_id") or company_id or "")
+            if channel_ref and ObjectId.is_valid(channel_ref):
                 channel = await col_channels().find_one({"_id": ObjectId(channel_ref)})
                 channel_credentials = (channel or {}).get("credentials") or {}
                 from core.security import decrypt_secret
@@ -403,23 +470,21 @@ async def proxy_recording(
                 channel_token = decrypt_secret(channel_credentials.get("api_token_encrypted", ""))
                 if channel_key and channel_token:
                     recording_auths.insert(0, (channel_key, channel_token))
-            # Older records can have a missing channel_id. Try configured
-            # Exotel accounts in the same company before declaring the media
-            # unavailable; this keeps historical recordings playable.
-            company_channels = await col_channels().find(
-                {"company_id": company_id, "type": {"$in": ["exotel", "exotel_voice"]}},
-                {"credentials": 1},
-            ).to_list(length=20)
-            from core.security import decrypt_secret
-            for candidate in company_channels:
-                candidate_credentials = candidate.get("credentials") or {}
-                candidate_auth = (
-                    decrypt_secret(candidate_credentials.get("api_key_encrypted", "")),
-                    decrypt_secret(candidate_credentials.get("api_token_encrypted", "")),
-                )
-                if all(candidate_auth) and candidate_auth not in recording_auths:
-                    recording_auths.append(candidate_auth)
-        except (TypeError, ValueError):
+            if conv_company_id and conv_company_id not in ("None", "undefined", "global"):
+                company_channels = await col_channels().find(
+                    {"company_id": conv_company_id, "type": {"$in": ["exotel", "exotel_voice"]}},
+                    {"credentials": 1},
+                ).to_list(length=20)
+                from core.security import decrypt_secret
+                for candidate in company_channels:
+                    candidate_credentials = candidate.get("credentials") or {}
+                    candidate_auth = (
+                        decrypt_secret(candidate_credentials.get("api_key_encrypted", "")),
+                        decrypt_secret(candidate_credentials.get("api_token_encrypted", "")),
+                    )
+                    if all(candidate_auth) and candidate_auth not in recording_auths:
+                        recording_auths.append(candidate_auth)
+        except Exception:
             pass
         if not recording_auths:
             raise HTTPException(status_code=503, detail="Exotel credentials are not configured")

@@ -14,6 +14,7 @@ export function CustomAudioPlayer({ src, durationSeconds = 0 }: CustomAudioPlaye
   const [isMuted, setIsMuted] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -46,10 +47,17 @@ export function CustomAudioPlayer({ src, durationSeconds = 0 }: CustomAudioPlaye
     if (!audioRef.current) return;
     if (isPlaying) {
       audioRef.current.pause();
+      setIsPlaying(false);
     } else {
-      audioRef.current.play();
+      audioRef.current.play().then(() => {
+        setIsPlaying(true);
+        setLoadError(false);
+      }).catch((err) => {
+        console.warn("Audio playback prevented:", err);
+        setIsPlaying(false);
+        setLoadError(true);
+      });
     }
-    setIsPlaying(!isPlaying);
   };
 
   const toggleMute = () => {
@@ -81,7 +89,33 @@ export function CustomAudioPlayer({ src, durationSeconds = 0 }: CustomAudioPlaye
 
   return (
     <div className="w-full bg-white border border-gray-200 rounded-xl shadow-sm p-4 mt-2 transition-all">
-      <audio ref={audioRef} src={src} autoPlay onPlay={() => setIsPlaying(true)} onPause={() => setIsPlaying(false)} />
+      <audio
+        ref={audioRef}
+        src={src}
+        autoPlay
+        onPlay={() => { setIsPlaying(true); setLoadError(false); }}
+        onPause={() => setIsPlaying(false)}
+        onError={(e) => {
+          console.warn("Audio source loading failed:", e);
+          setIsPlaying(false);
+          setLoadError(true);
+        }}
+      />
+      {loadError && (
+        <div className="mb-3 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between">
+          <span>Audio stream processing or unavailable from provider.</span>
+          <button
+            type="button"
+            onClick={() => {
+              setLoadError(false);
+              if (audioRef.current) audioRef.current.load();
+            }}
+            className="underline font-bold text-[11px] ml-2 text-amber-900 hover:text-amber-700"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       
       {/* Progress Bar */}
       <div className="flex items-center gap-3 mb-3">

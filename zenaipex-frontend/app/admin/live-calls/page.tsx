@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef, useCallback } from "react";
-import { API_BASE_URL, fetchApi } from "@/lib/api/client";
+import { API_BASE_URL, fetchApi, getPlayableRecordingUrl } from "@/lib/api/client";
 import {
   Activity, Phone, PhoneOff, User, Clock, MessageSquare, ShieldAlert,
   Zap, ArrowRight, UserCheck, UserPlus, History, FileText, Play, Pause,
@@ -349,18 +349,53 @@ export default function LiveCallsPage() {
     }
   };
 
-  const handleToggleRecentAudio = (url: string) => {
+  const [audioLoading, setAudioLoading] = useState(false);
+
+  const handleToggleRecentAudio = async (callId: string, companyId?: string) => {
     if (recentAudioPlaying) {
       if (recentAudioRef.current) recentAudioRef.current.pause();
       setRecentAudioPlaying(false);
       return;
     }
     if (recentAudioRef.current) recentAudioRef.current.pause();
-    const audio = new Audio(url);
-    recentAudioRef.current = audio;
-    setRecentAudioPlaying(true);
-    audio.play().catch(() => setRecentAudioPlaying(false));
-    audio.onended = () => setRecentAudioPlaying(false);
+    setAudioLoading(true);
+    try {
+      const playableUrl = await getPlayableRecordingUrl(callId, companyId);
+      if (!playableUrl) {
+        alert("Recording audio is not available or still processing.");
+        return;
+      }
+      const audio = new Audio(playableUrl);
+      recentAudioRef.current = audio;
+      setRecentAudioPlaying(true);
+      audio.play().catch((err) => {
+        console.warn("Audio playback error:", err);
+        setRecentAudioPlaying(false);
+      });
+      audio.onended = () => setRecentAudioPlaying(false);
+      audio.onerror = () => {
+        setRecentAudioPlaying(false);
+        alert("Unable to stream audio recording.");
+      };
+    } finally {
+      setAudioLoading(false);
+    }
+  };
+
+  const handlePlayTimelineRecording = async (itemId: string, companyId?: string) => {
+    setAudioLoading(true);
+    try {
+      const playableUrl = await getPlayableRecordingUrl(itemId, companyId);
+      if (playableUrl) {
+        setActiveRecordingUrl(playableUrl);
+      } else {
+        alert("Recording is still processing or unavailable.");
+      }
+    } catch {
+      alert("Recording unavailable.");
+    } finally {
+      setAudioLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -1134,15 +1169,15 @@ export default function LiveCallsPage() {
                         {selectedRecentCall.recording_url && (
                           <button
                             type="button"
-                            onClick={() => handleToggleRecentAudio(selectedRecentCall.recording_url)}
+                            onClick={() => handleToggleRecentAudio(selectedRecentCall.id, selectedRecentCall.company_id)}
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border transition ${
                               recentAudioPlaying
                                 ? "bg-emerald-600 text-white border-emerald-700 shadow-sm animate-pulse"
                                 : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
                             }`}
                           >
-                            {recentAudioPlaying ? <Pause className="h-2.5 w-2.5" /> : <Play className="h-2.5 w-2.5 ml-0.5" />}
-                            <span>{recentAudioPlaying ? "Playing" : "Recording"}</span>
+                            {recentAudioPlaying ? <Pause className="h-2.5 w-2.5" /> : audioLoading ? <RefreshCw className="h-2.5 w-2.5 animate-spin" /> : <Play className="h-2.5 w-2.5 ml-0.5" />}
+                            <span>{recentAudioPlaying ? "Playing" : audioLoading ? "Loading..." : "Recording"}</span>
                           </button>
                         )}
                       </div>
@@ -1447,7 +1482,7 @@ export default function LiveCallsPage() {
                           {item.recording_url ? (
                             <button
                               type="button"
-                              onClick={() => setActiveRecordingUrl(item.recording_url || null)}
+                              onClick={() => handlePlayTimelineRecording(item.id, selectedCall?.company_id || selectedRecentCall?.company_id)}
                               className="inline-flex items-center gap-1 font-bold text-emerald-700 hover:underline"
                             >
                               <Play className="h-3 w-3" /> Play recording

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Conversation } from "@/lib/api/conversations";
-import { API_BASE_URL, fetchApi } from "@/lib/api/client";
+import { API_BASE_URL, fetchApi, getPlayableRecordingUrl } from "@/lib/api/client";
 import {
   Loader2, ArrowLeft, Phone, Clock, User, Bot, PlayCircle,
   FileText, Copy, Check, Sparkles, Database, ThumbsUp, ThumbsDown,
@@ -84,13 +84,18 @@ export default function ConversationDetailPage() {
   }
 
   useEffect(() => {
-    if (!companyId || !conversationId) { setIsLoading(false); return; }
+    if (!conversationId) { setIsLoading(false); return; }
     async function load() {
       try {
         setIsLoading(true);
-        const conv = await fetchApi<Conversation>(`/admin/conversations/detail/${companyId}/${conversationId}`);
+        const detailEndpoint = companyId
+          ? `/admin/conversations/detail/${companyId}/${conversationId}`
+          : `/admin/conversations/detail/${conversationId}`;
+        let effectiveCompanyId = companyId;
+        const conv = await fetchApi<Conversation>(detailEndpoint);
         if (conv) {
           setConversation(conv);
+          effectiveCompanyId = conv.company_id || companyId;
           const [companiesResult, agentsResult, channelsResult] = await Promise.allSettled([
             fetchApi<{ companies?: { id: string; name: string }[] }>("/admin/companies"),
             fetchApi<{ agents?: { id: string; name: string }[] }>("/admin/agents"),
@@ -103,8 +108,11 @@ export default function ConversationDetailPage() {
           const channel = endpoint ? channels.find(item => item.company_id === conv.company_id && item.phone_number?.replace(/\D/g, "").slice(-10) === endpoint) : undefined;
           setJourneyContext({ company: companies.find(item => item.id === conv.company_id)?.name, agent: agents.find(item => item.id === conv.agent_id)?.name, channel: channel ? { id: channel.id, name: channel.name } : undefined });
         }
-        const transRes = await fetchApi<{messages: any[]}>(`/admin/conversations/${companyId}/${conversationId}/messages`);
-        if (transRes.messages) {
+        const messagesEndpoint = effectiveCompanyId
+          ? `/admin/conversations/${effectiveCompanyId}/${conversationId}/messages`
+          : `/admin/conversations/messages/${conversationId}`;
+        const transRes = await fetchApi<{messages: any[]}>(messagesEndpoint);
+        if (transRes?.messages) {
           setTranscript(transRes.messages.filter((message: any) => {
             const content = typeof message.content === "string" ? message.content : message.text || "";
             return !(message.role === "user" && content.startsWith("__GREETING__:"));
@@ -255,8 +263,13 @@ export default function ConversationDetailPage() {
                       className="w-full h-9 text-xs gap-2"
                       onClick={async () => {
                         try {
-                          const result = await fetchApi<{token: string}>(`/admin/conversations/${companyId}/${conversationId}/recording-token`);
-                          setAudioSrc(`${API_BASE_URL}/admin/conversations/${companyId}/${conversationId}/recording?token=${encodeURIComponent(result.token)}`);
+                          const effectiveCompanyId = conversation?.company_id || companyId;
+                          const playUrl = await getPlayableRecordingUrl(conversationId, effectiveCompanyId || undefined);
+                          if (playUrl) {
+                            setAudioSrc(playUrl);
+                          } else {
+                            alert("Recording not available for this call.");
+                          }
                         } catch (e) {
                           alert("Recording not available for this call.");
                         }

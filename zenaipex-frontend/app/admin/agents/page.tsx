@@ -1539,7 +1539,7 @@ export default function AdminAgentsPage() {
             Refresh
           </button>
           <button
-            onClick={() => setIsCloneModalOpen(true)}
+            onClick={() => setIsVoiceStudioOpen(true)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700 text-xs font-semibold transition-colors shadow-xs"
           >
             <Mic className="h-3.5 w-3.5" /> Clone Voice

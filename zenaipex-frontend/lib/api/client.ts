@@ -11,6 +11,22 @@ export function getCompanyLogoUrl(companyId: string, logoUrlReference?: string):
   return `${API_BASE_URL}/companies/${companyId}/logo?v=${encodeURIComponent(logoUrlReference)}`;
 }
 
+export async function getPlayableRecordingUrl(conversationId: string, companyId?: string): Promise<string | null> {
+  if (!conversationId) return null;
+  try {
+    const endpoint = companyId && companyId !== "None" && companyId !== "undefined"
+      ? `/admin/conversations/${companyId}/${conversationId}/recording-token`
+      : `/admin/conversations/token/recording/${conversationId}`;
+    const res = await fetchApi<{ token: string; company_id?: string }>(endpoint);
+    if (!res?.token) return null;
+    const cid = res.company_id || companyId || "global";
+    return `${API_BASE_URL}/admin/conversations/${cid}/${conversationId}/recording?token=${encodeURIComponent(res.token)}`;
+  } catch (err) {
+    console.warn("Failed to retrieve playable recording URL:", err);
+    return null;
+  }
+}
+
 export class ApiError extends Error {
   status: number;
   data: any;
