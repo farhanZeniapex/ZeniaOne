@@ -66,6 +66,14 @@ export default function ConversationDetailPage() {
   const toggleSources = (i: number) =>
     setExpandedSources(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
 
+  const handleBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1 && document.referrer && document.referrer.includes(window.location.host)) {
+      router.back();
+    } else {
+      router.push("/admin/live-calls");
+    }
+  };
+
   function handleShare(text: string) {
     if (navigator.share) navigator.share({ title: "ZeniaOne", text }).catch(() => {});
     else { navigator.clipboard.writeText(text); setCopiedIndex(-1); setTimeout(() => setCopiedIndex(null), 2000); }
@@ -134,7 +142,7 @@ export default function ConversationDetailPage() {
   if (!conversation) return (
     <div className="flex min-h-[400px] flex-col items-center justify-center gap-4">
       <p className="text-slate-500">Conversation not found.</p>
-      <Button variant="outline" onClick={() => router.back()}>Go Back</Button>
+      <Button variant="outline" onClick={handleBack}>Go Back</Button>
     </div>
   );
 
@@ -153,7 +161,7 @@ export default function ConversationDetailPage() {
 
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button onClick={() => router.back()} variant="outline" size="icon" aria-label="Back to conversations" className="h-9 w-9 border-slate-200 bg-white shadow-sm">
+        <Button onClick={handleBack} variant="outline" size="icon" aria-label="Back to conversations" className="h-9 w-9 border-slate-200 bg-white shadow-sm">
           <ArrowLeft className="h-4 w-4 text-slate-500" />
         </Button>
         <div className="flex-1 min-w-0">

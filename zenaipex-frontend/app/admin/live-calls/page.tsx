@@ -122,6 +122,10 @@ export default function LiveCallsPage() {
 
   // Active audio player preview in drawer
   const [activeRecordingUrl, setActiveRecordingUrl] = useState<string | null>(null);
+  const [activeTimelineId, setActiveTimelineId] = useState<string | null>(null);
+  const [openTranscriptId, setOpenTranscriptId] = useState<string | null>(null);
+  const [transcriptMessages, setTranscriptMessages] = useState<Record<string, any[]>>({});
+  const [loadingTranscriptId, setLoadingTranscriptId] = useState<string | null>(null);
 
   // Recent calls queue state (Advanced Feature: Standby & History Inspection)
   const [recentCalls, setRecentCalls] = useState<any[]>([]);
@@ -383,10 +387,16 @@ export default function LiveCallsPage() {
   };
 
   const handlePlayTimelineRecording = async (itemId: string, companyId?: string) => {
+    if (activeTimelineId === itemId && activeRecordingUrl) {
+      setActiveRecordingUrl(null);
+      setActiveTimelineId(null);
+      return;
+    }
     setAudioLoading(true);
     try {
       const playableUrl = await getPlayableRecordingUrl(itemId, companyId);
       if (playableUrl) {
+        setActiveTimelineId(itemId);
         setActiveRecordingUrl(playableUrl);
       } else {
         alert("Recording is still processing or unavailable.");
@@ -395,6 +405,32 @@ export default function LiveCallsPage() {
       alert("Recording unavailable.");
     } finally {
       setAudioLoading(false);
+    }
+  };
+
+  const handleToggleTranscript = async (itemId: string, companyId?: string) => {
+    if (openTranscriptId === itemId) {
+      setOpenTranscriptId(null);
+      return;
+    }
+    setOpenTranscriptId(itemId);
+    if (transcriptMessages[itemId]) return;
+    setLoadingTranscriptId(itemId);
+    try {
+      const endpoint = companyId && companyId !== "None" && companyId !== "undefined"
+        ? `/admin/conversations/${companyId}/${itemId}/messages`
+        : `/admin/conversations/messages/${itemId}`;
+      const res = await fetchApi<{ messages: any[] }>(endpoint);
+      const filtered = (res?.messages || []).filter((m: any) => {
+        const t = typeof m.content === "string" ? m.content : m.text || "";
+        return !(m.role === "user" && t.startsWith("__GREETING__:"));
+      });
+      setTranscriptMessages(prev => ({ ...prev, [itemId]: filtered }));
+    } catch (err) {
+      console.warn("Failed to load transcript messages", err);
+      setTranscriptMessages(prev => ({ ...prev, [itemId]: [] }));
+    } finally {
+      setLoadingTranscriptId(null);
     }
   };
 
@@ -1376,6 +1412,8 @@ export default function LiveCallsPage() {
         onClose={() => {
           setProfileDrawerOpen(false);
           setActiveRecordingUrl(null);
+          setActiveTimelineId(null);
+          setOpenTranscriptId(null);
         }}
         title={`Caller Profile · ${callerProfile?.contact_name || formatPhone(selectedCall?.caller_phone || selectedRecentCall?.caller_phone || "")}`}
         description="Complete customer call history, aggregated telephony analytics, and AI memory."
@@ -1442,68 +1480,221 @@ export default function LiveCallsPage() {
                 </div>
               </div>
 
-              {/* Audio player embed if recording selected */}
-              {activeRecordingUrl && (
-                <div className="p-4 rounded-2xl bg-slate-900 text-white shadow-lg space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold flex items-center gap-1.5"><Volume2 className="h-4 w-4" /> Call Recording</span>
-                    <button onClick={() => setActiveRecordingUrl(null)} className="text-slate-400 hover:text-white">Close</button>
-                  </div>
-                  <CustomAudioPlayer src={activeRecordingUrl} />
-                </div>
-              )}
-
               {/* Call Timeline */}
               <div className="space-y-3">
-                <h4 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
-                  <History className="h-3.5 w-3.5 text-slate-500" />
-                  Complete Call Timeline ({callerProfile.timeline.length})
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="font-extrabold text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
+                    <History className="h-3.5 w-3.5 text-slate-500" />
+                    Complete Call Timeline ({callerProfile.timeline.length})
+                  </h4>
+                  {activeRecordingUrl && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 animate-pulse">
+                      <Volume2 className="h-3 w-3" /> Audio Playing
+                    </span>
+                  )}
+                </div>
 
                 {callerProfile.timeline.length === 0 ? (
                   <p className="text-xs text-slate-400 py-4">No previous calls recorded for this caller.</p>
                 ) : (
-                  <div className="space-y-2.5">
-                    {callerProfile.timeline.map((item) => (
-                      <div key={item.id} className="p-3.5 rounded-xl border border-slate-200 bg-white hover:border-slate-300 transition-colors shadow-xs">
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="font-bold text-slate-800">
-                            {item.date ? new Date(item.date).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Recent"}
-                          </span>
-                          <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${item.direction === "inbound" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-blue-50 text-blue-700 border border-blue-200"
-                            }`}>
-                            {item.direction} • {item.duration_seconds}s
-                          </span>
-                        </div>
-                        <p className="text-xs font-semibold text-slate-700 mt-1">Topic: <span className="font-normal">{item.topic}</span></p>
-                        <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.summary}</p>
+                  <div className="space-y-3">
+                    {callerProfile.timeline.map((item) => {
+                      const isPlayingThis = activeTimelineId === item.id && Boolean(activeRecordingUrl);
+                      const isTranscriptOpen = openTranscriptId === item.id;
+                      const messages = transcriptMessages[item.id] || [];
+                      const isLoadingThisTranscript = loadingTranscriptId === item.id;
 
-                        <div className="flex items-center gap-3 mt-2.5 pt-2 border-t border-slate-100 text-[11px]">
-                          {item.recording_url ? (
-                            <button
-                              type="button"
-                              onClick={() => handlePlayTimelineRecording(item.id, selectedCall?.company_id || selectedRecentCall?.company_id)}
-                              className="inline-flex items-center gap-1 font-bold text-emerald-700 hover:underline"
+                      return (
+                        <div
+                          key={item.id}
+                          className={`p-3.5 rounded-xl border transition-all duration-200 shadow-xs ${
+                            isPlayingThis
+                              ? "border-emerald-400 bg-emerald-50/25 ring-1 ring-emerald-300 shadow-sm"
+                              : isTranscriptOpen
+                              ? "border-slate-300 bg-slate-50/40"
+                              : "border-slate-200 bg-white hover:border-slate-300"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-xs mb-1">
+                            <span className="font-bold text-slate-800">
+                              {item.date ? new Date(item.date).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Recent"}
+                            </span>
+                            <span className={`text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded ${
+                              item.direction === "inbound" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-blue-50 text-blue-700 border border-blue-200"
+                            }`}>
+                              {item.direction} • {item.duration_seconds}s
+                            </span>
+                          </div>
+                          <p className="text-xs font-semibold text-slate-700 mt-1">Topic: <span className="font-normal">{item.topic}</span></p>
+                          <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{item.summary}</p>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-3 mt-2.5 pt-2 border-t border-slate-100 text-[11px] flex-wrap">
+                            {item.recording_url ? (
+                              <button
+                                type="button"
+                                onClick={() => handlePlayTimelineRecording(item.id, selectedCall?.company_id || selectedRecentCall?.company_id)}
+                                className={`inline-flex items-center gap-1 font-bold transition-colors ${
+                                  isPlayingThis
+                                    ? "text-red-600 hover:text-red-700 bg-red-50 px-2 py-0.5 rounded-md"
+                                    : "text-emerald-700 hover:text-emerald-800 hover:underline"
+                                }`}
+                              >
+                                {isPlayingThis ? (
+                                  <>
+                                    <Pause className="h-3 w-3" />
+                                    <span>Stop recording</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Play className="h-3 w-3" />
+                                    <span>Play recording</span>
+                                  </>
+                                )}
+                              </button>
+                            ) : (
+                              <span className="text-slate-400">Recording unavailable</span>
+                            )}
+
+                            <span className="text-slate-300">•</span>
+
+                            {item.has_transcript ? (
+                              <button
+                                type="button"
+                                onClick={() => handleToggleTranscript(item.id, selectedCall?.company_id || selectedRecentCall?.company_id)}
+                                className={`inline-flex items-center gap-1 font-bold transition-colors ${
+                                  isTranscriptOpen
+                                    ? "text-slate-900 bg-slate-200/80 px-2 py-0.5 rounded-md"
+                                    : "text-slate-700 hover:text-emerald-700 hover:underline"
+                                }`}
+                              >
+                                <FileText className="h-3 w-3" />
+                                <span>{isTranscriptOpen ? "Hide transcript" : "View transcript"}</span>
+                                {isLoadingThisTranscript && <RefreshCw className="h-2.5 w-2.5 animate-spin ml-1 text-slate-500" />}
+                              </button>
+                            ) : (
+                              <span className="text-slate-400">No transcript</span>
+                            )}
+
+                            <span className="text-slate-300">•</span>
+
+                            <Link
+                              href={`/admin/conversations/${item.id}`}
+                              className="text-slate-400 hover:text-slate-700 hover:underline inline-flex items-center gap-0.5 text-[10px]"
+                              title="Open complete detail page"
                             >
-                              <Play className="h-3 w-3" /> Play recording
-                            </button>
-                          ) : (
-                            <span className="text-slate-400">Recording unavailable</span>
-                          )}
-                          <span className="text-slate-300">•</span>
-                          {item.has_transcript ? (
-                            <Link href={`/admin/conversations/${item.id}`} target="_blank" className="font-bold text-slate-700 hover:underline flex items-center gap-1">
-                              <FileText className="h-3 w-3" /> View transcript
+                              <span>Full Page</span>
+                              <ExternalLink className="h-2.5 w-2.5" />
                             </Link>
-                          ) : (
-                            <span className="text-slate-400">No transcript</span>
+                          </div>
+
+                          {/* Inline Audio Player directly inside this card */}
+                          {isPlayingThis && activeRecordingUrl && (
+                            <div className="mt-3 pt-3 border-t border-emerald-100 bg-white p-3 rounded-xl border border-emerald-200/70 shadow-xs">
+                              <div className="flex items-center justify-between text-xs text-slate-600 mb-2">
+                                <span className="font-bold flex items-center gap-1.5 text-emerald-700">
+                                  <Volume2 className="h-3.5 w-3.5 animate-pulse" /> Inline Audio Player
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => { setActiveRecordingUrl(null); setActiveTimelineId(null); }}
+                                  className="text-slate-400 hover:text-slate-700 text-[11px] font-semibold"
+                                >
+                                  Close
+                                </button>
+                              </div>
+                              <CustomAudioPlayer src={activeRecordingUrl} durationSeconds={item.duration_seconds} />
+                            </div>
+                          )}
+
+                          {/* Inline Transcript View directly inside this card */}
+                          {isTranscriptOpen && (
+                            <div className="mt-3 pt-3 border-t border-slate-100">
+                              <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 max-h-[340px] overflow-y-auto space-y-2">
+                                <div className="flex items-center justify-between border-b border-slate-200/70 pb-1.5 mb-2">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
+                                    <FileText className="h-3 w-3 text-emerald-600" /> Transcript ({messages.length} messages)
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setOpenTranscriptId(null)}
+                                    className="text-[10px] font-bold text-slate-400 hover:text-slate-600"
+                                  >
+                                    Close
+                                  </button>
+                                </div>
+
+                                {isLoadingThisTranscript ? (
+                                  <div className="flex items-center justify-center py-6 text-slate-400 text-xs">
+                                    <RefreshCw className="h-4 w-4 animate-spin mr-1.5 text-emerald-600" />
+                                    Loading transcript messages...
+                                  </div>
+                                ) : messages.length === 0 ? (
+                                  <p className="text-xs text-slate-400 py-3 text-center">No messages recorded for this session.</p>
+                                ) : (
+                                  <div className="space-y-2.5">
+                                    {messages.map((m, mIdx) => {
+                                      const isUser = m.role === "user";
+                                      const text = typeof m.content === "string" ? m.content : m.text || "";
+                                      const time = m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null;
+                                      return (
+                                        <div key={mIdx} className={`flex flex-col ${isUser ? "items-end" : "items-start"}`}>
+                                          <div className="flex items-center gap-1.5 text-[9px] font-semibold text-slate-400 mb-0.5">
+                                            <span>{isUser ? "Customer" : "AI Agent"}</span>
+                                            {time && <span>· {time}</span>}
+                                          </div>
+                                          <div
+                                            className={`text-xs px-3.5 py-2 rounded-2xl leading-relaxed max-w-[88%] shadow-2xs ${
+                                              isUser
+                                                ? "bg-slate-800 text-white rounded-tr-xs"
+                                                : "bg-white border border-slate-200 text-slate-800 rounded-tl-xs"
+                                            }`}
+                                          >
+                                            {text}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
+
+              {/* Floating Sticky Audio Controller at bottom of drawer so user never has to scroll up to pause */}
+              {activeRecordingUrl && (
+                <div className="sticky bottom-0 left-0 right-0 z-30 -mx-6 -mb-6 px-5 py-3 bg-slate-900/95 backdrop-blur-md text-white border-t border-slate-700 shadow-2xl flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="h-8 w-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                      <Volume2 className="h-4 w-4 animate-pulse" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-white truncate">Playing Call Audio</p>
+                      <p className="text-[10px] text-slate-400 truncate">
+                        {callerProfile?.timeline.find(t => t.id === activeTimelineId)?.date
+                          ? new Date(callerProfile.timeline.find(t => t.id === activeTimelineId)!.date!).toLocaleString([], { dateStyle: "short", timeStyle: "short" })
+                          : "Call audio active"}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveRecordingUrl(null);
+                      setActiveTimelineId(null);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition shadow-xs flex items-center gap-1 shrink-0"
+                  >
+                    <Pause className="h-3 w-3" /> Stop & Close
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <p className="text-xs text-slate-400 py-6">Caller profile data unavailable.</p>
