@@ -113,6 +113,10 @@ export default function AdminChannelsPage() {
     try {
       setIsLoading(true);
       setError(null);
+      if (typeof window !== "undefined" && !localStorage.getItem("zenaipex_token")) {
+        window.location.href = "/login";
+        return;
+      }
       const [chanRes, compRes, agentRes] = await Promise.all([
         fetchApi<any>(`/admin/channels`),
         fetchApi<any>(`/admin/companies`),
@@ -135,6 +139,13 @@ export default function AdminChannelsPage() {
       setAgentsMap(aMap);
     } catch (err: any) {
       console.error("Failed to load channels", err);
+      if (err?.status === 401 || err?.status === 403) {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("zenaipex_token");
+          window.location.href = "/login";
+          return;
+        }
+      }
       setError("We couldn't retrieve your communication channels right now.");
     } finally {
       setIsLoading(false);
