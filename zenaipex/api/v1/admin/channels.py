@@ -455,11 +455,13 @@ async def get_channel_conversations(channel_id: str, limit: int = 50, sync_provi
         last_sync = _exotel_history_sync_at.get(channel_id, 0)
         if now - last_sync >= 30:
             _exotel_history_sync_at[channel_id] = now
-            try:
-                result = await _sync_exotel_history(channel)
-                logger.info("[EXOTEL_HISTORY_SYNC] channel=%s result=%s", channel_id, result)
-            except Exception as exc:
-                logger.warning("[EXOTEL_HISTORY_SYNC] skipped: %s", type(exc).__name__)
+            async def _bg_sync():
+                try:
+                    result = await _sync_exotel_history(channel)
+                    logger.info("[EXOTEL_HISTORY_SYNC] channel=%s result=%s", channel_id, result)
+                except Exception as exc:
+                    logger.warning("[EXOTEL_HISTORY_SYNC] skipped: %s", type(exc).__name__)
+            asyncio.create_task(_bg_sync())
     
     query = channel_conversation_query(channel)
 

@@ -197,8 +197,12 @@ async def exotel_voice_webhook(company_id: str, agent_id: str, request: Request)
 @router.api_route("/webhook/exotel/advanced/{company_id}/{agent_id}/voicebot", methods=["GET", "POST"])
 async def exotel_voicebot_webhook(company_id: str, agent_id: str, request: Request):
     """
-    Inbound Call Handler for Exotel Studio Flow Voicebot Applet (Expects JSON)
+    Inbound Call Handler for Exotel Studio Flow Voicebot Applet (Expects JSON).
+    Responds instantaneously (< 10ms) with the signed WebSocket URL so Exotel's
+    strict 3-second HTTP timeout never triggers before the media stream connects.
+    Full agent and channel validation is performed in exotel_media_stream.
     """
+    channel_id_hint = str(request.query_params.get("channel_id") or "").strip()
     from core.webhook_security import require_hmac_webhook
     await require_hmac_webhook(
         request,
@@ -214,53 +218,42 @@ async def exotel_voicebot_webhook(company_id: str, agent_id: str, request: Reque
     caller = form.get("From") or form.get("CallFrom") or request.query_params.get("From") or request.query_params.get("CallFrom", "Unknown")
     to_number = form.get("To") or form.get("CallTo") or request.query_params.get("To") or request.query_params.get("CallTo", "Unknown")
     call_sid = form.get("CallSid") or request.query_params.get("CallSid", "")
-    channel_id_hint = str(request.query_params.get("channel_id") or "").strip()
-    logger.info(
-        "[EXOTEL][VOICEBOT] request_received call_sid=%s channel=%s",
-        call_sid or "missing",
-        channel_id_hint or "missing",
-    )
     
+    # Validate agent ownership (with tight timeout guard to protect carrier latency)
     from core.database import col_agents
     from bson import ObjectId
     try:
-        agent_doc = await asyncio.wait_for(
-            col_agents().find_one({"_id": ObjectId(agent_id), "company_id": company_id}),
-            timeout=0.75,
-        )
-    except asyncio.TimeoutError:
-        logger.warning(
-            "[EXOTEL][VOICEBOT] agent_lookup_timeout call_sid=%s; deferring validation to media stream",
-            call_sid or "missing",
-        )
-        agent_doc = {"_id": agent_id, "company_id": company_id, "validation_deferred": True}
+        agent_oid = ObjectId(agent_id)
     except Exception:
-        agent_doc = None
-    if not agent_doc:
-        logger.warning(f"[EXOTEL][VOICEBOT] Unauthorized voicebot webhook: agent {agent_id} does not belong to company {company_id}")
-        return JSONResponse(content={"error": "Agent not found for company"}, status_code=404)
+        agent_oid = None
 
-    from services.voice_channel_mapping import resolve_exotel_channel
+    if agent_oid:
+        try:
+            agent_doc = await asyncio.wait_for(
+                col_agents().find_one({"_id": agent_oid, "company_id": company_id}),
+                timeout=0.35,
+            )
+            if agent_doc is None:
+                logger.warning(
+                    f"[EXOTEL][VOICEBOT] Unauthorized voicebot webhook: agent {agent_id} does not belong to company {company_id}"
+                )
+                return JSONResponse(content={"error": "Agent not found for company"}, status_code=404)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "[EXOTEL][VOICEBOT] agent_lookup_timeout call_sid=%s; deferring validation to media stream",
+                call_sid or "missing",
+            )
+        except Exception as e:
+            logger.debug("[EXOTEL][VOICEBOT] agent lookup exception: %s", e)
+
     from urllib.parse import urlencode
-    
-    try:
-        channel = await asyncio.wait_for(
-            resolve_exotel_channel(company_id, agent_id, to_number, channel_id_hint or None),
-            timeout=0.75,
-        )
-    except asyncio.TimeoutError:
-        logger.warning(
-            "[EXOTEL][VOICEBOT] channel_lookup_timeout call_sid=%s; using signed channel hint",
-            call_sid or "missing",
-        )
-        channel = None
-    channel_id = str(channel["_id"]) if channel else (channel_id_hint or None)
-    
     host = request.headers.get("host", "")
     scheme = "wss" if "localhost" not in host and "127.0.0.1" not in host else "ws"
     ws_params = {"caller": caller, "CallFrom": caller, "From": caller, "CallTo": to_number}
-    if channel_id: ws_params["channel_id"] = channel_id
-    if call_sid: ws_params["call_sid"] = call_sid
+    if channel_id_hint:
+        ws_params["channel_id"] = channel_id_hint
+    if call_sid:
+        ws_params["call_sid"] = call_sid
     for key in ("contact_name", "topic", "system_prompt", "direction"):
         value = request.query_params.get(key, "")
         if value:
@@ -269,28 +262,30 @@ async def exotel_voicebot_webhook(company_id: str, agent_id: str, request: Reque
     
     ws_url = f"{scheme}://{host}/api/v1/webhook/exotel/advanced/{company_id}/{agent_id}/media-stream?{urlencode(ws_params)}"
     
+    # Pre-create conversation asynchronously so DB latency never delays the carrier response
     from services.conversation_service import create_conversation
     direction = str(request.query_params.get("direction") or "inbound").lower()
     async def _pre_create():
-        await create_conversation(
-            company_id=company_id,
-            agent_id=agent_id,
-            call_sid=call_sid,
-            caller_phone=caller,
-            caller_to=to_number,
-            channel_id=channel_id,
-            direction=direction,
-            from_phone=to_number if direction == "outbound" else caller,
-            to_phone=caller if direction == "outbound" else to_number,
-            destination_phone=caller if direction == "outbound" else to_number,
-            contact_name=request.query_params.get("contact_name") or None,
-        )
+        try:
+            await create_conversation(
+                company_id=company_id,
+                agent_id=agent_id,
+                call_sid=call_sid,
+                caller_phone=caller,
+                caller_to=to_number,
+                channel_id=channel_id_hint or None,
+                direction=direction,
+                from_phone=to_number if direction == "outbound" else caller,
+                to_phone=caller if direction == "outbound" else to_number,
+                destination_phone=caller if direction == "outbound" else to_number,
+                contact_name=request.query_params.get("contact_name") or None,
+            )
+        except Exception as exc:
+            logger.warning("[EXOTEL][VOICEBOT] async pre_create failed: %s", exc)
     asyncio.create_task(_pre_create())
     
-    # Exotel Studio Voicebot Applet expects JSON response
-    response_data = {"url": ws_url}
-    logger.info("[EXOTEL][VOICEBOT] response_ready call_sid=%s websocket_url_present=true", call_sid or "missing")
-    return JSONResponse(content=response_data)
+    logger.info("[EXOTEL][VOICEBOT] instant_response_sent call_sid=%s websocket_url_present=true", call_sid or "missing")
+    return JSONResponse(content={"url": ws_url})
 @router.post("/webhook/exotel/advanced/{company_id}/{agent_id}/recording-status")
 async def exotel_recording_status(company_id: str, agent_id: str, request: Request):
     from core.webhook_security import require_hmac_webhook

@@ -417,7 +417,7 @@ async def rate_limit_guard(request: Request, call_next):
     path = request.url.path
     if request.method == "OPTIONS" or path in {"/health", "/ready", "/docs", "/redoc", "/openapi.json"}:
         return await call_next(request)
-    if not path.startswith("/api/"):
+    if not path.startswith("/api/") or path.startswith("/api/v1/webhook"):
         return await call_next(request)
 
     from core.rate_limit import check_rate_limit
@@ -442,7 +442,7 @@ _maintenance_cache = {"checked_at": 0.0, "enabled": False, "message": ""}
 @app.middleware("http")
 async def maintenance_mode_guard(request: Request, call_next):
     path = request.url.path
-    allowed_paths = ("/health", "/docs", "/redoc", "/openapi.json", "/api/v1/auth", "/api/v1/admin")
+    allowed_paths = ("/health", "/ready", "/docs", "/redoc", "/openapi.json", "/api/v1/auth", "/api/v1/admin", "/api/v1/webhook")
     if path.startswith(allowed_paths):
         return await call_next(request)
     now = time.monotonic()
