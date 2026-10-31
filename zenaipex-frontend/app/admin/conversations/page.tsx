@@ -41,6 +41,7 @@ import {
   CheckCircle2,
   Ban,
   PhoneMissed,
+  AlertTriangle,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -695,25 +696,33 @@ export default function AdminConversationsPage() {
       icon: <Mic size={17} />,
       tab: "voice" as const,
     },
+    {
+      label: "Needs Review",
+      val: totalUnverified,
+      sub: totalUnverified > 0 ? "Pending source check" : "100% verified",
+      icon: <AlertTriangle size={17} />,
+      tab: "unverified" as const,
+    },
   ];
 
   return (
     <>
       <div className={org.page}>
-        {/* Header */}
+        {/* ── Executive Header ───────────────────────────────────────────── */}
         <div className={org.pageHeader}>
           <div>
-            <span className={org.eyebrow}>
-              <MessageSquare size={14} /> CUSTOMER INTERACTIONS
-            </span>
-            <div className="flex items-center gap-3 mb-1">
-              <h1 className={org.title}>Customer calls & chats</h1>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-                Cross-tenant · {conversations.length} total
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+              <MessageSquare className="h-6 w-6 text-emerald-600" />
+              Customer Conversations
+              <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                {conversations.length} total
               </span>
-            </div>
-            <p className={org.subtitle}>
-              Explore calls, web chats and voice sessions across all companies.
+              {isLoading && (
+                <RefreshCw className="h-4 w-4 animate-spin text-emerald-600" />
+              )}
+            </h1>
+            <p className="text-xs text-slate-500 font-medium mt-1">
+              Cross-tenant communication logs: telephony voicebots, webchats & audio sessions
             </p>
           </div>
           <div className={org.toolbar}>
@@ -722,9 +731,10 @@ export default function AdminConversationsPage() {
                 setIsSelecting(false);
                 loadConvs();
               }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors"
+              disabled={isLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 text-xs font-semibold transition-colors shadow-xs"
             >
-              <RefreshCw className="h-3.5 w-3.5" /> Refresh
+              <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} /> Refresh
             </button>
             <div className="inline-flex items-center gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-0.5">
               {(["all", "active", "archived"] as const).map((mode) => (
@@ -793,8 +803,8 @@ export default function AdminConversationsPage() {
           </div>
         )}
 
-        {/* ── Clickable Premium Stats Cards ── */}
-        <div className={org.metrics}>
+        {/* ── Standard Clickable 5-Card KPI Grid ────────────────────────── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
           {statCards.map((s) => (
             <button
               key={s.label}
@@ -805,37 +815,17 @@ export default function AdminConversationsPage() {
                   ?.scrollIntoView({ behavior: "smooth" });
               }}
               aria-pressed={activeTab === s.tab}
-              className={org.metricButton}
+              className={`${org.metricButton} ${s.tab === "unverified" && totalUnverified > 0 ? "!border-amber-300 !bg-amber-50/20" : ""}`}
             >
-              <span className={org.metricIcon}>{s.icon}</span>
+              <span className={`${org.metricIcon} ${s.tab === "unverified" && totalUnverified > 0 ? "!bg-amber-100 !text-amber-700" : ""}`}>
+                {s.icon}
+              </span>
               <span className={org.metricLabel}>{s.label}</span>
               <strong className={org.metricValue}>{s.val}</strong>
               <span className={org.metricSub}>{s.sub}</span>
             </button>
           ))}
         </div>
-
-        {totalUnverified > 0 && !viewArchived && (
-          <div className={org.reviewNote} role="note">
-            <Info size={16} className="shrink-0" />
-            <span>
-              <strong>{totalUnverified} records need source review.</strong>{" "}
-              These records are visible, but their original call or chat channel
-              has not been confirmed.
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("unverified");
-                document
-                  .getElementById("conv-table")
-                  ?.scrollIntoView({ behavior: "smooth" });
-              }}
-            >
-              Review records
-            </button>
-          </div>
-        )}
 
         {/* ── Table ── */}
         <div id="conv-table" className={org.tableSurface}>
@@ -1064,11 +1054,18 @@ export default function AdminConversationsPage() {
                           </span>
                         </td>
                         <td className="px-5 py-3.5">
-                          <span className="font-mono text-xs font-semibold text-slate-700">
-                            {conv.source_type === "unverified"
-                              ? "—"
-                              : formatDur(dur)}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono text-xs font-semibold text-slate-700">
+                              {conv.source_type === "unverified"
+                                ? "—"
+                                : formatDur(dur)}
+                            </span>
+                            {conv.recording_url && (
+                              <span title="Audio recording available" className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                🎙️
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-5 py-3.5">
                           <span className="text-[11px] font-mono font-semibold text-slate-600">
