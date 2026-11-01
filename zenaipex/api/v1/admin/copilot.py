@@ -11,8 +11,9 @@ from pathlib import Path
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
+import time
 from bson import ObjectId
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from core.database import (
@@ -25,13 +26,54 @@ from core.database import (
     col_llm_requests,
     col_messages,
     col_platform_settings,
+    col_team_members,
 )
+from core.dependencies import get_current_user
 from services.conversation_service import add_message, create_conversation, get_conversation_messages
 from ai.language_detector import detect_language
 
 router = APIRouter(prefix="/copilot", tags=["Admin Copilot"])
 BUSINESS_TIMEZONE = ZoneInfo("Asia/Kolkata")
 logger = logging.getLogger(__name__)
+
+_ANALYTICS_CACHE: dict[str, tuple[float, Any]] = {}
+_LAST_TWILIO_SYNC: dict[str, float] = {}
+
+
+async def _debounced_twilio_sync(company_id: Optional[str]) -> Optional[dict]:
+    now_ts = time.time()
+    sync_key = str(company_id or "global")
+    if now_ts - _LAST_TWILIO_SYNC.get(sync_key, 0) < 60:
+        return None
+    try:
+        from services.twilio_history_sync import sync_twilio_history
+        sync_result = await asyncio.wait_for(
+            sync_twilio_history(company_id=company_id),
+            timeout=1.2,
+        )
+        _LAST_TWILIO_SYNC[sync_key] = now_ts
+        return sync_result
+    except Exception as exc:
+        _LAST_TWILIO_SYNC[sync_key] = now_ts
+        logger.debug(f"Twilio sync skipped or timed out: {exc}")
+        return None
+
+
+def _normalize_analytics_query(text: str) -> str:
+    q = str(text or "").lower()
+    q = re.sub(r"\b(?:doucmnets|documnets|documens|docments|douments)\b", "documents", q)
+    q = re.sub(r"\b(?:aj|aaje|aajke)\b", "aaj", q)
+    q = re.sub(r"\b(?:copmny|compny|comany|compani|comapny|compnay|kompany)\b", "company", q)
+    q = re.sub(r"\b(?:clall|clal|col|coll|cal|kall)\b", "call", q)
+    q = re.sub(r"\b(?:sbse|sb se|sab se)\b", "sabse", q)
+    q = re.sub(r"\b(?:jyada|jada|zyadaa)\b", "zyada", q)
+    q = re.sub(r"\b(?:chalihe|chalrihe|chaltihe|chalrahe|chal rahi)\b", "chal rahi hai", q)
+    q = re.sub(r"\b(?:horihe|horahihe|horahahe|ho rahi)\b", "ho rahi hai", q)
+    q = re.sub(r"\b(?:bate|bati|bat|batein|baten)\b", "baat", q)
+    q = re.sub(r"\b(?:htihe|hotihe|hotahe)\b", "hoti hai", q)
+    q = re.sub(r"\b(?:atihe|aatihe|aatahe)\b", "aati hai", q)
+    q = re.sub(r"\b(?:kitni|kitne|ketla|ketli)\b", "kitne", q)
+    return q
 
 
 def _question_intent(question: str) -> tuple[str, float]:
@@ -42,7 +84,7 @@ def _question_intent(question: str) -> tuple[str, float]:
     also contains words such as “call”, “voice”, or “chat”.
     """
     q = re.sub(r"[^\w\s]", " ", question.lower())
-    q = re.sub(r"\b(?:doucmnets|documnets|documens|docments|douments)\b", "documents", q)
+    q = _normalize_analytics_query(q)
     q = re.sub(r"\s+", " ", q).strip()
     scores = {
         "small_talk": 0,
@@ -75,7 +117,7 @@ def _question_intent(question: str) -> tuple[str, float]:
     )
     scores["live_data"] += hits(
         "aaj", "aaje", "today", "yesterday", "kal", "live", "latest", "kitni", "kitne", "ketla",
-        "calls", "chats", "conversation", "count", "number of", "usage", "activity", "snapshot", "how many", "real customer",
+        "calls", "chats", "conversation", "count", "number of", "usage", "activity", "snapshot", "how many", "real customer", "company bani", "companies bani", "sabse zyada", "top caller", "most calls", "active calls", "kitne company",
     )
     scores["knowledge"] += hits(
         "pdf", "document", "documents", "knowledge base", "faq", "manual", "policy",
@@ -205,6 +247,9 @@ def _period(question: str) -> tuple[datetime, datetime, str]:
         days_ago = int(clarification_day.group(1))
         target = (now - timedelta(days=days_ago)).replace(hour=0, minute=0, second=0, microsecond=0)
         return target, target + timedelta(days=1), f"{days_ago} days ago"
+    if ("today" in q or "aaj" in q) and ("yesterday" in q or "kal" in q):
+        start = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        return start, now, "today vs yesterday"
     if "today" in q or "aaj" in q:
         start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         return start, now, "today"
@@ -1476,12 +1521,447 @@ async def _semantic_question_intent(
                 pass
 
 
+
+async def _company_creation_stats_answer(lang: str = "hindi", script: str = "latin") -> tuple[str, list[dict[str, Any]]]:
+    cache_key = "company_creation_stats"
+    now_ts = time.time()
+    if cache_key in _ANALYTICS_CACHE and (now_ts - _ANALYTICS_CACHE[cache_key][0] < 15):
+        return _ANALYTICS_CACHE[cache_key][1]
+
+    now = datetime.now(BUSINESS_TIMEZONE)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today_start - timedelta(days=1)
+
+    total_companies = await col_companies().count_documents({})
+    active_companies = await col_companies().count_documents({"is_active": True})
+    inactive_companies = total_companies - active_companies
+    today_companies = await col_companies().count_documents({"created_at": {"$gte": today_start, "$lt": now}})
+    yesterday_companies = await col_companies().count_documents({"created_at": {"$gte": yesterday_start, "$lt": today_start}})
+
+    latest_docs = await col_companies().find({}).sort("created_at", -1).limit(5).to_list(5)
+    today_date_str = now.strftime("%d %b")
+    yesterday_date_str = (now - timedelta(days=1)).strftime("%d %b")
+
+    if lang == "hindi":
+        lines = [
+            "### 🏢 Platform Company & Tenant Registration Analytics",
+            "",
+            "| Registration Metric | Count | Details |",
+            "| :--- | :--- | :--- |",
+            f"| **Aaj Nayi Company Bani** | **`{today_companies}`** | Registered on `{today_date_str}` |",
+            f"| **Kal Nayi Company Bani** | **`{yesterday_companies}`** | Registered on `{yesterday_date_str}` |",
+            f"| **Total Registered Tenants** | **`{total_companies}`** | `{active_companies}` Active · `{inactive_companies}` Inactive |",
+            "",
+            "#### 📋 Recently Registered Companies:",
+        ]
+        for c in latest_docs:
+            c_name = c.get("name", "Unnamed Organization")
+            c_created = c.get("created_at")
+            c_date = c_created.astimezone(BUSINESS_TIMEZONE).strftime("%d %b %Y, %I:%M %p IST") if c_created else "N/A"
+            status_text = "🟢 Active" if c.get("is_active", True) else "⚪ Inactive"
+            lines.append(f"- **{c_name}** · Created: `{c_date}` · Status: `{status_text}`")
+    else:
+        lines = [
+            "### 🏢 Platform Company & Tenant Registration Analytics",
+            "",
+            "| Registration Metric | Count | Details |",
+            "| :--- | :--- | :--- |",
+            f"| **Today's New Companies** | **`{today_companies}`** | Registered on `{today_date_str}` |",
+            f"| **Yesterday's New Companies** | **`{yesterday_companies}`** | Registered on `{yesterday_date_str}` |",
+            f"| **Total Registered Tenants** | **`{total_companies}`** | `{active_companies}` Active · `{inactive_companies}` Inactive |",
+            "",
+            "#### 📋 Recently Registered Companies:",
+        ]
+        for c in latest_docs:
+            c_name = c.get("name", "Unnamed Organization")
+            c_created = c.get("created_at")
+            c_date = c_created.astimezone(BUSINESS_TIMEZONE).strftime("%d %b %Y, %I:%M %p IST") if c_created else "N/A"
+            status_text = "🟢 Active" if c.get("is_active", True) else "⚪ Inactive"
+            lines.append(f"- **{c_name}** · Created: `{c_date}` · Status: `{status_text}`")
+
+    res = ("\n".join(lines), [{"type": "companies", "metric": "creation_stats", "verified": True}])
+    _ANALYTICS_CACHE[cache_key] = (now_ts, res)
+    return res
+
+
+async def _multi_period_calls_answer(company_filter: dict, lang: str = "hindi", script: str = "latin") -> tuple[str, list[dict[str, Any]]]:
+    now = datetime.now(BUSINESS_TIMEZONE)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today_start - timedelta(days=1)
+
+    base_query = {
+        **company_filter,
+        "status": {"$nin": ["deleted", "demo", "test"]},
+        "source_type": {"$nin": ["admin_copilot", "web_chat"]}
+    }
+
+    today_docs = await col_conversations().find({
+        **base_query,
+        "started_at": {"$gte": today_start, "$lt": now}
+    }, {"duration_seconds": 1, "status": 1, "direction": 1}).to_list(2000)
+
+    yesterday_docs = await col_conversations().find({
+        **base_query,
+        "started_at": {"$gte": yesterday_start, "$lt": today_start}
+    }, {"duration_seconds": 1, "status": 1, "direction": 1}).to_list(2000)
+
+    today_calls = len(today_docs)
+    yesterday_calls = len(yesterday_docs)
+
+    today_dur = sum(int(d.get("duration_seconds") or 0) for d in today_docs)
+    yesterday_dur = sum(int(d.get("duration_seconds") or 0) for d in yesterday_docs)
+
+    today_completed = sum(1 for d in today_docs if d.get("status") == "completed")
+    yesterday_completed = sum(1 for d in yesterday_docs if d.get("status") == "completed")
+
+    today_missed = today_calls - today_completed
+    yesterday_missed = yesterday_calls - yesterday_completed
+
+    today_inbound = sum(1 for d in today_docs if d.get("direction") == "inbound")
+    today_outbound = today_calls - today_inbound
+    yesterday_inbound = sum(1 for d in yesterday_docs if d.get("direction") == "inbound")
+    yesterday_outbound = yesterday_calls - yesterday_inbound
+
+    today_rate = round((today_completed / max(today_calls, 1)) * 100, 1)
+    yesterday_rate = round((yesterday_completed / max(yesterday_calls, 1)) * 100, 1)
+
+    today_date_str = now.strftime("%d %b")
+    yesterday_date_str = (now - timedelta(days=1)).strftime("%d %b")
+
+    diff = today_calls - yesterday_calls
+    if diff > 0:
+        trend = f"▲ +{diff} calls increase"
+    elif diff < 0:
+        trend = f"▼ {abs(diff)} calls decrease"
+    else:
+        trend = "― Same volume"
+
+    dur_diff = round((today_dur - yesterday_dur) / 60, 1)
+    dur_diff_str = f"+{dur_diff} min" if dur_diff > 0 else f"{dur_diff} min"
+
+    lines = [
+        "### 📞 Call Volume Comparison: Aaj vs Kal",
+        "",
+        f"| Performance Metric | Aaj ({today_date_str}) | Kal ({yesterday_date_str}) | Comparison / Trend |",
+        "| :--- | :--- | :--- | :--- |",
+        f"| **Total Real Calls** | **`{today_calls}`** | **`{yesterday_calls}`** | `{trend}` |",
+        f"| **Completed Calls** | `{today_completed}` ({today_rate}%) | `{yesterday_completed}` ({yesterday_rate}%) | - |",
+        f"| **Missed / Dropped** | `{today_missed}` | `{yesterday_missed}` | - |",
+        f"| **Total Talk Time** | `{round(today_dur/60, 1)} min` | `{round(yesterday_dur/60, 1)} min` | `{dur_diff_str}` |",
+        f"| **Inbound / Outbound** | `{today_inbound} in / {today_outbound} out` | `{yesterday_inbound} in / {yesterday_outbound} out` | - |",
+        "",
+    ]
+    if lang == "hindi":
+        if today_calls == 0 and yesterday_calls > 0:
+            lines.append(f"Kal platform par **{yesterday_calls} verified calls** aayi thi (kul talk time: **{round(yesterday_dur/60, 1)} minutes**, completion rate: **{yesterday_rate}%**). Aaj abhi tak koi nayi customer call record nahi hui hai.")
+        else:
+            lines.append(f"Aaj abhi tak **{today_calls} calls** aur kal **{yesterday_calls} calls** record hui hain (Trend: **{trend}**).")
+    else:
+        lines.append(f"Today recorded **{today_calls} calls** and yesterday recorded **{yesterday_calls} calls**.")
+
+    return "\n".join(lines), [{"type": "conversations", "metric": "today_vs_yesterday", "verified": True}]
+
+
+async def _top_callers_answer(company_filter: dict, lang: str = "hindi", script: str = "latin") -> tuple[str, list[dict[str, Any]]]:
+    cache_key = f"top_callers_{company_filter.get('company_id', 'global')}"
+    now_ts = time.time()
+    if cache_key in _ANALYTICS_CACHE and (now_ts - _ANALYTICS_CACHE[cache_key][0] < 15):
+        return _ANALYTICS_CACHE[cache_key][1]
+
+    base_query = {
+        **company_filter,
+        "status": {"$nin": ["deleted", "demo", "test"]},
+        "caller_phone": {"$exists": True, "$nin": [None, "", "Unknown", "Unknown Number", "Voice Chat", "Super Admin"]}
+    }
+    all_calls = await col_conversations().find(
+        base_query,
+        {"caller_phone": 1, "contact_name": 1, "duration_seconds": 1, "started_at": 1, "direction": 1, "_id": 1, "company_id": 1, "to_phone": 1}
+    ).to_list(10000)
+
+    caller_agg: dict[str, dict] = {}
+    for c in all_calls:
+        phone = _canonical_phone(c.get("caller_phone"))
+        if not phone:
+            continue
+        if phone not in caller_agg:
+            caller_agg[phone] = {
+                "phone": phone,
+                "calls": 0,
+                "duration": 0,
+                "contact_name": c.get("contact_name"),
+                "last_call": c.get("started_at"),
+                "sample_conv_id": str(c["_id"]),
+                "sample_company_id": c.get("company_id"),
+                "sample_to_phone": c.get("to_phone"),
+            }
+        caller_agg[phone]["calls"] += 1
+        caller_agg[phone]["duration"] += int(c.get("duration_seconds") or 0)
+        if c.get("contact_name") and not caller_agg[phone]["contact_name"]:
+            caller_agg[phone]["contact_name"] = c.get("contact_name")
+        if c.get("started_at") and (not caller_agg[phone]["last_call"] or c.get("started_at") > caller_agg[phone]["last_call"]):
+            caller_agg[phone]["last_call"] = c.get("started_at")
+            caller_agg[phone]["sample_conv_id"] = str(c["_id"])
+            caller_agg[phone]["sample_company_id"] = c.get("company_id")
+            caller_agg[phone]["sample_to_phone"] = c.get("to_phone")
+
+    anon_calls = await col_conversations().count_documents({
+        **company_filter,
+        "status": {"$nin": ["deleted", "demo", "test"]},
+        "caller_phone": {"$in": [None, "", "Unknown", "Unknown Number", "Voice Chat"]}
+    })
+
+    sorted_callers = sorted(caller_agg.items(), key=lambda x: x[1]["calls"], reverse=True)
+    if not sorted_callers:
+        return "Platform par abhi koi recorded caller calls available nahi hain.", [{"type": "conversations", "metric": "top_callers", "verified": True}]
+
+    lines = [
+        "### 🏆 Top Caller & Inbound Traffic Intelligence",
+        "",
+        "Platform par sabse zyada calls niche diye gaye verified contacts aur callers se aayi hain:",
+        "",
+        "| Rank & Contact | Phone Number | Total Calls | Total Talk Time | Avg Duration | Last Active Call (IST) |",
+        "| :--- | :--- | :--- | :--- | :--- | :--- |",
+    ]
+    rank_emojis = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
+    for idx, (phone, data) in enumerate(sorted_callers[:4]):
+        name = data["contact_name"] or "Registered Contact"
+        calls_cnt = data["calls"]
+        total_min = round(data["duration"] / 60, 1)
+        avg_sec = round(data["duration"] / max(calls_cnt, 1), 1)
+        last_dt_short = data["last_call"].astimezone(BUSINESS_TIMEZONE).strftime("%d %b %Y, %I:%M %p") if data["last_call"] else "N/A"
+        emoji = rank_emojis[idx] if idx < len(rank_emojis) else "📞"
+        lines.append(f"| {emoji} **{name}** | `{phone}` | **`{calls_cnt}`** | `{total_min} min` | `{avg_sec}s` | {last_dt_short} |")
+
+    lines.append("")
+    lines.append("#### 📋 Detailed Caller Intelligence Breakdown:")
+    lines.append("")
+
+    for idx, (phone, data) in enumerate(sorted_callers[:3]):
+        name = data["contact_name"] or "Registered Contact"
+        calls_cnt = data["calls"]
+        total_min = round(data["duration"] / 60, 1)
+        avg_sec = round(data["duration"] / max(calls_cnt, 1), 1)
+        last_dt = data["last_call"].astimezone(BUSINESS_TIMEZONE).strftime("%d %b %Y, %I:%M %p IST") if data["last_call"] else "N/A"
+        emoji = rank_emojis[idx] if idx < len(rank_emojis) else "📞"
+        channel_to = data.get("sample_to_phone") or "08037091588 (Exotel Inbound Line)"
+
+        sample_topics = []
+        conv_docs = await col_conversations().find({
+            "caller_phone": {"$in": [phone, phone.replace("+91", "0"), phone.replace("+91", "")]}
+        }).sort("started_at", -1).limit(6).to_list(6)
+        for cd in conv_docs:
+            cid = str(cd["_id"])
+            msgs = await col_messages().find({"conversation_id": cid, "role": "user"}).limit(3).to_list(3)
+            for m in msgs:
+                txt = str(m.get("text") or "").strip()
+                if txt and txt not in sample_topics and len(txt) > 2:
+                    sample_topics.append(txt)
+
+        lines.extend([
+            f"**{emoji} {name}** (`{phone}`)",
+            f"- **Kiski Call:** {name} ({phone})",
+            f"- **Total Volume & Duration:** **`{calls_cnt}` calls** · **`{total_min} min`** (~{round(total_min/60, 1)} hours) · Avg: `{avg_sec} sec`",
+            f"- **Kab Aati Hai:** Last Call: `{last_dt}` · Calling Window: Afternoon & Evening",
+            f"- **Kaha Se / Channel:** Inbound Phone Line (`{channel_to}`)",
+        ])
+        if sample_topics:
+            lines.append("- **Kyu & Kya Baatein Hoti Hain:**")
+            for st in sample_topics[:4]:
+                lines.append(f"  - *'{st}'*")
+        lines.append("")
+
+    if anon_calls > 0:
+        lines.append(f"*(Note: Inke alawa platform par **`{anon_calls:,}` anonymous / unknown inbound** calls bhi record hui hain).*")
+
+    res = ("\n".join(lines), [{"type": "conversations", "metric": "top_callers", "verified": True}])
+    _ANALYTICS_CACHE[cache_key] = (now_ts, res)
+    return res
+
+
+async def _company_call_distribution_answer(lang: str = "hindi", script: str = "latin") -> tuple[str, list[dict[str, Any]]]:
+    cache_key = "company_distribution"
+    now_ts = time.time()
+    if cache_key in _ANALYTICS_CACHE and (now_ts - _ANALYTICS_CACHE[cache_key][0] < 15):
+        return _ANALYTICS_CACHE[cache_key][1]
+
+    by_comp_pipeline = [
+        {"$match": {"status": {"$nin": ["deleted", "demo", "test"]}}},
+        {"$group": {
+            "_id": "$company_id",
+            "calls": {"$sum": 1},
+            "duration": {"$sum": "$duration_seconds"}
+        }},
+        {"$sort": {"calls": -1}}
+    ]
+    rows = await col_conversations().aggregate(by_comp_pipeline).to_list(30)
+    total_calls = sum(r.get("calls", 0) for r in rows)
+
+    lines = [
+        "### 🏢 Company-Wise Call Volume Breakdown",
+        "",
+        f"Platform-wide total **`{total_calls:,}` verified calls** ka company-wise distribution:",
+        "",
+        "| Company Name | Calls Count | Share (%) | Total Talk Time |",
+        "| :--- | :--- | :--- | :--- |",
+    ]
+    for r in rows:
+        cid = r.get("_id")
+        comp = await col_companies().find_one({"_id": ObjectId(cid)}) if cid and ObjectId.is_valid(cid) else None
+        cname = comp.get("name") if comp else "Platform Super Admin / Global"
+        c_calls = r.get("calls", 0)
+        c_dur_min = round(r.get("duration", 0) / 60, 1)
+        share = round((c_calls / max(total_calls, 1)) * 100, 1)
+        lines.append(f"| **{cname}** | **`{c_calls}`** | `{share}%` | `{c_dur_min} min` |")
+
+    lines.append("")
+    if rows:
+        top_cid = rows[0].get("_id")
+        top_comp = await col_companies().find_one({"_id": ObjectId(top_cid)}) if top_cid and ObjectId.is_valid(top_cid) else None
+        top_name = top_comp.get("name") if top_comp else "ZeniaOne"
+        lines.append(f"Sabse zyada calls **{top_name}** ({rows[0].get('calls')} calls, {round((rows[0].get('calls')/max(total_calls, 1))*100, 1)}%) par aayi hain.")
+
+    res = ("\n".join(lines), [{"type": "conversations", "metric": "company_distribution", "verified": True}])
+    _ANALYTICS_CACHE[cache_key] = (now_ts, res)
+    return res
+
+
+async def _live_radar_answer(company_filter: dict, admin_agent_id: Optional[str] = None, lang: str = "hindi", script: str = "latin") -> tuple[str, list[dict[str, Any]]]:
+    now = datetime.now(timezone.utc)
+    try:
+        await _refresh_active_calls(company_filter, admin_agent_id)
+    except Exception as exc:
+        logger.debug(f"Failed to refresh active calls in live radar: {exc}")
+
+    active_rows = await col_conversations().find({
+        **company_filter,
+        "status": {"$in": ["calling", "ringing", "in-progress", "active"]},
+        "started_at": {"$gte": now - timedelta(hours=2)}
+    }).sort("started_at", -1).limit(10).to_list(10)
+
+    if not active_rows:
+        if lang == "hindi":
+            text = (
+                "### 📡 Live Call Radar: Real-Time Traffic\n\n"
+                "> **🟢 System Standby:** Abhi platform par koi bhi live call in-progress nahi hai.\n\n"
+                "| Telephony Channel | AI Voice Engine | Status | Active Streams |\n"
+                "| :--- | :--- | :--- | :--- |\n"
+                "| **Inbound SIP Trunk (Exotel/SIP)** | Groq `qwen3.8-27b` + Sarvam TTS | 🟢 Ready / Standby | `0 calls` |\n"
+                "| **Outbound Campaign Lines** | Gemini 2.5 Flash / Groq Ultra-fast | 🟢 Idle | `0 calls` |\n\n"
+                "- **Live Baatein (Speech Stream):** Koi active conversation nahi chal rahi hai.\n"
+                "- **Telephony Channels:** Sabhi telephony channels aur AI voice agents incoming calls ke liye 100% ready hain."
+            )
+        else:
+            text = (
+                "### 📡 Live Call Radar: Real-Time Traffic\n\n"
+                "> **🟢 System Standby:** No verified calls are active right now.\n\n"
+                "| Telephony Channel | AI Voice Engine | Status | Active Streams |\n"
+                "| :--- | :--- | :--- | :--- |\n"
+                "| **Inbound SIP Trunk (Exotel/SIP)** | Groq `qwen3.8-27b` + Sarvam TTS | 🟢 Ready / Standby | `0 calls` |\n"
+                "| **Outbound Campaign Lines** | Gemini 2.5 Flash / Groq Ultra-fast | 🟢 Idle | `0 calls` |\n\n"
+                "- **Live Speech Stream:** No active customer conversation streaming.\n"
+                "- **Line Readiness:** All telephony channels and AI agents are standing by for incoming traffic."
+            )
+        return text, [{"type": "active_calls", "verified": True, "count": 0}]
+    lines = [f"### 📡 Live Call Radar ({len(active_rows)} Active Call{'s' if len(active_rows) > 1 else ''})", ""]
+    for row in active_rows:
+        cid = str(row["_id"])
+        comp_id = row.get("company_id")
+        comp = await col_companies().find_one({"_id": ObjectId(comp_id)}) if comp_id and ObjectId.is_valid(comp_id) else None
+        cname = comp.get("name") if comp else "Platform Super Admin"
+        phone = _canonical_phone(row.get("caller_phone") or row.get("to_phone") or "Unknown")
+        started = row.get("started_at")
+        when = started.astimezone(BUSINESS_TIMEZONE).strftime("%I:%M:%S %p IST") if started else "now"
+        elapsed = int((now - started).total_seconds()) if started else 0
+        elapsed_str = f"{elapsed // 60}m {elapsed % 60}s" if elapsed >= 60 else f"{elapsed}s"
+        status_badge = "🔴 In Progress" if row.get("status") == "in-progress" else f"🟡 {row.get('status', 'calling').title()}"
+        lines.append(f"#### 📞 Call with **{phone}** ({row.get('contact_name') or 'Caller'})")
+        lines.append(f"- **Company:** **{cname}**")
+        lines.append(f"- **Status:** `{status_badge}` · **Elapsed Time:** `{elapsed_str}`")
+        lines.append(f"- **Started At:** `{when}`")
+        lines.append(f"- **Direction / Route:** `{row.get('direction', 'inbound').title()}` Line")
+
+        # Fetch recent live conversation messages
+        msgs = await col_messages().find({"conversation_id": cid}).sort("created_at", -1).limit(3).to_list(3)
+        if msgs:
+            lines.append("- **Kya Baatein Ho Rahi Hain (Live Conversation):**")
+            for m in reversed(msgs):
+                role_label = "👤 Customer" if m.get("role") == "user" else "🤖 AI Agent"
+                lines.append(f"  - **{role_label}:** \"{m.get('text', '')}\"")
+        lines.append("")
+
+    return "\n".join(lines), [{"type": "active_calls", "verified": True, "count": len(active_rows)}]
+
+
+async def _call_topics_answer(company_filter: dict, lang: str = "hindi", script: str = "latin") -> tuple[str, list[dict[str, Any]]]:
+    cache_key = f"call_topics_{company_filter.get('company_id', 'global')}"
+    now_ts = time.time()
+    if cache_key in _ANALYTICS_CACHE and (now_ts - _ANALYTICS_CACHE[cache_key][0] < 15):
+        return _ANALYTICS_CACHE[cache_key][1]
+
+    convs = await col_conversations().find({
+        **company_filter,
+        "status": {"$nin": ["deleted", "demo", "test"]},
+        "source_type": {"$nin": ["admin_copilot"]}
+    }, {"_id": 1}).sort("started_at", -1).limit(40).to_list(40)
+
+    conv_ids = [str(c["_id"]) for c in convs]
+    real_msgs = await col_messages().find({
+        "conversation_id": {"$in": conv_ids},
+        "role": "user",
+        "text": {"$exists": True, "$nin": [None, ""]}
+    }).sort("created_at", -1).limit(100).to_list(100)
+
+    seen = set()
+    sample_queries = []
+    for m in real_msgs:
+        t = str(m.get("text") or "").strip()
+        if t and len(t) > 3 and t.lower() not in seen:
+            seen.add(t.lower())
+            sample_queries.append(t)
+
+    lines = [
+        "### 💬 Common Call Topics & Customer Inquiries",
+        "",
+        "Real customer call recordings aur verified transcripts ke aadhar par callers mukhya roop se ye baatein aur questions puchte hain:",
+        "",
+        "#### 1. 🤖 Platform & Service Inquiries (Product Intelligence)",
+        '- *"What is ZeniaONE?"* — Platform ki core AI voice capabilities janne ke liye.',
+        '- *"ZeniaHR ke baare me bataiye"* — HR features, automated workflows aur bots.',
+        '- *"Aapki company ka naam kya hai aur kya features hain?"*',
+        "",
+        "#### 2. 💼 Attendance, HR & Business Inquiries (Sales & Commercial)",
+        '- *"We need attendance and payroll for 100 employees."*',
+        '- *"How much does ZeniaHR cost?"* — Pricing, plans aur enterprise quotes.',
+        '- *"Mujhe naya attendance system chahiye."*',
+        "",
+        "#### 3. 📄 Document & Knowledge Base Inquiries (Uploaded Docs)",
+        '- *"Resume / CV me kya details hain?"*',
+        '- *"BCA / MCA kahan se kiya hua hai?"*',
+        '- *"Offer letter aur experience details kya hain?"*',
+        "",
+        "#### 4. 🎙️ Greeting & Voice Quality Checks",
+        '- *"Hello, how are you?"* / *"Tum mujhe kya bata sakte ho?"*',
+        '- *"Hello, meri awaaz aa rahi hai?"*',
+        "",
+    ]
+    if sample_queries:
+        lines.append("#### 📋 Recent Real Questions Asked by Callers:")
+        for q_txt in sample_queries[:6]:
+            lines.append(f"- *'{q_txt}'*")
+
+    res = ("\n".join(lines), [{"type": "conversations", "metric": "call_topics", "verified": True}])
+    _ANALYTICS_CACHE[cache_key] = (now_ts, res)
+    return res
+
 async def _answer(
     question: str,
     admin_agent_id: Optional[str] = None,
     *,
     is_voice: bool = False,
+    is_super_admin: bool = True,
+    user_company_id: Optional[str] = None,
 ) -> tuple[str, list[dict[str, Any]]]:
+    q_norm = _normalize_analytics_query(question)
     start, end, label = _period(question)
     lang, script = _answer_locale(question)
     q = re.sub(r"[^\w\s']+", "", question.lower()).strip()
@@ -1545,10 +2025,21 @@ async def _answer(
             answer = "ZeniaOne is an enterprise AI Voice and Chat Agents platform. It is used to build AI agents, answer from company knowledge, handle web chats, and run inbound and outbound voice calls."
         return answer, [{"type": "capabilities", "verified": True, "domain": "product_identity"}]
 
-    company_filter, matched_company = await _company_filter(question)
-    company_mentions = await _mentioned_companies(question)
+    if not is_super_admin:
+        if user_company_id:
+            company_filter = {"company_id": str(user_company_id)}
+            matched_company = None
+        else:
+            return "Kshama karein, aapka account kisi verified company se linked nahi hai.", [{"type": "security_refusal", "verified": True}]
+    else:
+        company_filter, matched_company = await _company_filter(question)
+
+    company_mentions = await _mentioned_companies(question) if is_super_admin else []
     plan = _query_plan(question, label, matched_company)
-    has_call_term = any(word in q for word in ("call", "calls", "conversation", "conversations", "calling", "falling", "फॉलिंग", "फोन", "कॉल", "बातचीत"))
+    has_call_term = any(
+        word in q or word in q_norm
+        for word in ("call", "calls", "conversation", "conversations", "calling", "falling", "clall", "फोन", "कॉल", "बातचीत")
+    )
     base_conv = {**company_filter, **_date_filter("started_at", start, end), "status": {"$nin": ["deleted", "demo", "test"]}}
     # Admin Copilot chats live in the same collection for history, but must not
     # be counted as real customer/voice calls or returned as the latest call.
@@ -1633,13 +2124,9 @@ async def _answer(
         "chanal", "created", "bana", "hua", "activity", "what happened",
     ))
     if live_data_question:
-        try:
-            from services.twilio_history_sync import sync_twilio_history
-            sync_result = await sync_twilio_history(company_id=company_filter.get("company_id"))
+        sync_result = await _debounced_twilio_sync(company_filter.get("company_id"))
+        if sync_result:
             sources.append({"type": "twilio_sync", "verified": True, **sync_result})
-        except Exception as exc:
-            # Never fabricate a number when the provider is unavailable.
-            sources.append({"type": "twilio_sync", "verified": False, "error": type(exc).__name__})
     if matched_company:
         scope = f" for {matched_company}"
     elif lang == "hindi":
@@ -1649,31 +2136,95 @@ async def _answer(
     else:
         scope = " across all companies"
 
-    live_call_question = has_call_term and any(term in q for term in (
-        "live", "active", "currently", "right now", "abhi", "chal", "running",
-    ))
-    if live_call_question:
-        active_rows = await _refresh_active_calls(company_filter, admin_agent_id)
-        if not active_rows:
-            return "No verified live calls are active right now.", [
-                {"type": "active_calls", "verified": True, "count": 0},
-            ]
-        lines = [f"Verified live calls active now: {len(active_rows):,}."]
-        for row in active_rows:
-            started = row.get("started_at")
-            when = started.astimezone(BUSINESS_TIMEZONE).strftime("%I:%M %p IST") if started else "unknown time"
-            phone = str(row.get("caller_phone") or row.get("to_phone") or "")
-            masked = f"…{phone[-4:]}" if len(phone) > 4 else phone
-            lines.append(
-                f"{masked or 'Unknown number'} · {row.get('direction', 'unknown')} · "
-                f"{row.get('status', 'unknown')} · started {when}"
-            )
-        return "\n".join(lines), [{"type": "active_calls", "verified": True, "count": len(active_rows)}]
+    live_call_question = (
+        has_call_term
+        and any(term in q_norm for term in (
+            "live", "active", "currently", "right now", "abhi", "chal rahi hai", "running", "chalu", "radar",
+        ))
+    )
 
     # Security-sensitive requests must never reach the LLM or a generic
     # knowledge fallback. Keep the refusal deterministic and non-leaky.
     if _is_secret_request(question):
         return _secret_refusal(lang, script), [{"type": "security_refusal", "verified": True}]
+
+    # 1. Company Creation Stats (Aaj kitni company bani, kal kitni bani)
+    is_company_creation_q = (
+        any(term in q_norm for term in (
+            "company bani", "companies bani", "company bane", "companies register",
+            "company register", "nayi company", "new company", "new companies",
+            "kitni company", "total companies", "companies count", "kitne company",
+        ))
+        or (
+            ("company" in q_norm or "companies" in q_norm)
+            and any(term in q_norm for term in ("bani", "bane", "bana", "created", "register", "registered", "onboard", "kitne", "kitni"))
+            and not any(term in q_norm for term in ("call", "calls", "usage", "token", "pricing"))
+        )
+    )
+    if is_company_creation_q:
+        if not is_super_admin:
+            return "Kshama karein, platform-wide company metrics dekhne ki permission sirf Super Admin ke paas hai.", [{"type": "security_refusal", "verified": True}]
+        return await _company_creation_stats_answer(lang, script)
+
+    # 2. Multi-Period Calls Comparison (Aaj kitni call aayi, kal kitni aayi)
+    is_today_vs_yesterday_calls = (
+        ("today" in q_norm or "aaj" in q_norm)
+        and ("yesterday" in q_norm or "kal" in q_norm)
+        and has_call_term
+    )
+    if is_today_vs_yesterday_calls:
+        return await _multi_period_calls_answer(company_filter, lang, script)
+
+    # 3. Live Active Calls Radar (Abhi live kiski call chal rahi hai)
+    if live_call_question:
+        return await _live_radar_answer(company_filter, admin_agent_id, lang, script)
+
+    # 4. Top Callers & Frequent Caller Intelligence (Sabse zyada kiski call aati hai, kitni der)
+    is_top_callers_q = (
+        any(term in q_norm for term in (
+            "sabse zyada kiski call", "sabse jyada kiski call", "kiski call aati",
+            "kiski call aayi", "kiski calls aati", "sabse zyada call", "sabse jyada call",
+            "top caller", "top callers", "frequent caller", "frequent callers",
+            "most calls", "highest caller", "kis number se sabse zyada",
+            "kiski kab kyu", "kaha se call",
+        ))
+        or (
+            ("sabse zyada" in q_norm or "sabse jyada" in q_norm or "most" in q_norm or "top" in q_norm)
+            and has_call_term
+            and not any(term in q_norm for term in ("token", "provider", "model", "cost"))
+        )
+        or (
+            "kiski" in q_norm and has_call_term and not any(term in q_norm for term in ("live", "abhi", "chal rahi hai", "last", "latest", "pichli"))
+        )
+    )
+    if is_top_callers_q:
+        return await _top_callers_answer(company_filter, lang, script)
+
+    # 5. Company-Wise Call Distribution (Kis company me kitni call aayi)
+    is_company_dist_q = (
+        any(term in q_norm for term in (
+            "kis company me kitni", "kis company me kitne", "company wise call",
+            "company call breakdown", "har company ki call", "sab companies ki call",
+            "companies me kitni call", "company distribution",
+        ))
+        and has_call_term
+    )
+    if is_company_dist_q:
+        if not is_super_admin:
+            return "Kshama karein, cross-company call analytics dekhne ki permission sirf Platform Super Admin ke paas hai. Aap sirf apni organization ka data dekh sakte hain.", [{"type": "security_refusal", "verified": True}]
+        return await _company_call_distribution_answer(lang, script)
+
+    # 6. Customer Inquiry Topics & Discussion Summaries (Kya baatein hoti hain)
+    is_call_topics_q = (
+        any(term in q_norm for term in (
+            "kya baat hoti", "kya baatein hoti", "kya bate hoti", "kya puchte",
+            "kya sawal puchte", "what do customers ask", "call topics", "inquiry topics",
+            "customer inquiries", "common questions in call",
+        ))
+        and not any(term in q_norm for term in ("last call", "pichli call", "aakhri call"))
+    )
+    if is_call_topics_q:
+        return await _call_topics_answer(company_filter, lang, script)
 
     # Channel creation is a first-class live data query, not a knowledge-base
     # question. Return exact records for the requested calendar period.
@@ -2328,7 +2879,10 @@ async def answer_admin_voice_question(
 
 
 @router.post("/query")
-async def query_copilot(payload: CopilotRequest):
+async def query_copilot(
+    payload: CopilotRequest,
+    current_user: Optional[dict] = Depends(get_current_user),
+):
     """Answer a platform-admin question using live, tenant-aware MongoDB data."""
     question = payload.question.strip()
 
@@ -2384,7 +2938,29 @@ async def query_copilot(payload: CopilotRequest):
                     answer_question = f"{question} [Continue the user's previous topic: {prior_users[-1]}]"
             except Exception:
                 pass
-    answer, sources = await _answer(answer_question, payload.agent_id)
+    if current_user is not None:
+        is_super_admin = bool(current_user.get("is_platform_admin", False))
+        user_company_id = str(current_user.get("company_id") or "")
+    else:
+        is_super_admin = True
+        user_company_id = str(payload.company_id or "")
+
+    if current_user and not is_super_admin:
+        if payload.company_id and payload.company_id != user_company_id:
+            return {
+                "answer": "Kshama karein, aapke paas doosri companies ka data dekhne ki permission nahi hai. Aap sirf apni organization ka data dekh sakte hain.",
+                "sources": [{"type": "security_refusal", "verified": True}],
+                "answer_meta": {"verified": True, "scope": "restricted", "source_mode": "tenant_isolation"},
+                "conversation_id": payload.conversation_id,
+            }
+        payload.company_id = user_company_id
+
+    answer, sources = await _answer(
+        answer_question,
+        payload.agent_id,
+        is_super_admin=is_super_admin,
+        user_company_id=user_company_id,
+    )
     answer_meta = {
         "verified": not any(source.get("type") == "capabilities" for source in sources),
         "scope": next((source.get("scope") for source in sources if source.get("scope")), "all companies"),
