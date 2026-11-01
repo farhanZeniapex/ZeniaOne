@@ -84,3 +84,57 @@ def test_call_topics_answer():
     answer, sources = _run(_answer("call me kya bate hoti he"))
     assert "Common Call Topics & Customer Inquiries" in answer
     assert any(s.get("metric") == "call_topics" for s in sources)
+
+
+def test_documents_and_chunks_audit():
+    answer, sources = _run(_answer("konse doucmnets uplode he bahi usme kitne chunks he"))
+    assert "Knowledge Base Documents & Chunks Intelligence Report" in answer
+    assert any(s.get("metric") == "chunks_audit" for s in sources)
+
+
+def test_knowledge_weakness_detector():
+    answer, sources = _run(_answer("kaha weebkenss he"))
+    assert "Knowledge Base Weakness & Gap Audit Report" in answer
+    assert any(s.get("metric") == "weakness_audit" for s in sources)
+
+
+def test_custom_rolling_period_calls_5_days():
+    answer, sources = _run(_answer("piche 5 din me kitni aay thi"))
+    assert "Call Volume Intelligence" in answer
+    assert any(s.get("metric") == "rolling_period_calls" for s in sources)
+
+
+def test_custom_rolling_period_calls_15_days():
+    answer, sources = _run(_answer("piche 15 din me kitni call aay thi"))
+    assert "Call Volume Intelligence" in answer
+    assert any(s.get("metric") == "rolling_period_calls" for s in sources)
+
+
+def test_custom_rolling_period_calls_last_month():
+    answer, sources = _run(_answer("last month kitni call aaythi"))
+    assert "Call Volume Intelligence" in answer
+    assert any(s.get("metric") == "rolling_period_calls" for s in sources)
+
+
+def test_sales_funnel_and_leads():
+    answer, sources = _run(_answer("kitni sales hui"))
+    assert "Voice AI Sales Funnel & Lead Conversion Report" in answer
+    assert any(s.get("metric") == "sales_funnel" for s in sources)
+
+
+def test_ai_provider_utilization():
+    answer, sources = _run(_answer("konsa AI provedr jyada use horahe"))
+    assert "AI Provider Utilization, Token Consumption & Speed" in answer
+    assert any(s.get("metric") == "provider_utilization" for s in sources)
+
+
+def test_peak_traffic_hours():
+    answer, sources = _run(_answer("sabse zyada call kis time aati hai"))
+    assert "Peak Call Traffic & Hourly Heatmap" in answer
+    assert any(s.get("metric") == "peak_hours" for s in sources)
+
+
+def test_call_drop_diagnostic():
+    answer, sources = _run(_answer("calls drop kyu hui call cut kyu"))
+    assert "Call Drop & Disconnect Diagnostic Report" in answer
+    assert any(s.get("metric") == "call_drop_diagnostic" for s in sources)
