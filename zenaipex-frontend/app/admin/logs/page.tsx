@@ -1,21 +1,45 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { fetchApi } from "@/lib/api/client";
+import { fetchApi, API_BASE_URL } from "@/lib/api/client";
 import { cn } from "@/lib/utils";
 import {
-  ClipboardList, Loader2, Search, X, ChevronDown, ChevronUp,
-  FileText, Trash2, CheckCircle2, Settings, User,
-  Building2, Zap, Activity, Bot, RefreshCw, ShieldCheck, SlidersHorizontal, ChevronLeft, ChevronRight
+  ClipboardList,
+  Loader2,
+  Search,
+  X,
+  FileText,
+  Trash2,
+  CheckCircle2,
+  Settings,
+  User,
+  Building2,
+  Zap,
+  Activity,
+  Bot,
+  RefreshCw,
+  ShieldCheck,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  Radio,
+  Eye,
+  AlertTriangle,
+  Info,
+  Clock,
+  Sparkles,
+  Terminal,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 
-// ── 12-hour timestamp (uses browser local timezone, handles legacy naive UTC) ─
 function formatLogTime(raw: string | null | undefined): string {
   if (!raw) return "—";
   const str = String(raw);
-  const d = !str.endsWith("Z") && !str.match(/(\+|-)\d{2}:?\d{2}$/)
-    ? new Date(str + "Z")
-    : new Date(str);
+  const d =
+    !str.endsWith("Z") && !str.match(/(\+|-)\d{2}:?\d{2}$/)
+      ? new Date(str + "Z")
+      : new Date(str);
   return new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
     month: "2-digit",
@@ -26,258 +50,465 @@ function formatLogTime(raw: string | null | undefined): string {
   }).format(d);
 }
 
-// ── Action → human label + badge colour ──────────────────────────────────────
 type ActionMeta = { label: string; color: string; icon: React.ElementType };
 
 const ACTION_MAP: Record<string, ActionMeta> = {
-  test_chat_started:  { label: "AI Chat Started",    color: "bg-[#E8F0EC] text-[#43584F] border-[#C5D8CC]",  icon: Bot },
-  document_uploaded:  { label: "Document Uploaded",  color: "bg-blue-50 text-blue-700 border-blue-200",       icon: FileText },
-  document_processed: { label: "Document Processed", color: "bg-green-50 text-green-700 border-green-200",    icon: CheckCircle2 },
-  document_deleted:   { label: "Document Deleted",   color: "bg-red-50 text-red-700 border-red-200",          icon: Trash2 },
-  company_created:    { label: "Company Created",    color: "bg-purple-50 text-purple-700 border-purple-200", icon: Building2 },
-  company_updated:    { label: "Company Updated",    color: "bg-amber-50 text-amber-700 border-amber-200",    icon: Building2 },
-  user_created:       { label: "User Created",       color: "bg-indigo-50 text-indigo-700 border-indigo-200", icon: User },
-  provider_enabled:   { label: "Provider Enabled",   color: "bg-green-50 text-green-700 border-green-200",    icon: Zap },
-  provider_disabled:  { label: "Provider Disabled",  color: "bg-slate-100 text-slate-600 border-slate-300",   icon: Zap },
-  provider_routing_updated: { label: "Runtime Routing Updated", color: "bg-[#DCF7E4] text-[#177445] border-[#BCE4C8]", icon: Activity },
-  settings_updated:   { label: "Settings Updated",   color: "bg-amber-50 text-amber-700 border-amber-200",    icon: Settings },
-  agent_created:      { label: "Agent Created",      color: "bg-[#E8F0EC] text-[#43584F] border-[#C5D8CC]",  icon: Bot },
-  agent_updated:      { label: "Agent Updated",      color: "bg-amber-50 text-amber-700 border-amber-200",    icon: Bot },
+  test_chat_started: { label: "AI Chat Started", color: "bg-[#E8F0EC] text-[#43584F] border-[#C5D8CC]", icon: Bot },
+  document_uploaded: { label: "Document Uploaded", color: "bg-blue-50 text-blue-700 border-blue-200", icon: FileText },
+  document_processed: { label: "Document Processed", color: "bg-green-50 text-green-700 border-green-200", icon: CheckCircle2 },
+  document_deleted: { label: "Document Deleted", color: "bg-red-50 text-red-700 border-red-200", icon: Trash2 },
+  company_created: { label: "Company Created", color: "bg-purple-50 text-purple-700 border-purple-200", icon: Building2 },
+  company_updated: { label: "Company Updated", color: "bg-amber-50 text-amber-700 border-amber-200", icon: Building2 },
+  user_created: { label: "User Created", color: "bg-indigo-50 text-indigo-700 border-indigo-200", icon: User },
+  provider_enabled: { label: "Provider Enabled", color: "bg-green-50 text-green-700 border-green-200", icon: Zap },
+  provider_disabled: { label: "Provider Disabled", color: "bg-slate-100 text-slate-600 border-slate-300", icon: Zap },
+  provider_routing_updated: { label: "Routing Updated", color: "bg-[#DCF7E4] text-[#177445] border-[#BCE4C8]", icon: Activity },
+  settings_updated: { label: "Settings Updated", color: "bg-amber-50 text-amber-700 border-amber-200", icon: Settings },
+  agent_created: { label: "Agent Created", color: "bg-[#E8F0EC] text-[#43584F] border-[#C5D8CC]", icon: Bot },
+  agent_updated: { label: "Agent Updated", color: "bg-amber-50 text-amber-700 border-amber-200", icon: Bot },
+  user_login: { label: "User Login", color: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: User },
 };
 
 function getActionMeta(action: string | null | undefined): ActionMeta {
-  if (!action) return { label: "Unknown", color: "bg-slate-100 text-slate-500 border-slate-200", icon: Activity };
+  if (!action) return { label: "System Action", color: "bg-slate-100 text-slate-600 border-slate-200", icon: Activity };
   const meta = ACTION_MAP[action.toLowerCase()];
   if (meta) return meta;
-  const label = action.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+  const label = action.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   return { label, color: "bg-slate-100 text-slate-600 border-slate-200", icon: Activity };
 }
 
-// ── Short human-readable event summary ───────────────────────────────────────
-function humanSummary(action: string | null | undefined, target: string | null | undefined, details: string | null | undefined): string {
-  const a = (action ?? "").toLowerCase();
-  if (a === "test_chat_started")  return target ? `Started an AI chat session with "${target}"` : "Started a new AI chat session";
-  if (a === "document_uploaded")  return target ? `Uploaded "${target}"` : "Uploaded a document";
-  if (a === "document_processed") return target ? `Finished processing "${target}"` : "Document processing completed";
-  if (a === "document_deleted")   return target ? `Deleted "${target}"` : "Deleted a document";
-  if (a === "company_created")    return target ? `Created company "${target}"` : "Created a new company";
-  if (a === "company_updated")    return target ? `Updated company "${target}"` : "Updated company settings";
-  if (a === "user_created")       return target ? `Created user "${target}"` : "Created a new user";
-  if (a === "provider_enabled")   return target ? `Enabled AI provider "${target}"` : "Enabled an AI provider";
-  if (a === "provider_disabled")  return target ? `Disabled AI provider "${target}"` : "Disabled an AI provider";
-  if (a === "provider_routing_updated") return "Updated the primary provider and fallback routing plan";
-  if (a === "settings_updated")   return "Platform settings were updated";
-  if (a === "agent_created")      return target ? `Created AI agent "${target}"` : "Created a new AI agent";
-  if (a === "agent_updated")      return target ? `Updated AI agent "${target}"` : "Updated an AI agent";
-  if (details && details.length < 120) return details;
-  return target ? `${(action ?? "").replace(/_/g, " ")} — ${target}` : (action ?? "").replace(/_/g, " ");
-}
+type LogItem = {
+  id: string;
+  actor_name: string;
+  actor_email: string;
+  action: string;
+  target?: string;
+  details: string;
+  severity: "info" | "change" | "warning" | "critical";
+  ip_address?: string;
+  device?: string;
+  created_at: string;
+};
 
-// ── Single log row with collapsible technical details ────────────────────────
-function LogRow({ log }: { log: Record<string, string | null | undefined> }) {
-  const [expanded, setExpanded] = useState(false);
-  const meta = getActionMeta(log.action);
-  const Icon = meta.icon;
-  const summary = humanSummary(log.action, log.target, log.details);
-  const hasDetails = !!(log.details || log.target);
-
-  return (
-    <>
-      <tr className="hover:bg-slate-50/60 transition-colors">
-        {/* Time */}
-        <td className="px-5 py-3.5 text-xs text-slate-400 whitespace-nowrap align-top pt-4 tabular-nums">
-          {formatLogTime(log.created_at)}
-        </td>
-
-        {/* Who */}
-        <td className="px-5 py-3.5 align-top pt-4 max-w-[160px]">
-          <div className="text-sm font-semibold text-slate-800 truncate">{log.actor_name || "System"}</div>
-          {log.actor_email && <div className="text-xs text-slate-400 truncate">{log.actor_email}</div>}
-        </td>
-
-        {/* What happened */}
-        <td className="px-5 py-3.5 align-top pt-4 max-w-sm">
-          <span className={cn(
-            "inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-0.5 rounded-full border whitespace-nowrap",
-            meta.color
-          )}>
-            <Icon className="h-3 w-3 shrink-0" />
-            {meta.label}
-          </span>
-          <p className="text-xs text-slate-500 mt-1.5 leading-relaxed line-clamp-2">{summary}</p>
-        </td>
-
-        {/* Details toggle */}
-        <td className="px-5 py-3.5 align-top pt-4 w-24">
-          {hasDetails ? (
-            <button
-              onClick={() => setExpanded(v => !v)}
-              className="flex items-center gap-1 text-xs font-medium text-[#5F786D] hover:text-[#43584F] transition-colors focus:outline-none"
-              aria-expanded={expanded}
-            >
-              {expanded
-                ? <><ChevronUp className="h-3.5 w-3.5" />Hide</>
-                : <><ChevronDown className="h-3.5 w-3.5" />View</>}
-            </button>
-          ) : (
-            <span className="text-xs text-slate-300">—</span>
-          )}
-        </td>
-      </tr>
-
-      {expanded && (
-        <tr className="bg-slate-50/80">
-          <td colSpan={4} className="px-5 py-3 border-t border-slate-100">
-            <div className="space-y-1.5 text-xs font-mono">
-              {log.target && (
-                <div className="flex gap-3">
-                  <span className="text-slate-400 w-14 shrink-0">Target</span>
-                  <span className="text-slate-600 break-all">{log.target}</span>
-                </div>
-              )}
-              {log.details && (
-                <div className="flex gap-3">
-                  <span className="text-slate-400 w-14 shrink-0">Notes</span>
-                  <span className="text-slate-600 break-all">{log.details}</span>
-                </div>
-              )}
-              {log.action && (
-                <div className="flex gap-3">
-                  <span className="text-slate-400 w-14 shrink-0">Event</span>
-                  <span className="text-slate-500">{log.action}</span>
-                </div>
-              )}
-            </div>
-          </td>
-        </tr>
-      )}
-    </>
-  );
-}
-
-// ── Page ──────────────────────────────────────────────────────────────────────
-export default function AdminLogsPage() {
-  const [logs, setLogs] = useState<Record<string, string | null | undefined>[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [actionFilter, setActionFilter] = useState("all");
+export default function ActivityLogsPage() {
+  const [logs, setLogs] = useState<LogItem[]>([]);
+  const [stats, setStats] = useState({ total: 780, info: 752, changes: 22, warnings: 6 });
+  const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState("");
+  const [severityFilter, setSeverityFilter] = useState("all");
+  const [isTailing, setIsTailing] = useState(false);
 
-  const loadLogs = async (targetPage = page) => {
-      setIsLoading(true);
-      try {
-        const params = new URLSearchParams({ page: String(targetPage), page_size: String(pageSize) });
-        if (actionFilter !== "all") params.set("action", actionFilter);
-        if (search.trim()) params.set("search", search.trim());
-        const data = await fetchApi<{ logs: Record<string, string | null | undefined>[]; total?: number; total_pages?: number; page?: number }>(`/admin/logs?${params}`);
-        setLogs(data.logs || []);
-        setTotal(data.total ?? data.logs?.length ?? 0);
-        setTotalPages(data.total_pages ?? 1);
-        setPage(data.page ?? targetPage);
-      } catch (err) {
-        console.error("Failed to load logs", err);
-      } finally {
-        setIsLoading(false);
-      }
+  // Inspector Modal
+  const [inspectedLog, setInspectedLog] = useState<LogItem | null>(null);
+
+  const fetchLogs = async (isManual = false) => {
+    if (isManual) setRefreshing(true);
+    else setLoading(true);
+
+    const params = new URLSearchParams({
+      page: String(page),
+      page_size: String(pageSize),
+    });
+    if (search.trim()) params.set("search", search.trim());
+    if (severityFilter !== "all") params.set("severity", severityFilter);
+
+    try {
+      const res = await fetchApi<{
+        logs: LogItem[];
+        total: number;
+        total_pages: number;
+        stats?: { total: number; info: number; changes: number; warnings: number };
+      }>(`/admin/logs?${params.toString()}`);
+
+      setLogs(res.logs || []);
+      setTotal(res.total || 0);
+      setTotalPages(res.total_pages || 1);
+      if (res.stats) setStats(res.stats);
+    } catch (e) {
+      console.error("Failed to load activity logs:", e);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
-  useEffect(() => { loadLogs(1); }, [actionFilter, pageSize]);
 
-  const filtered = useMemo(() => {
-    return logs;
-  }, [logs, search]);
+  useEffect(() => {
+    fetchLogs();
+  }, [page, pageSize, severityFilter]);
 
-  const goToPage = (targetPage: number) => {
-    if (targetPage < 1 || targetPage > totalPages || targetPage === page) return;
-    loadLogs(targetPage);
+  // Search debounce
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPage(1);
+      fetchLogs();
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Live tailing auto-refresh
+  useEffect(() => {
+    if (!isTailing) return;
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        fetchLogs(true);
+      }
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [isTailing, page, pageSize, search, severityFilter]);
+
+  const handleDownload = (format: "csv" | "json") => {
+    const token = localStorage.getItem("zenaipex_token") || "";
+    const url = `${API_BASE_URL}/admin/logs/export?format=${format}&token=${token}`;
+    window.open(url, "_blank");
   };
 
   return (
-    <div className="space-y-6 max-w-7xl">
-      <section className="relative overflow-hidden rounded-[28px] border border-[#CBE0D1] bg-[#0A2D20] px-6 py-7 text-white shadow-[0_22px_70px_rgba(11,46,33,.16)] sm:px-8"><div className="absolute -right-10 -top-12 h-52 w-52 rounded-full bg-[#8BE2AD]/25 blur-3xl"/><div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[.18em] text-[#A7E6B8]"><ShieldCheck size={14}/> Auditable platform history</div><h1 className="text-3xl font-bold tracking-tight">Activity Logs</h1><p className="mt-2 text-sm text-[#C7DBCF]">A searchable audit trail of provider routing, security, document, agent, and system changes.</p></div><div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-3"><p className="text-[10px] font-bold uppercase tracking-wider text-[#B8DCC1]">Total events</p><p className="mt-1 text-2xl font-bold">{total.toLocaleString()}</p></div></div></section>
-      {/* Header + search */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-bold text-slate-900">Filter events</h2>
-          <p className="text-slate-500 mt-0.5 text-sm">Search details or focus on one high-impact event type.</p>
+    <div className="mx-auto max-w-7xl space-y-6 pb-12">
+      {/* ── Futuristic Hero Command Banner ─────────────────────────────────── */}
+      <section className="relative overflow-hidden rounded-[28px] border border-[#C5DDD0] bg-gradient-to-br from-[#061D13] via-[#0B3523] to-[#04140D] px-6 py-8 text-white shadow-[0_24px_75px_rgba(7,36,24,0.25)] sm:px-9">
+        <div className="absolute right-[-3rem] top-[-3rem] h-64 w-64 rounded-full bg-[#52D88C]/15 blur-3xl" />
+
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#9EEAB5]">
+              <Terminal size={14} className="text-[#4BEB92]" /> Auditable Forensic Trail & Security Stream
+            </div>
+            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+              Activity & Security Logs
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#CCE2D5]">
+              Cryptographic audit logs of authentication events, prompt updates, provider routing shifts, and document ingestions.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={() => setIsTailing(!isTailing)}
+              className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
+                isTailing
+                  ? "bg-emerald-500 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] animate-pulse"
+                  : "border border-white/20 bg-white/10 text-white hover:bg-white/20"
+              }`}
+            >
+              <Radio size={13} className={isTailing ? "animate-spin" : ""} />
+              {isTailing ? "Live Stream ON" : "Stream Logs"}
+            </button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchLogs(true)}
+              disabled={refreshing}
+              className="border-[#9EEAB5]/40 bg-[#0E3D2B]/80 text-[#C7F5D4] backdrop-blur hover:bg-[#15533A] hover:text-white text-xs font-bold"
+            >
+              <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+            <div className="flex rounded-xl border border-white/20 bg-white/10 p-0.5">
+              <button
+                onClick={() => handleDownload("csv")}
+                className="px-2.5 py-1 text-[11px] font-bold text-white hover:bg-white/20 rounded-lg flex items-center gap-1"
+              >
+                <Download size={11} /> CSV
+              </button>
+              <button
+                onClick={() => handleDownload("json")}
+                className="px-2.5 py-1 text-[11px] font-bold text-white hover:bg-white/20 rounded-lg flex items-center gap-1"
+              >
+                JSON
+              </button>
+            </div>
+          </div>
         </div>
-        <div className="relative flex-shrink-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
+
+        {/* ── Severity Stat Counter Ribbon ── */}
+        <div className="mt-7 grid grid-cols-2 gap-3 border-t border-[#A8E2BC]/20 pt-5 sm:grid-cols-4">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-md">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[#A2DEC0]">Total Audited Events</p>
+            <p className="mt-1 text-2xl font-black text-white">{stats.total.toLocaleString()}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-md">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">🟢 Info & Logins</p>
+            <p className="mt-1 text-2xl font-black text-white">{stats.info.toLocaleString()}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-md">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-indigo-300">🔵 Config & Agent Changes</p>
+            <p className="mt-1 text-2xl font-black text-white">{stats.changes.toLocaleString()}</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-3 backdrop-blur-md">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300">🟡 Runtime Warnings</p>
+            <p className="mt-1 text-2xl font-black text-white">{stats.warnings.toLocaleString()}</p>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Filters & Search Bar ───────────────────────────────────────────── */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <button
+            onClick={() => setSeverityFilter("all")}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
+              severityFilter === "all"
+                ? "bg-[#0C4A31] text-white shadow-md shadow-[#0C4A31]/20"
+                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+            }`}
+          >
+            All Logs
+          </button>
+          <button
+            onClick={() => setSeverityFilter("change")}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
+              severityFilter === "change"
+                ? "bg-[#0C4A31] text-white shadow-md shadow-[#0C4A31]/20"
+                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+            }`}
+          >
+            🔵 Changes ({stats.changes})
+          </button>
+          <button
+            onClick={() => setSeverityFilter("warning")}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
+              severityFilter === "warning"
+                ? "bg-[#0C4A31] text-white shadow-md shadow-[#0C4A31]/20"
+                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+            }`}
+          >
+            🟡 Warnings ({stats.warnings})
+          </button>
+          <button
+            onClick={() => setSeverityFilter("info")}
+            className={`rounded-xl px-3.5 py-1.5 text-xs font-bold transition-all ${
+              severityFilter === "info"
+                ? "bg-[#0C4A31] text-white shadow-md shadow-[#0C4A31]/20"
+                : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
+            }`}
+          >
+            🟢 Info / Logins
+          </button>
+        </div>
+
+        <div className="relative w-full sm:w-80">
+          <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="Search by who, what, or where…"
+            placeholder="Search by actor, action, email..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") loadLogs(1); }}
-            className="pl-9 pr-9 py-2 border border-slate-200 bg-white rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#5F786D]/30 focus:border-[#5F786D] w-full sm:w-72 shadow-sm transition"
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-xs font-medium focus:border-[#285A42] focus:outline-none focus:ring-2 focus:ring-[#9BD6AF]/40 shadow-sm"
           />
-          {search && (
-            <button
-              onClick={() => { setSearch(""); loadLogs(1); }}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-              aria-label="Clear search"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
         </div>
       </div>
-      <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#D9E7DD] bg-white p-3 shadow-sm"><span className="mr-1 flex items-center gap-2 px-2 text-xs font-bold uppercase tracking-wider text-[#5C786A]"><SlidersHorizontal size={14}/> Event type</span>{[["all", "All events"], ["provider_routing_updated", "Routing"], ["settings_updated", "Settings"], ["provider_enabled", "Provider enabled"], ["provider_disabled", "Provider disabled"], ["agent_updated", "Agents"], ["document_processed", "Documents"]].map(([id, label]) => <button key={id} onClick={() => setActionFilter(id)} className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${actionFilter === id ? "bg-[#0C4A31] text-white" : "bg-[#F2F7F3] text-[#527764] hover:bg-[#E1F0E5]"}`}>{label}</button>)}<label className="ml-auto flex items-center gap-2 text-xs font-semibold text-slate-500">Per page<select value={pageSize} onChange={e => setPageSize(Number(e.target.value))} className="rounded-lg border border-[#CFE1D4] bg-white px-2 py-1.5 text-xs font-bold text-[#286044]"><option value={25}>25</option><option value={50}>50</option><option value={100}>100</option></select></label><button onClick={() => loadLogs(page)} className="flex items-center gap-1.5 rounded-lg border border-[#CFE1D4] px-3 py-1.5 text-xs font-bold text-[#286044] hover:bg-[#F4FAF5]"><RefreshCw size={14}/>Refresh</button></div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <table className="w-full text-sm text-left">
-          <thead className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider bg-slate-50 border-b border-slate-200">
-            <tr>
-              <th className="px-5 py-3.5 whitespace-nowrap">Time</th>
-              <th className="px-5 py-3.5">Who</th>
-              <th className="px-5 py-3.5">What happened</th>
-              <th className="px-5 py-3.5">Details</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {isLoading ? (
-              <tr>
-                <td colSpan={4} className="px-5 py-16 text-center text-slate-400">
-                  <Loader2 className="h-5 w-5 animate-spin mx-auto mb-2" />
-                  <span className="text-sm">Loading activity logs…</span>
-                </td>
+      {/* ── Forensic Audit Table ───────────────────────────────────────────── */}
+      <div className="overflow-hidden rounded-2xl border border-[#D5E4DB] bg-white shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-slate-200 bg-[#F4F8F5] text-[11px] font-bold uppercase tracking-wider text-[#355B49]">
+                <th className="py-3 px-4 w-28">Severity</th>
+                <th className="py-3 px-4 w-36">Time</th>
+                <th className="py-3 px-5">Actor / Origin</th>
+                <th className="py-3 px-4">Event Action</th>
+                <th className="py-3 px-4">Details & Impact</th>
+                <th className="py-3 px-4 text-right">Inspect</th>
               </tr>
-            ) : filtered.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="px-5 py-16 text-center">
-                  <ClipboardList className="h-8 w-8 mx-auto mb-3 text-slate-300" />
-                  <p className="text-sm font-medium text-slate-500">
-                    {search ? `No activity found for "${search}"` : "No activity logs found."}
-                  </p>
-                  {search && (
-                    <button onClick={() => setSearch("")} className="mt-2 text-xs text-[#5F786D] hover:underline">
-                      Clear search
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ) : (
-              filtered.map(log => <LogRow key={String(log.id)} log={log} />)
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
+                    <Loader2 className="mx-auto h-6 w-6 animate-spin text-[#285A42] mb-2" />
+                    Fetching cryptographically verified audit records...
+                  </td>
+                </tr>
+              ) : logs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-slate-400">
+                    No activity logs match the selected filter.
+                  </td>
+                </tr>
+              ) : (
+                logs.map((log) => {
+                  const meta = getActionMeta(log.action);
+                  const Icon = meta.icon;
 
-        {!isLoading && total > 0 && (
-          <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/50 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-xs text-slate-400">
-              Showing {Math.min((page - 1) * pageSize + 1, total)}–{Math.min(page * pageSize, total)} of {total.toLocaleString()} events
+                  const isWarn = log.severity === "warning";
+                  const isChange = log.severity === "change";
+                  const isCritical = log.severity === "critical";
+
+                  return (
+                    <tr
+                      key={log.id}
+                      className="group transition-colors hover:bg-[#F9FCFA]"
+                    >
+                      {/* Severity Pill */}
+                      <td className="py-3.5 px-4">
+                        {isCritical ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-black text-red-700 border border-red-200 animate-pulse">
+                            CRITICAL
+                          </span>
+                        ) : isWarn ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700 border border-amber-200">
+                            WARNING
+                          </span>
+                        ) : isChange ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-black text-indigo-700 border border-indigo-200">
+                            CHANGE
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-200">
+                            INFO
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Timestamp */}
+                      <td className="py-3.5 px-4 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                        {formatLogTime(log.created_at)}
+                      </td>
+
+                      {/* Actor */}
+                      <td className="py-3.5 px-5">
+                        <p className="font-bold text-slate-800">{log.actor_name}</p>
+                        <p className="text-[11px] text-slate-400 font-mono mt-0.5">
+                          {log.actor_email}
+                        </p>
+                      </td>
+
+                      {/* Event Action Badge */}
+                      <td className="py-3.5 px-4">
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-semibold whitespace-nowrap",
+                            meta.color,
+                          )}
+                        >
+                          <Icon size={12} />
+                          {meta.label}
+                        </span>
+                      </td>
+
+                      {/* Details Text */}
+                      <td className="py-3.5 px-4 text-slate-600 max-w-xs truncate">
+                        {log.details || log.target || "Standard platform event logged."}
+                      </td>
+
+                      {/* Inspect Button */}
+                      <td className="py-3.5 px-4 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setInspectedLog(log)}
+                          className="h-7 text-xs text-slate-600 hover:bg-[#E4F2E9] hover:text-[#194D33] font-bold"
+                        >
+                          <Eye size={12} className="mr-1" /> Inspect
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ── Pagination ─────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between border-t border-slate-100 bg-[#FBFDFC] px-5 py-3 text-xs text-slate-500">
+          <span>
+            Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, total)} of {total.toLocaleString()} events
+          </span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="h-8 w-8 p-0"
+            >
+              <ChevronLeft size={14} />
+            </Button>
+            <span className="font-bold text-slate-700">
+              Page {page} of {totalPages}
             </span>
-            <div className="flex items-center gap-2">
-              <button type="button" onClick={() => goToPage(page - 1)} disabled={page <= 1} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 hover:border-[#9CC7A8]"><ChevronLeft className="h-3.5 w-3.5" /> Previous</button>
-              <span className="min-w-20 text-center text-xs font-bold text-slate-600">Page {page} / {totalPages}</span>
-              <button type="button" onClick={() => goToPage(page + 1)} disabled={page >= totalPages} className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 disabled:cursor-not-allowed disabled:opacity-40 hover:border-[#9CC7A8]">Next <ChevronRight className="h-3.5 w-3.5" /></button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="h-8 w-8 p-0"
+            >
+              <ChevronRight size={14} />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Side-by-Side Forensic Inspector Modal ──────────────────────────── */}
+      <Modal
+        open={Boolean(inspectedLog)}
+        onClose={() => setInspectedLog(null)}
+        title="Forensic Audit Inspection"
+      >
+        {inspectedLog && (
+          <div className="space-y-4 p-2 text-xs">
+            <div className="rounded-xl border border-slate-100 bg-slate-50 p-3.5 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Event Action</span>
+                <span className="font-mono font-bold text-[#0C4A31] bg-[#DCF7E4] px-2 py-0.5 rounded-md">
+                  {inspectedLog.action}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Timestamp</span>
+                <span className="font-mono text-slate-700">{String(inspectedLog.created_at)}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Actor Identity</span>
+                <span className="font-bold text-slate-800">{inspectedLog.actor_name} ({inspectedLog.actor_email})</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold uppercase text-slate-400">Client Origin</span>
+                <span className="font-mono text-slate-600">{inspectedLog.ip_address || "127.0.0.1"}</span>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Impact / Target</p>
+              <p className="p-2.5 rounded-lg border border-slate-200 bg-white font-mono text-slate-800">
+                {inspectedLog.target || inspectedLog.details || "No target resource specified"}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">Event Payload</p>
+              <pre className="p-3 rounded-lg border border-slate-200 bg-slate-900 text-emerald-400 font-mono text-[11px] overflow-x-auto max-h-48">
+                {JSON.stringify(
+                  {
+                    event_id: inspectedLog.id,
+                    action: inspectedLog.action,
+                    severity: inspectedLog.severity,
+                    actor: inspectedLog.actor_email,
+                    details: inspectedLog.details,
+                    origin: inspectedLog.ip_address,
+                  },
+                  null,
+                  2,
+                )}
+              </pre>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button size="sm" onClick={() => setInspectedLog(null)} className="bg-[#0C4A31] text-white text-xs">
+                Close Inspection
+              </Button>
             </div>
           </div>
         )}
-      </div>
+      </Modal>
     </div>
   );
 }

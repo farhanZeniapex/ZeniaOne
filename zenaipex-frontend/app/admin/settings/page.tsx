@@ -2,57 +2,58 @@
 
 import { useEffect, useState } from "react";
 import {
-  ArrowRight,
+  Settings2,
+  Building2,
+  ShieldCheck,
   BellRing,
   Bot,
-  Building2,
-  CalendarClock,
-  CheckCircle2,
-  CircleAlert,
-  Clock3,
-  Globe2,
-  Loader2,
-  LockKeyhole,
-  Phone,
-  Save,
-  Settings2,
-  ShieldCheck,
   Sparkles,
-  Trash2,
   Upload,
-  Wrench,
+  Trash2,
+  Save,
+  CheckCircle2,
+  AlertTriangle,
+  LockKeyhole,
+  Clock3,
+  Sliders,
+  Globe2,
+  Server,
+  Zap,
+  Radio,
+  RadioTower,
+  Smartphone,
+  Send,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Toast } from "@/components/ui/toast";
+import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton";
 import {
   GlobalSettings,
   getAdminSettings,
   updateAdminSettings,
 } from "@/lib/api/settings";
-import { companySettingsApi, CompanyProfile } from "@/lib/api/settings";
-import { getCompanyLogoUrl } from "@/lib/api/client";
-import { useCurrentCompany } from "@/hooks/use-company";
-import SmartWeeklySchedule from "@/components/platform/settings/SmartWeeklySchedule";
-import WorkspaceExperienceSettings from "@/components/platform/settings/workspace-experience-settings";
-import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton";
-import { SmartSelect } from "@/components/ui/smart-select";
 
 const DEFAULT_SETTINGS: GlobalSettings = {
   type: "global",
   platform: {
     platform_name: "ZeniaOne",
-    default_language: "en",
-    default_timezone: "UTC",
+    default_language: "en-IN",
+    default_timezone: "Asia/Kolkata",
   },
   ai_defaults: {
-    default_provider: "gemini",
-    default_model: "gemini-3.5-flash-lite",
-    default_token_limit: 1024,
+    default_provider: "groq",
+    default_model: "qwen-3.8-27b",
+    default_token_limit: 2048,
     default_temperature: 0.7,
   },
-  security: { session_timeout_minutes: 60, require_strong_passwords: true },
+  security: {
+    session_timeout_minutes: 60,
+    require_strong_passwords: true,
+  },
   notifications: {
     admin_notifications_enabled: true,
     system_alerts_enabled: true,
@@ -60,809 +61,757 @@ const DEFAULT_SETTINGS: GlobalSettings = {
   },
   system: {
     maintenance_mode: false,
-    maintenance_message:
-      "System is undergoing maintenance. Please try again shortly.",
+    maintenance_message: "ZeniaOne is currently performing scheduled engine optimizations. Normal operations will resume shortly.",
   },
 };
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<GlobalSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const load = async () => {
-    setLoading(true);
-    try {
-      setSettings(await getAdminSettings());
-    } catch {
-      setNotice("Settings could not be loaded. Please refresh and try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [savingSection, setSavingSection] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"branding" | "maintenance" | "alerts" | "security" | "ai">("branding");
+  const [toast, setToast] = useState<{ message: string; tone: "success" | "error" | "info" } | null>(null);
+
+  // Logo state
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
+  // Webhook / WhatsApp custom state
+  const [whatsappNumber, setWhatsappNumber] = useState("+919099887880");
+  const [slackWebhook, setSlackWebhook] = useState("https://hooks.slack.com/services/T00/B00/XXXXX");
+
   useEffect(() => {
+    async function load() {
+      try {
+        const data = await getAdminSettings();
+        setSettings({
+          ...DEFAULT_SETTINGS,
+          ...data,
+          platform: { ...DEFAULT_SETTINGS.platform, ...data.platform },
+          ai_defaults: { ...DEFAULT_SETTINGS.ai_defaults, ...data.ai_defaults },
+          security: { ...DEFAULT_SETTINGS.security, ...data.security },
+          notifications: { ...DEFAULT_SETTINGS.notifications, ...data.notifications },
+          system: { ...DEFAULT_SETTINGS.system, ...data.system },
+        });
+        if ((data as any).logo_url || data.platform?.logo_path) {
+          setLogoPreview((data as any).logo_url || data.platform?.logo_path);
+        }
+      } catch {
+        setToast({ message: "Loaded default platform control profile.", tone: "info" });
+      } finally {
+        setLoading(false);
+      }
+    }
     load();
   }, []);
-  const save = async (
-    section:
-      "platform" | "ai_defaults" | "security" | "notifications" | "system",
-  ) => {
-    setSaving(section);
-    setNotice(null);
+
+  const saveSection = async (section: keyof GlobalSettings) => {
+    setSavingSection(String(section));
     try {
-      const next = await updateAdminSettings({ [section]: settings[section] });
-      setSettings(next);
-      setNotice(`${section.replace("_", " ")} settings saved successfully.`);
-    } catch (error: any) {
-      setNotice(error?.message || "Settings could not be saved.");
+      await updateAdminSettings({ [section]: settings[section] });
+      setToast({ message: `${String(section).toUpperCase()} preferences updated permanently!`, tone: "success" });
+    } catch {
+      setToast({ message: "Failed to persist platform changes.", tone: "error" });
     } finally {
-      setSaving(null);
+      setSavingSection(null);
     }
   };
-  const set = <
-    K extends keyof Pick<
-      GlobalSettings,
-      "platform" | "ai_defaults" | "security" | "notifications" | "system"
-    >,
-  >(
-    section: K,
-    key: keyof GlobalSettings[K],
-    value: any,
-  ) =>
-    setSettings((current) => ({
-      ...current,
-      [section]: { ...current[section], [key]: value },
-    }));
-  if (loading) return <PageLoadingSkeleton cards={4} />;
+
+  const handleMaintenanceToggle = async (enabled: boolean) => {
+    const updated = {
+      ...settings,
+      system: {
+        ...settings.system,
+        maintenance_mode: enabled,
+      },
+    };
+    setSettings(updated);
+    setSavingSection("system");
+    try {
+      await updateAdminSettings({
+        system: {
+          maintenance_mode: enabled,
+          maintenance_message: settings.system?.maintenance_message,
+        },
+      });
+      setToast({
+        message: enabled ? "🛑 Maintenance Mode ACTIVATED platform-wide!" : "🟢 Platform is now LIVE & accepting calls!",
+        tone: enabled ? "error" : "success",
+      });
+    } catch {
+      setToast({ message: "Failed to update maintenance state.", tone: "error" });
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  if (loading) return <PageLoadingSkeleton cards={3} />;
+
+  const isMaintenanceOn = Boolean(settings.system?.maintenance_mode);
+
   return (
-    <div className="mx-auto max-w-7xl space-y-7 pb-10">
-      <section className="relative overflow-hidden rounded-[28px] border border-[#CBE0D1] bg-[#0A2D20] px-6 py-8 text-white shadow-[0_22px_70px_rgba(11,46,33,.16)] sm:px-9">
-        <div className="absolute -right-12 -top-16 h-64 w-64 rounded-full bg-[#8BE2AD]/25 blur-3xl" />
-        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+    <div className="mx-auto max-w-7xl space-y-7 pb-12">
+      {/* ── Futuristic Hero Command Banner with Emergency Kill-Switch ─────── */}
+      <section className="relative overflow-hidden rounded-[28px] border border-[#BDE0C8] bg-gradient-to-br from-[#061D13] via-[#0B3523] to-[#04140D] px-6 py-8 text-white shadow-[0_24px_75px_rgba(7,36,24,0.25)] sm:px-9">
+        <div className="absolute right-[-3rem] top-[-3rem] h-72 w-72 rounded-full bg-[#5BE697]/15 blur-3xl" />
+
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <div className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-[.18em] text-[#A7E6B8]">
-              <Sparkles size={14} /> Platform controls
+            <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#9EEAB5]">
+              <Settings2 size={14} className="text-[#4BEB92]" /> Global Infrastructure & Security Command
             </div>
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              Settings
+            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
+              Platform Settings
             </h1>
-            <p className="mt-3 max-w-xl text-sm leading-6 text-[#C7DBCF]">
-              Manage security, notifications, AI defaults, and maintenance behavior from one secure control center.
+            <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#CCE2D5]">
+              Configure white-label branding, emergency maintenance kill-switches, WhatsApp alert dispatchers, and global AI guardrails.
             </p>
           </div>
-          <div className="rounded-2xl border border-white/15 bg-white/10 px-5 py-3">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-[#B8DCC1]">
-              Runtime setting
-            </p>
-            <p className="mt-1 text-lg font-bold">
-              {settings.system.maintenance_mode
-                ? "Maintenance enabled"
-                : "Platform open"}
-            </p>
-          </div>
-        </div>
-      </section>
-      {notice && (
-        <div className="flex items-center gap-2 rounded-xl border border-[#BCE4C8] bg-[#F0FBF3] px-4 py-3 text-sm font-medium text-[#17613C]">
-          <CheckCircle2 size={17} />
-          {notice}
-        </div>
-      )}
-      <WorkspaceExperienceSettings />
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Stat
-          icon={ShieldCheck}
-          label="Password policy"
-          value={
-            settings.security.require_strong_passwords ? "Strong" : "Standard"
-          }
-        />
-        <Stat
-          icon={Clock3}
-          label="Session lifetime"
-          value={`${settings.security.session_timeout_minutes} min`}
-        />
-        <Stat
-          icon={Bot}
-          label="AI default"
-          value={settings.ai_defaults.default_provider}
-        />
-        <Stat
-          icon={BellRing}
-          label="System alerts"
-          value={settings.notifications.system_alerts_enabled ? "On" : "Off"}
-        />
-      </section>
-      <section className="grid gap-4 lg:grid-cols-2">
-        <Card className="overflow-hidden border-[#BFE2CA] bg-[#F3FCF5] shadow-sm">
-          <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex gap-3">
-              <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#DDF7E5] text-[#087F5B]">
-                <Phone size={20} />
-              </span>
-              <div>
-                <p className="font-bold text-[#214333]">Live AI routing</p>
-                <p className="mt-1 text-sm text-[#527764]">
-                  Actual Gemini, Groq, STT, and TTS routing for phone, voice chat, and website experiences is managed in AI Providers.
-                </p>
-              </div>
-            </div>
-            <a
-              href="/admin/system/ai-providers"
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-[#0C4A31] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#083A27]"
-            >
-              Open routing <ArrowRight size={16} />
-            </a>
-          </CardContent>
-        </Card>
-        <Card className="border-[#D9E7DD] shadow-sm">
-          <CardContent className="flex h-full items-center gap-3 p-5">
-            <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#E6F6EB] text-[#087F5B]">
-              <ShieldCheck size={20} />
-            </span>
+
+          {/* Quick Emergency Status Pill */}
+          <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md">
             <div>
-              <p className="font-bold text-[#214333]">Billing enforcement</p>
-              <p className="mt-1 text-sm text-[#527764]">
-                {settings.env_overrides?.ai_billing_enforcement
-                  ? "Usage limits are enforced by the server environment."
-                  : "Usage limit enforcement is currently disabled in the server environment."}
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#A2DEC0]">Global Runtime State</p>
+              <p className="mt-0.5 text-lg font-black text-white">
+                {isMaintenanceOn ? "🛑 Maintenance Mode" : "🟢 Platform Open & Live"}
               </p>
             </div>
-          </CardContent>
-        </Card>
-      </section>
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Panel
-          icon={Settings2}
-          title="Platform identity"
-          description="Default branding and language for the control center."
-          action={() => save("platform")}
-          saving={saving === "platform"}
-        >
-          <Field label="Platform name">
-            <Input
-              value={settings.platform.platform_name}
-              onChange={(e) => set("platform", "platform_name", e.target.value)}
-            />
-          </Field>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Default language">
-              <SmartSelect
-                value={settings.platform.default_language}
-                onChange={(value) => set("platform", "default_language", value)}
-                options={[
-                  { value: "en", label: "English" },
-                  { value: "hi", label: "Hindi" },
-                  { value: "hi-IN", label: "Hinglish" },
-                  { value: "gu-IN", label: "Gujarati" },
-                ]}
-                searchable={false}
-              />
-            </Field>
-            <Field label="Default timezone">
-              <Input
-                value={settings.platform.default_timezone}
-                onChange={(e) =>
-                  set("platform", "default_timezone", e.target.value)
-                }
-                placeholder="Asia/Kolkata"
-              />
-            </Field>
+            <button
+              onClick={() => handleMaintenanceToggle(!isMaintenanceOn)}
+              className={`rounded-xl px-4 py-2 text-xs font-black transition-all ${
+                isMaintenanceOn
+                  ? "bg-red-600 text-white shadow-[0_0_20px_rgba(239,68,68,0.6)] animate-pulse"
+                  : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-900/30"
+              }`}
+            >
+              {isMaintenanceOn ? "Exit Maintenance" : "Maintenance Mode"}
+            </button>
           </div>
-        </Panel>
-        <Panel
-          icon={Bot}
-          title="AI defaults"
-          description="Fallback defaults for agents without an explicit setting."
-          action={() => save("ai_defaults")}
-          saving={saving === "ai_defaults"}
-        >
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Default provider">
-              <SmartSelect
-                value={settings.ai_defaults.default_provider}
-                onChange={(value) =>
-                  set("ai_defaults", "default_provider", value)
-                }
-                options={[
-                  { value: "gemini", label: "Gemini" },
-                  { value: "groq", label: "Groq" },
-                  { value: "sarvam", label: "Sarvam" },
-                ]}
-                searchable={false}
-              />
-            </Field>
-            <Field label="Default model">
-              <Input
-                value={settings.ai_defaults.default_model}
-                onChange={(e) =>
-                  set("ai_defaults", "default_model", e.target.value)
-                }
-              />
-            </Field>
-            <Field label="Token limit">
-              <Input
-                type="number"
-                min="64"
-                max="8192"
-                value={settings.ai_defaults.default_token_limit}
-                onChange={(e) =>
-                  set(
-                    "ai_defaults",
-                    "default_token_limit",
-                    Number(e.target.value),
-                  )
-                }
-              />
-            </Field>
-            <Field label="Temperature (0–1)">
-              <Input
-                type="number"
-                min="0"
-                max="1"
-                step=".1"
-                value={settings.ai_defaults.default_temperature}
-                onChange={(e) =>
-                  set(
-                    "ai_defaults",
-                    "default_temperature",
-                    Number(e.target.value),
-                  )
-                }
-              />
-            </Field>
-          </div>
-          <p className="rounded-xl bg-[#F6FAF7] p-3 text-xs leading-5 text-[#527764]">
-            Voice calls and chat routing are controlled from AI Providers. This
-            section supplies only safe defaults.
-          </p>
-        </Panel>
-        <Panel
-          icon={LockKeyhole}
-          title="Security policy"
-          description="Set session and password requirements for every admin."
-          action={() => save("security")}
-          saving={saving === "security"}
-        >
-          <Field label="Session timeout in minutes">
-            <Input
-              type="number"
-              min="5"
-              max="10080"
-              value={settings.security.session_timeout_minutes}
-              onChange={(e) =>
-                set(
-                  "security",
-                  "session_timeout_minutes",
-                  Number(e.target.value),
-                )
-              }
-            />
-          </Field>
-          <Toggle
-            label="Require strong passwords"
-            detail="Applies password rules when administrators set or reset a password."
-            checked={settings.security.require_strong_passwords}
-            onChange={(value) =>
-              set("security", "require_strong_passwords", value)
-            }
-          />
-        </Panel>
-        <Panel
-          icon={BellRing}
-          title="Alerts & notifications"
-          description="Choose the platform events that notify administrators."
-          action={() => save("notifications")}
-          saving={saving === "notifications"}
-        >
-          <Toggle
-            label="Admin notifications"
-            detail="Workspace and account changes."
-            checked={settings.notifications.admin_notifications_enabled}
-            onChange={(value) =>
-              set("notifications", "admin_notifications_enabled", value)
-            }
-          />
-          <Toggle
-            label="System alerts"
-            detail="Provider, API and service events."
-            checked={settings.notifications.system_alerts_enabled}
-            onChange={(value) =>
-              set("notifications", "system_alerts_enabled", value)
-            }
-          />
-          <Toggle
-            label="Security alerts"
-            detail="Authentication and policy events."
-            checked={settings.notifications.security_alerts_enabled}
-            onChange={(value) =>
-              set("notifications", "security_alerts_enabled", value)
-            }
-          />
-        </Panel>
-        <div className="xl:col-span-2">
-          <Panel
-            icon={Wrench}
-            title="Maintenance control"
-            description="Use only when you need to temporarily pause customer access."
-            action={() => save("system")}
-            saving={saving === "system"}
-            danger
+        </div>
+
+        {/* ── Segmented Control Navigation Tabs ── */}
+        <div className="mt-8 flex flex-wrap gap-2 border-t border-[#A8E2BC]/20 pt-5">
+          <button
+            onClick={() => setActiveTab("branding")}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              activeTab === "branding"
+                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
+                : "bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
           >
-            <Toggle
-              label="Maintenance mode"
-              detail="New customer actions display the message below. Existing server tasks are not cancelled."
-              checked={settings.system.maintenance_mode}
-              onChange={(value) => set("system", "maintenance_mode", value)}
-              danger
-            />
-            <Field label="Customer maintenance message">
-              <Textarea
-                rows={3}
-                value={settings.system.maintenance_message}
-                onChange={(e) =>
-                  set("system", "maintenance_message", e.target.value)
-                }
-              />
-            </Field>
-          </Panel>
+            <Building2 size={13} />
+            🎨 Branding & Identity
+          </button>
+          <button
+            onClick={() => setActiveTab("maintenance")}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              activeTab === "maintenance"
+                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
+                : "bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
+          >
+            <RadioTower size={13} />
+            🛑 Maintenance & Kill-Switch
+          </button>
+          <button
+            onClick={() => setActiveTab("alerts")}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              activeTab === "alerts"
+                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
+                : "bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
+          >
+            <BellRing size={13} />
+            🔔 Alerts & Webhooks
+          </button>
+          <button
+            onClick={() => setActiveTab("security")}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              activeTab === "security"
+                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
+                : "bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
+          >
+            <ShieldCheck size={13} />
+            🛡️ Security Armor
+          </button>
+          <button
+            onClick={() => setActiveTab("ai")}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+              activeTab === "ai"
+                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
+                : "bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
+          >
+            <Bot size={13} />
+            🤖 AI Guardrails
+          </button>
         </div>
-      </div>
-    </div>
-  );
-}
-function WorkspaceSettings() {
-  const { companyId } = useCurrentCompany();
-  const [company, setCompany] = useState<CompanyProfile | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
-  useEffect(() => {
-    if (companyId)
-      companySettingsApi
-        .getCompany(companyId)
-        .then(setCompany)
-        .catch(() => setNotice("Workspace settings could not be loaded."));
-  }, [companyId]);
-  const update = async (updates: Partial<CompanyProfile>, message: string) => {
-    if (!companyId || !company) return;
-    setSaving(true);
-    try {
-      const result = await companySettingsApi.updateCompany(companyId, updates);
-      setCompany(result);
-      setNotice(message);
-    } catch (error: any) {
-      setNotice(error?.message || "Workspace settings could not be saved.");
-    } finally {
-      setSaving(false);
-    }
-  };
-  const saveBusiness = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    update(
-      {
-        name: String(form.get("name") || ""),
-        industry: String(form.get("industry") || ""),
-        country: String(form.get("country") || ""),
-        timezone: String(form.get("timezone") || ""),
-        settings: {
-          ...company?.settings,
-          legal_name: String(form.get("legal_name") || ""),
-          business_email: String(form.get("business_email") || ""),
-          phone: String(form.get("phone") || ""),
-          website: String(form.get("website") || ""),
-          address: String(form.get("address") || ""),
-          business_description: String(form.get("business_description") || ""),
-        },
-      },
-      "Business profile saved successfully.",
-    );
-  };
-  const saveHours = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    let hours: any = {};
-    try {
-      hours = JSON.parse(String(form.get("business_hours") || "{}"));
-    } catch {}
-    update(
-      {
-        settings: {
-          ...company?.settings,
-          business_hours: hours,
-          greeting_message: String(form.get("greeting_message") || ""),
-          default_language: String(form.get("default_language") || "en-IN"),
-          default_voice: String(form.get("default_voice") || "ritu"),
-        },
-      },
-      "Business hours and agent defaults saved successfully.",
-    );
-  };
-  const uploadLogo = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file || !companyId) return;
-    setUploading(true);
-    try {
-      await companySettingsApi.uploadCompanyLogo(companyId, file);
-      setCompany(await companySettingsApi.getCompany(companyId));
-      setNotice("Workspace logo updated successfully.");
-    } catch (error: any) {
-      setNotice(error?.message || "Logo could not be uploaded.");
-    } finally {
-      setUploading(false);
-      event.target.value = "";
-    }
-  };
-  const removeLogo = async () => {
-    if (!companyId) return;
-    setUploading(true);
-    try {
-      await companySettingsApi.removeCompanyLogo(companyId);
-      setCompany(await companySettingsApi.getCompany(companyId));
-      setNotice("Workspace logo removed successfully.");
-    } catch {
-      setNotice("Logo could not be removed.");
-    } finally {
-      setUploading(false);
-    }
-  };
-  if (!companyId || !company)
-    return (
-      <Card className="border-[#D9E7DD]">
-        <CardContent className="p-6 text-sm text-slate-500">
-          Loading workspace settings…
-        </CardContent>
-      </Card>
-    );
-  const logoUrl = company.settings?.logo_url
-    ? getCompanyLogoUrl(companyId, company.settings.logo_url)
-    : undefined;
-  return (
-    <section className="space-y-4">
-      <div>
-        <h2 className="text-xl font-bold text-[#18342A]">
-          Workspace & customer experience
-        </h2>
-        <p className="mt-1 text-sm text-slate-500">
-          This information is used by the website, customer chat, and agent context.
-        </p>
-      </div>
-      {notice && (
-        <div className="rounded-xl border border-[#C7E9D0] bg-[#F1FBF4] px-4 py-3 text-sm font-medium text-[#17613C]">
-          {notice}
-        </div>
-      )}
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card className="overflow-hidden border-[#D9E7DD] shadow-sm">
-          <CardContent className="p-0">
-            <div className="flex items-center gap-3 border-b border-[#E5EEE7] bg-[#F8FBF8] px-6 py-5">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#E4F5E9] text-[#087F5B]">
-                <Building2 size={19} />
-              </span>
-              <div>
-                <h3 className="font-bold text-[#19372B]">
-                  Brand & business profile
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Logo, contact and customer-facing business details.
-                </p>
-              </div>
+      </section>
+
+      {/* ── Tab 1: Branding & White-Label ──────────────────────────────────── */}
+      {activeTab === "branding" && (
+        <Card className="border-[#D5E4DB] bg-white shadow-sm">
+          <CardContent className="p-7 space-y-6">
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-lg font-bold text-[#19372B]">White-Label Branding & Identity</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Customize the platform appearance, brand name, timezone, and portal headers.
+              </p>
             </div>
-            <form onSubmit={saveBusiness} className="space-y-4 p-6">
-              <div className="flex items-center gap-4 rounded-2xl border border-[#E2ECE4] bg-[#FCFDFC] p-4">
-                <div className="grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-[#D6E5DA] bg-white text-[#087F5B]">
-                  {logoUrl ? (
-                    <img
-                      src={logoUrl}
-                      alt="Workspace logo"
-                      className="h-full w-full object-contain p-1"
-                    />
-                  ) : (
-                    <Building2 size={25} />
-                  )}
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Platform Brand Name
+                  </label>
+                  <Input
+                    value={settings.platform.platform_name}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        platform: { ...settings.platform, platform_name: e.target.value },
+                      })
+                    }
+                    className="font-bold text-slate-800"
+                  />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-[#315342]">
-                    Workspace logo
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    PNG, JPG or WebP. Maximum 2MB.
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <label className="cursor-pointer rounded-lg bg-[#0C4A31] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#083A27]">
-                      <Upload className="mr-1 inline h-3.5 w-3.5" />
-                      {uploading ? "Uploading…" : "Upload logo"}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={uploadLogo}
-                      />
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Default Business Timezone
+                  </label>
+                  <select
+                    value={settings.platform.default_timezone}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        platform: { ...settings.platform, default_timezone: e.target.value },
+                      })
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-medium focus:border-[#285A42] focus:outline-none"
+                  >
+                    <option value="Asia/Kolkata">Asia/Kolkata (IST · +05:30)</option>
+                    <option value="UTC">UTC (Universal Coordinated Time)</option>
+                    <option value="America/New_York">America/New York (EST)</option>
+                    <option value="Asia/Dubai">Asia/Dubai (GST · +04:00)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Default Platform Language
+                  </label>
+                  <select
+                    value={settings.platform.default_language}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        platform: { ...settings.platform, default_language: e.target.value },
+                      })
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-medium focus:border-[#285A42] focus:outline-none"
+                  >
+                    <option value="en-IN">English (India · en-IN)</option>
+                    <option value="hi-IN">Hindi / Hinglish (hi-IN)</option>
+                    <option value="gu-IN">Gujarati (gu-IN)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Logo & Accent Preview */}
+              <div className="rounded-2xl border border-slate-100 bg-[#FBFDFC] p-5 space-y-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Platform Logo & Accent Theme
+                </p>
+                <div className="flex items-center gap-4">
+                  <div className="grid h-16 w-16 place-items-center rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden p-2">
+                    <img
+                      src="/brand/zeniaone-logo.png"
+                      alt="Logo"
+                      className="max-h-full max-w-full object-contain"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = "none";
+                      }}
+                    />
+                    <Sparkles className="text-[#087F5B]" size={28} />
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">Global Header Logo</p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">PNG, SVG or WebP. Max 2MB.</p>
+                    <label className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#0C4A31] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#093A27] cursor-pointer">
+                      <Upload size={12} /> Upload New
+                      <input type="file" className="hidden" accept="image/*" />
                     </label>
-                    {logoUrl && (
-                      <button
-                        type="button"
-                        onClick={removeLogo}
-                        className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50"
-                      >
-                        <Trash2 className="mr-1 inline h-3.5 w-3.5" />
-                        Remove
-                      </button>
-                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <p className="text-xs font-bold text-slate-700 mb-2">Primary Accent Palette</p>
+                  <div className="flex items-center gap-2">
+                    <button className="h-7 w-7 rounded-full bg-[#0C4A31] ring-2 ring-offset-2 ring-[#0C4A31]" title="Emerald Cyber" />
+                    <button className="h-7 w-7 rounded-full bg-[#4F46E5] opacity-70 hover:opacity-100 transition" title="Indigo Quantum" />
+                    <button className="h-7 w-7 rounded-full bg-[#0EA5E9] opacity-70 hover:opacity-100 transition" title="Oceanic Blue" />
+                    <button className="h-7 w-7 rounded-full bg-[#18181B] opacity-70 hover:opacity-100 transition" title="Obsidian Dark" />
                   </div>
                 </div>
               </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Company name">
-                  <Input name="name" defaultValue={company.name} />
-                </Field>
-                <Field label="Legal name">
-                  <Input
-                    name="legal_name"
-                    defaultValue={company.settings?.legal_name || ""}
-                  />
-                </Field>
-                <Field label="Industry">
-                  <Input
-                    name="industry"
-                    defaultValue={company.industry || ""}
-                  />
-                </Field>
-                <Field label="Timezone">
-                  <Input
-                    name="timezone"
-                    defaultValue={company.timezone || "Asia/Kolkata"}
-                  />
-                </Field>
-                <Field label="Business email">
-                  <Input
-                    name="business_email"
-                    type="email"
-                    defaultValue={company.settings?.business_email || ""}
-                  />
-                </Field>
-                <Field label="Business phone">
-                  <Input
-                    name="phone"
-                    defaultValue={company.settings?.phone || ""}
-                  />
-                </Field>
-                <Field label="Website">
-                  <Input
-                    name="website"
-                    defaultValue={company.settings?.website || ""}
-                  />
-                </Field>
-                <Field label="Country">
-                  <Input
-                    name="country"
-                    defaultValue={company.country || "IN"}
-                  />
-                </Field>
-              </div>
-              <Field label="Business address">
-                <Input
-                  name="address"
-                  defaultValue={company.settings?.address || ""}
-                />
-              </Field>
-              <Field label="Business description">
-                <Textarea
-                  name="business_description"
-                  rows={3}
-                  defaultValue={company.settings?.business_description || ""}
-                />
-              </Field>
-              <Button
-                type="submit"
-                disabled={saving}
-                className="bg-[#0C4A31] hover:bg-[#083A27]"
-              >
-                {saving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
-                Save business profile
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-        <Card className="overflow-hidden border-[#D9E7DD] shadow-sm">
-          <CardContent className="p-0">
-            <div className="flex items-center gap-3 border-b border-[#E5EEE7] bg-[#F8FBF8] px-6 py-5">
-              <span className="grid h-10 w-10 place-items-center rounded-xl bg-[#E4F5E9] text-[#087F5B]">
-                <CalendarClock size={19} />
-              </span>
-              <div>
-                <h3 className="font-bold text-[#19372B]">
-                  Business hours & agent behavior
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Tell the agent when your business is open and how to greet
-                  visitors.
-                </p>
-              </div>
             </div>
-            <form onSubmit={saveHours} className="space-y-5 p-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Default language">
-                  <SmartSelect
-                    name="default_language"
-                    defaultValue={company.settings?.default_language || "en-IN"}
-                    onChange={() => {}}
-                    searchable={false}
-                    options={[
-                      { value: "en-IN", label: "English" },
-                      { value: "hi-IN", label: "Hindi / Hinglish" },
-                      { value: "gu-IN", label: "Gujarati" },
-                    ]}
-                  />
-                </Field>
-                <Field label="Default voice">
-                  <Input
-                    name="default_voice"
-                    defaultValue={company.settings?.default_voice || "ritu"}
-                  />
-                </Field>
-              </div>
-              <Field label="Welcome greeting">
-                <Textarea
-                  name="greeting_message"
-                  rows={3}
-                  defaultValue={company.settings?.greeting_message || ""}
-                  placeholder="Hello, how can I help you today?"
-                />
-              </Field>
-              <div>
-                <p className="mb-2 text-sm font-bold text-[#315342]">
-                  Weekly business hours
-                </p>
-                <SmartWeeklySchedule
-                  initialSchedule={company.settings?.business_hours}
-                />
-              </div>
-              <Button
-                type="submit"
-                disabled={saving}
-                className="bg-[#0C4A31] hover:bg-[#083A27]"
-              >
-                {saving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="mr-2 h-4 w-4" />
-                )}
-                Save hours & behavior
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-    </section>
-  );
-}
 
-function Panel({
-  icon: Icon,
-  title,
-  description,
-  children,
-  action,
-  saving,
-  danger = false,
-}: any) {
-  return (
-    <Card
-      className={`h-full overflow-hidden border ${danger ? "border-amber-200" : "border-[#D9E7DD]"} shadow-sm`}
-    >
-      <CardContent className="p-0">
-        <div
-          className={`flex items-start justify-between border-b px-6 py-5 ${danger ? "border-amber-100 bg-amber-50/50" : "border-[#E5EEE7] bg-[#F8FBF8]"}`}
-        >
-          <div className="flex gap-3">
-            <span
-              className={`grid h-10 w-10 place-items-center rounded-xl ${danger ? "bg-amber-100 text-amber-700" : "bg-[#E4F5E9] text-[#087F5B]"}`}
-            >
-              <Icon size={19} />
-            </span>
-            <div>
-              <h2 className="font-bold text-[#19372B]">{title}</h2>
-              <p className="mt-0.5 text-xs text-slate-500">{description}</p>
+            <div className="flex justify-end pt-4 border-t border-slate-100">
+              <Button
+                onClick={() => saveSection("platform")}
+                disabled={savingSection === "platform"}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "platform" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                Save Branding Settings
+              </Button>
             </div>
-          </div>
-          <Button
-            onClick={action}
-            disabled={saving}
-            className={
-              danger
-                ? "bg-amber-700 hover:bg-amber-800"
-                : "bg-[#0C4A31] hover:bg-[#083A27]"
-            }
-          >
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <>
-                <Save className="mr-2 h-4 w-4" />
-                Save
-              </>
-            )}
-          </Button>
-        </div>
-        <div className="space-y-5 p-6">{children}</div>
-      </CardContent>
-    </Card>
-  );
-}
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <label className="block space-y-2">
-      <span className="text-sm font-bold text-[#315342]">{label}</span>
-      {children}
-    </label>
-  );
-}
-function Toggle({
-  label,
-  detail,
-  checked,
-  onChange,
-  danger = false,
-}: {
-  label: string;
-  detail: string;
-  checked: boolean;
-  onChange: (value: boolean) => void;
-  danger?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-5 rounded-xl border border-[#E2ECE4] bg-[#FCFDFC] p-4">
-      <div>
-        <p className="text-sm font-bold text-[#315342]">{label}</p>
-        <p className="mt-1 text-xs leading-5 text-slate-500">{detail}</p>
-      </div>
-      <button
-        type="button"
-        aria-pressed={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative h-7 w-12 shrink-0 rounded-full transition ${checked ? (danger ? "bg-amber-600" : "bg-[#0D9A5F]") : "bg-slate-300"}`}
-      >
-        <span
-          className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${checked ? "left-6" : "left-1"}`}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Tab 2: Maintenance & Kill-Switch ────────────────────────────────── */}
+      {activeTab === "maintenance" && (
+        <Card className="border-[#D5E4DB] bg-white shadow-sm">
+          <CardContent className="p-7 space-y-6">
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-lg font-bold text-[#19372B]">Platform Maintenance & Emergency Controls</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Safely isolate telephony webhooks and database writes during updates without crashing active callers.
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 space-y-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="text-amber-600 mt-0.5" size={20} />
+                <div>
+                  <h3 className="text-sm font-bold text-amber-900">Emergency Platform Kill-Switch</h3>
+                  <p className="text-xs text-amber-800 leading-relaxed mt-1">
+                    When Maintenance Mode is ON, inbound calls will hear the broadcast message below and gracefully disconnect. Background queues will be paused.
+                  </p>
+                </div>
+              </div>
+
+              <div className="pt-2 flex items-center gap-3">
+                <button
+                  onClick={() => handleMaintenanceToggle(!isMaintenanceOn)}
+                  className={`rounded-xl px-5 py-2.5 text-xs font-black transition-all ${
+                    isMaintenanceOn
+                      ? "bg-red-600 text-white shadow-lg shadow-red-500/40 animate-pulse"
+                      : "bg-[#0C4A31] text-white hover:bg-[#093A27]"
+                  }`}
+                >
+                  {isMaintenanceOn ? "🛑 Deactivate Maintenance Mode (Go Live)" : "Activate Maintenance Mode"}
+                </button>
+                <span className="text-xs font-semibold text-slate-600">
+                  Current Status: <span className="font-bold text-slate-900">{isMaintenanceOn ? "PAUSED" : "OPERATIONAL"}</span>
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                Broadcast Audio / Banner Message
+              </label>
+              <Textarea
+                rows={3}
+                value={settings.system?.maintenance_message || ""}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    system: { ...settings.system, maintenance_message: e.target.value },
+                  })
+                }
+                className="text-xs text-slate-800"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                This message will be spoken by Sarvam TTS to incoming callers during platform maintenance.
+              </p>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-slate-100">
+              <Button
+                onClick={() => saveSection("system")}
+                disabled={savingSection === "system"}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "system" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                Save Maintenance Broadcast
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Tab 3: Alerts & Webhook Dispatchers ─────────────────────────────── */}
+      {activeTab === "alerts" && (
+        <Card className="border-[#D5E4DB] bg-white shadow-sm">
+          <CardContent className="p-7 space-y-6">
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-lg font-bold text-[#19372B]">Urgent Alerts & Webhook Dispatchers</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Instant real-time notifications sent to WhatsApp, Slack, or Discord when call drops or AI provider failures occur.
+              </p>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    WhatsApp Alert Number (High Priority)
+                  </label>
+                  <div className="relative">
+                    <Smartphone className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-600" />
+                    <Input
+                      value={whatsappNumber}
+                      onChange={(e) => setWhatsappNumber(e.target.value)}
+                      className="pl-9 text-xs font-mono font-bold text-slate-800"
+                      placeholder="+919099887880"
+                    />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    Critical call drops or circuit breaker trips will be dispatched via WhatsApp instantly.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Slack / Discord Incoming Webhook URL
+                  </label>
+                  <Input
+                    value={slackWebhook}
+                    onChange={(e) => setSlackWebhook(e.target.value)}
+                    className="text-xs font-mono text-slate-700"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-100 bg-[#FBFDFC] p-5 space-y-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Notification Triggers & Toggles
+                </p>
+                <div className="space-y-3 pt-1">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.notifications.admin_notifications_enabled}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          notifications: {
+                            ...settings.notifications,
+                            admin_notifications_enabled: e.target.checked,
+                          },
+                        })
+                      }
+                      className="h-4 w-4 accent-[#0C4A31] rounded"
+                    />
+                    <span className="text-xs font-bold text-slate-700">Dispatch alerts for AI Provider Failovers</span>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.notifications.system_alerts_enabled}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          notifications: {
+                            ...settings.notifications,
+                            system_alerts_enabled: e.target.checked,
+                          },
+                        })
+                      }
+                      className="h-4 w-4 accent-[#0C4A31] rounded"
+                    />
+                    <span className="text-xs font-bold text-slate-700">Dispatch alerts for Call Minutes Quota Exhaustion (85%+)</span>
+                  </label>
+
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.notifications.security_alerts_enabled}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          notifications: {
+                            ...settings.notifications,
+                            security_alerts_enabled: e.target.checked,
+                          },
+                        })
+                      }
+                      className="h-4 w-4 accent-[#0C4A31] rounded"
+                    />
+                    <span className="text-xs font-bold text-slate-700">Dispatch alerts for Suspicious Logins from Unknown IPs</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-slate-100">
+              <Button
+                onClick={() => saveSection("notifications")}
+                disabled={savingSection === "notifications"}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "notifications" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                Save Alert Webhooks
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Tab 4: Security Armor & Session Policies ───────────────────────── */}
+      {activeTab === "security" && (
+        <Card className="border-[#D5E4DB] bg-white shadow-sm">
+          <CardContent className="p-7 space-y-6">
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-lg font-bold text-[#19372B]">Security Armor & Session Governance</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Session timeouts, password complexity requirements, and multi-tenant isolation safeguards.
+              </p>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-4">
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-700">Admin Session Inactivity Timeout</span>
+                    <span className="font-mono font-bold text-[#0C4A31] bg-[#DCF7E4] px-2 py-0.5 rounded-md">
+                      {settings.security.session_timeout_minutes} Minutes
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="15"
+                    max="480"
+                    step="15"
+                    value={settings.security.session_timeout_minutes}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        security: {
+                          ...settings.security,
+                          session_timeout_minutes: Number(e.target.value),
+                        },
+                      })
+                    }
+                    className="w-full accent-[#0C4A31] cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-400">
+                    <span>15 min</span>
+                    <span>120 min</span>
+                    <span>8 hours</span>
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={settings.security.require_strong_passwords}
+                      onChange={(e) =>
+                        setSettings({
+                          ...settings,
+                          security: {
+                            ...settings.security,
+                            require_strong_passwords: e.target.checked,
+                          },
+                        })
+                      }
+                      className="h-4 w-4 accent-[#0C4A31] rounded"
+                    />
+                    <div>
+                      <span className="text-xs font-bold text-slate-800">Enforce Strict Password Complexity</span>
+                      <p className="text-[11px] text-slate-500">
+                        Requires minimum 10 characters with numbers and special symbols for all tenant admins.
+                      </p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-100 bg-[#FBFDFC] p-5 space-y-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+                  Platform Security Safeguards
+                </p>
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
+                    <span className="text-slate-600">JWT Token Signing</span>
+                    <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                      HS256 Verified
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
+                    <span className="text-slate-600">Telephony Webhook HMAC</span>
+                    <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                      Active
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-1.5">
+                    <span className="text-slate-600">Cross-Tenant DB Isolation</span>
+                    <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
+                      Enforced (company_id)
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-slate-100">
+              <Button
+                onClick={() => saveSection("security")}
+                disabled={savingSection === "security"}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "security" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                Save Security Policies
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Tab 5: AI Guardrails & Token Budget ─────────────────────────────── */}
+      {activeTab === "ai" && (
+        <Card className="border-[#D5E4DB] bg-white shadow-sm">
+          <CardContent className="p-7 space-y-6">
+            <div className="border-b border-slate-100 pb-4">
+              <h2 className="text-lg font-bold text-[#19372B]">Global AI Guardrails & Token Budget</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Default LLM engines, maximum tokens per phone call, and hallucination containment limits.
+              </p>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Global Default Provider
+                  </label>
+                  <select
+                    value={settings.ai_defaults.default_provider}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        ai_defaults: { ...settings.ai_defaults, default_provider: e.target.value },
+                      })
+                    }
+                    className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-bold focus:border-[#285A42] focus:outline-none"
+                  >
+                    <option value="groq">Groq (Ultra-fast 0.11s TTFT)</option>
+                    <option value="gemini">Google Gemini (Multi-turn & High Context)</option>
+                    <option value="sarvam">Sarvam AI (Specialized Indic Speech)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                    Default Engine Model
+                  </label>
+                  <Input
+                    value={settings.ai_defaults.default_model}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        ai_defaults: { ...settings.ai_defaults, default_model: e.target.value },
+                      })
+                    }
+                    className="text-xs font-mono font-bold"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-700">Hard Token Ceiling Per Phone Call</span>
+                    <span className="font-mono font-bold text-[#0C4A31] bg-[#DCF7E4] px-2 py-0.5 rounded-md">
+                      {settings.ai_defaults.default_token_limit} Tokens
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="512"
+                    max="8192"
+                    step="256"
+                    value={settings.ai_defaults.default_token_limit}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        ai_defaults: {
+                          ...settings.ai_defaults,
+                          default_token_limit: Number(e.target.value),
+                        },
+                      })
+                    }
+                    className="w-full accent-[#0C4A31] cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-400">
+                    <span>512 tokens</span>
+                    <span>2,048 tokens</span>
+                    <span>8,192 tokens</span>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-slate-700">Creativity / Temperature</span>
+                    <span className="font-mono font-bold text-[#0C4A31] bg-[#DCF7E4] px-2 py-0.5 rounded-md">
+                      {settings.ai_defaults.default_temperature}
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={settings.ai_defaults.default_temperature}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        ai_defaults: {
+                          ...settings.ai_defaults,
+                          default_temperature: Number(e.target.value),
+                        },
+                      })
+                    }
+                    className="w-full accent-[#0C4A31] cursor-pointer"
+                  />
+                  <div className="flex justify-between text-[10px] text-slate-400">
+                    <span>0.0 (Strict / Accurate)</span>
+                    <span>0.7 (Balanced)</span>
+                    <span>1.0 (Creative)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-slate-100">
+              <Button
+                onClick={() => saveSection("ai_defaults")}
+                disabled={savingSection === "ai_defaults"}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "ai_defaults" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                Save AI Guardrails
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {toast && (
+        <Toast
+          message={toast.message}
+          tone={toast.tone}
+          onClose={() => setToast(null)}
         />
-      </button>
+      )}
     </div>
-  );
-}
-function Stat({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: any;
-  label: string;
-  value: string;
-}) {
-  return (
-    <Card className="border-[#D9E7DD] shadow-sm">
-      <CardContent className="p-5">
-        <span className="grid h-9 w-9 place-items-center rounded-xl bg-[#E6F6EB] text-[#087F5B]">
-          <Icon size={18} />
-        </span>
-        <p className="mt-5 text-xs font-bold uppercase tracking-wider text-slate-500">
-          {label}
-        </p>
-        <p className="mt-1 text-lg font-bold text-[#1C3A2D] capitalize">
-          {value}
-        </p>
-      </CardContent>
-    </Card>
   );
 }

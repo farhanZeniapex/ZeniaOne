@@ -55,67 +55,35 @@ type NavGroup = { title: string; items: NavItem[] };
 
 const navGroups: NavGroup[] = [
   {
-    title: "COMMAND CENTER",
+    title: "OPERATIONS",
     items: [
       { name: "Overview", href: "/admin", icon: LayoutDashboard, exact: true },
-      { name: "Live Calls", href: "/admin/live-calls", icon: Activity },
+      { name: "Live Radar", href: "/admin/live-calls", icon: Activity },
       {
-        name: "Conversations",
+        name: "Call Records",
         href: "/admin/conversations",
         icon: MessageSquare,
       },
     ],
   },
   {
-    title: "BUILD & DEPLOY",
+    title: "TENANTS & VOICE",
     items: [
-      { name: "Organization", href: "/admin/companies", icon: Building2 },
-      { name: "Agents & Voices", href: "/admin/agents", icon: Headset },
-      { name: "Channels", href: "/admin/channels", icon: Phone },
+      { name: "Organizations", href: "/admin/companies", icon: Building2 },
+      { name: "Voice AI Agents", href: "/admin/agents", icon: Headset },
+      { name: "Phone Channels", href: "/admin/channels", icon: Phone },
     ],
   },
   {
     title: "AI WORKSPACE",
     items: [
-      {
-        name: "Assistant",
-        href: "/admin/my-ai/chat",
-        icon: Bot,
-        children: [
-          { name: "New Chat", href: "/admin/my-ai/chat", icon: Bot },
-          {
-            name: "Chat History",
-            href: "/admin/my-ai/conversations",
-            icon: Clock,
-          },
-        ],
-      },
-      {
-        name: "Knowledge",
-        href: "/admin/knowledge",
-        icon: BookOpen,
-        children: [
-          {
-            name: "My Documents",
-            href: "/admin/my-ai/documents",
-            icon: BookOpen,
-          },
-          { name: "Knowledge Base", href: "/admin/knowledge", icon: BookOpen },
-        ],
-      },
-      {
-        name: "Studio",
-        href: "/admin/ai-playground",
-        icon: Zap,
-        children: [
-          { name: "AI Playground", href: "/admin/ai-playground", icon: Zap },
-          { name: "Usage & Costs", href: "/admin/usage", icon: BarChart },
-        ],
-      },
+      { name: "My AI Copilot", href: "/admin/my-ai/chat", icon: Bot },
+      { name: "Knowledge Hub", href: "/admin/knowledge", icon: BookOpen },
+      { name: "AI Playground", href: "/admin/ai-playground", icon: Zap },
     ],
   },
   {
-    title: "CONTROL",
+    title: "MANAGEMENT",
     items: [
       {
         name: "AI Routing",
@@ -123,12 +91,17 @@ const navGroups: NavGroup[] = [
         icon: Settings,
       },
       {
+        name: "Billing & Plans",
+        href: "/admin/subscriptions",
+        icon: CreditCard,
+      },
+      {
         name: "System",
         href: "/admin/system",
         icon: HeartPulse,
         children: [
           {
-            name: "Health & Logs",
+            name: "Health & Telemetry",
             href: "/admin/system",
             icon: HeartPulse,
             exact: true,
@@ -136,11 +109,6 @@ const navGroups: NavGroup[] = [
           { name: "Activity Logs", href: "/admin/logs", icon: ClipboardList },
           { name: "Settings", href: "/admin/settings", icon: ShieldAlert },
         ],
-      },
-      {
-        name: "Billing & Plans",
-        href: "/admin/subscriptions",
-        icon: CreditCard,
       },
     ],
   },
@@ -192,11 +160,12 @@ export default function AdminLayout({
     useState("");
   const [commandQuery, setCommandQuery] = useState("");
   const [expandedGroups, setExpandedGroups] = useState<string[]>([
-    "COMMAND CENTER",
-    "BUILD & DEPLOY",
+    "OPERATIONS",
+    "TENANTS & VOICE",
     "AI WORKSPACE",
+    "MANAGEMENT",
   ]);
-  const [expandedItems, setExpandedItems] = useState<string[]>(["Assistant"]);
+  const [expandedItems, setExpandedItems] = useState<string[]>(["System"]);
   const profileRef = useRef<HTMLDivElement>(null);
   const sidebarBeforeFocusRef = useRef<boolean | null>(null);
 
@@ -227,33 +196,16 @@ export default function AdminLayout({
           setUserProfile({ name: res.name, email: res.email });
           setIsLoading(false);
 
-          // Warm the most frequently visited admin resources after the shell
-          // is visible. fetchApi deduplicates in-flight requests and caches
-          // the responses, so route changes reuse these results instead of
-          // showing a full-page loader while Render wakes up.
-          const warmAdminRoutes = [
-            "/admin/companies",
-            "/admin/companies?limit=100",
-            "/admin/agents",
-            "/admin/channels",
-            "/admin/documents",
-            "/admin/knowledge-bases",
-            "/admin/monitoring-summary",
-            "/admin/subscriptions",
-            "/admin/users",
-            "/plans",
-          ];
-          const warm = () => {
-            void Promise.allSettled(warmAdminRoutes.map((path) => fetchApi(path)));
-          };
+          // Polite background warm: only fetch company overview when browser is completely idle
           if (typeof window !== "undefined") {
             const idleWindow = window as Window & {
               requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
             };
+            const warm = () => {
+              void fetchApi("/admin/companies");
+            };
             if (idleWindow.requestIdleCallback) {
-              idleWindow.requestIdleCallback(warm, { timeout: 2500 });
-            } else {
-              window.setTimeout(warm, 800);
+              idleWindow.requestIdleCallback(warm, { timeout: 4000 });
             }
           }
         } else {
