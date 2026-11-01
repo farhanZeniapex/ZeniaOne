@@ -42,43 +42,68 @@ const TIME_OPTIONS = Array.from({ length: 48 }).map((_, i) => {
   return { value, display };
 });
 
-export default function SmartWeeklySchedule({ initialSchedule }: { initialSchedule?: any }) {
-  const [schedule, setSchedule] = useState<Record<string, DaySchedule>>(() => {
-    let parsed = initialSchedule;
-    if (typeof parsed === 'string') {
+export default function SmartWeeklySchedule({
+  initialSchedule,
+  onChange,
+}: {
+  initialSchedule?: any;
+  onChange?: (schedule: Record<string, DaySchedule>) => void;
+}) {
+  const parseSchedule = (raw: any): Record<string, DaySchedule> => {
+    let parsed = raw;
+    if (typeof parsed === "string") {
       try {
         parsed = JSON.parse(parsed);
-      } catch(e) {
+      } catch {
         parsed = {};
       }
     }
-    if (!parsed || typeof parsed !== 'object') {
+    if (!parsed || typeof parsed !== "object") {
       parsed = {};
     }
-    
+
     const finalSchedule = { ...DEFAULT_SCHEDULE };
     for (const key of Object.keys(DEFAULT_SCHEDULE)) {
-      if (parsed && parsed[key] && typeof parsed[key] === 'object') {
+      if (parsed && parsed[key] && typeof parsed[key] === "object") {
         finalSchedule[key as keyof typeof DEFAULT_SCHEDULE] = {
           ...DEFAULT_SCHEDULE[key as keyof typeof DEFAULT_SCHEDULE],
-          ...parsed[key]
+          ...parsed[key],
         };
       }
     }
     return finalSchedule;
-  });
+  };
+
+  const [schedule, setSchedule] = useState<Record<string, DaySchedule>>(() =>
+    parseSchedule(initialSchedule),
+  );
+
+  React.useEffect(() => {
+    if (initialSchedule) {
+      setSchedule(parseSchedule(initialSchedule));
+    }
+  }, [initialSchedule]);
+
   const toggleDay = (day: string) => {
-    setSchedule(prev => ({
-      ...prev,
-      [day]: { ...prev[day], active: !prev[day].active }
-    }));
+    setSchedule((prev) => {
+      const next = {
+        ...prev,
+        [day]: { ...prev[day], active: !prev[day].active },
+      };
+      onChange?.(next);
+      return next;
+    });
   };
 
   const updateTime = (day: string, field: "start" | "end", value: string) => {
-    setSchedule(prev => ({
-      ...prev,
-      [day]: { ...prev[day], [field]: value }
-    }));
+    setSchedule((prev) => {
+      const next = {
+        ...prev,
+        [day]: { ...prev[day], [field]: value },
+      };
+      onChange?.(next);
+      return next;
+    });
   };
 
   return (

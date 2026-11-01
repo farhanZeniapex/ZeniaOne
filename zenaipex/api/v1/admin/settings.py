@@ -20,6 +20,7 @@ class PlatformSettingsUpdate(BaseModel):
     platform_name: Optional[str] = None
     default_language: Optional[str] = None
     default_timezone: Optional[str] = None
+    accent_color: Optional[str] = None
 
 class AIDefaultsUpdate(BaseModel):
     default_provider: Optional[str] = None
@@ -35,6 +36,8 @@ class NotificationSettingsUpdate(BaseModel):
     admin_notifications_enabled: Optional[bool] = None
     system_alerts_enabled: Optional[bool] = None
     security_alerts_enabled: Optional[bool] = None
+    whatsapp_number: Optional[str] = None
+    slack_webhook_url: Optional[str] = None
 
 class SystemSettingsUpdate(BaseModel):
     maintenance_mode: Optional[bool] = None
@@ -59,9 +62,10 @@ def get_default_settings() -> Dict[str, Any]:
         "type": "global",
         "platform": {
             "platform_name": "ZeniaOne",
-            "default_language": "en",
-            "default_timezone": "UTC",
+            "default_language": "en-IN",
+            "default_timezone": "Asia/Kolkata",
             "logo_path": None,
+            "accent_color": "#0C4A31",
         },
         "ai_defaults": {
             "default_provider": "sarvam",
@@ -77,6 +81,8 @@ def get_default_settings() -> Dict[str, Any]:
             "admin_notifications_enabled": True,
             "system_alerts_enabled": True,
             "security_alerts_enabled": True,
+            "whatsapp_number": "+919099887880",
+            "slack_webhook_url": "",
         },
         "system": {
             "maintenance_mode": False,

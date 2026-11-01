@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import {
   Settings2,
   Building2,
@@ -24,6 +24,20 @@ import {
   Smartphone,
   Send,
   Loader2,
+  CalendarClock,
+  MapPin,
+  Mail,
+  Phone,
+  MessageSquare,
+  Mic,
+  Volume2,
+  Check,
+  RefreshCw,
+  Power,
+  FileText,
+  ChevronRight,
+  Layers,
+  ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -31,11 +45,18 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Toast } from "@/components/ui/toast";
 import { PageLoadingSkeleton } from "@/components/ui/page-loading-skeleton";
+import SmartWeeklySchedule from "@/components/platform/settings/SmartWeeklySchedule";
+import { SmartSelect } from "@/components/ui/smart-select";
 import {
   GlobalSettings,
   getAdminSettings,
   updateAdminSettings,
+  uploadPlatformLogo,
+  removePlatformLogo,
+  companySettingsApi,
+  CompanyProfile,
 } from "@/lib/api/settings";
+import { fetchApi, getCompanyLogoUrl, API_BASE_URL } from "@/lib/api/client";
 
 const DEFAULT_SETTINGS: GlobalSettings = {
   type: "global",
@@ -43,11 +64,12 @@ const DEFAULT_SETTINGS: GlobalSettings = {
     platform_name: "ZeniaOne",
     default_language: "en-IN",
     default_timezone: "Asia/Kolkata",
+    accent_color: "#0C4A31",
   },
   ai_defaults: {
-    default_provider: "groq",
-    default_model: "qwen-3.8-27b",
-    default_token_limit: 2048,
+    default_provider: "sarvam",
+    default_model: "sarvam-105b",
+    default_token_limit: 1024,
     default_temperature: 0.7,
   },
   security: {
@@ -58,57 +80,379 @@ const DEFAULT_SETTINGS: GlobalSettings = {
     admin_notifications_enabled: true,
     system_alerts_enabled: true,
     security_alerts_enabled: true,
+    whatsapp_number: "+919099887880",
+    slack_webhook_url: "",
   },
   system: {
     maintenance_mode: false,
-    maintenance_message: "ZeniaOne is currently performing scheduled engine optimizations. Normal operations will resume shortly.",
+    maintenance_message: "System is currently undergoing maintenance. Please try again later.",
   },
 };
+
+const ACCENT_PALETTES = [
+  { id: "emerald", label: "Emerald Cyber", hex: "#0C4A31", borderHex: "#10B981" },
+  { id: "indigo", label: "Indigo Quantum", hex: "#4F46E5", borderHex: "#818CF8" },
+  { id: "oceanic", label: "Oceanic Blue", hex: "#0284C7", borderHex: "#38BDF8" },
+  { id: "violet", label: "Royal Violet", hex: "#7C3AED", borderHex: "#A78BFA" },
+  { id: "obsidian", label: "Obsidian Dark", hex: "#18181B", borderHex: "#71717A" },
+];
+
+const STANDARD_VOICES = [
+  { value: "ritu", label: "Ritu (Warm & Professional · Hindi/English)" },
+  { value: "priya", label: "Priya (Friendly & Clear · Hinglish)" },
+  { value: "neha", label: "Neha (Energetic Support · English/Hindi)" },
+  { value: "pooja", label: "Pooja (Calm & Empathetic · Hindi)" },
+  { value: "shreya", label: "Shreya (Executive Tone · English)" },
+  { value: "kavya", label: "Kavya (Soft & Polished · Gujarati/Hindi)" },
+  { value: "rahul", label: "Rahul (Assertive & Confident · Hindi/English)" },
+  { value: "rohan", label: "Rohan (Casual & Tech · English)" },
+  { value: "aditya", label: "Aditya (Corporate Formal · Hindi/English)" },
+  { value: "kabir", label: "Kabir (Deep & Authoritative · Hindi)" },
+  { value: "amit", label: "Amit (Customer Care Lead · Hinglish)" },
+];
+
+const LANGUAGE_OPTIONS = [
+  { value: "en-IN", label: "English (India · en-IN)" },
+  { value: "hi-IN", label: "Hindi / Hinglish (hi-IN)" },
+  { value: "gu-IN", label: "Gujarati (gu-IN)" },
+  { value: "en-US", label: "English (US · en-US)" },
+  { value: "en-GB", label: "English (UK · en-GB)" },
+];
+
+const TIMEZONE_OPTIONS = [
+  { value: "Asia/Kolkata", label: "Asia/Kolkata (IST · +05:30)" },
+  { value: "UTC", label: "UTC (Universal Coordinated Time)" },
+  { value: "America/New_York", label: "America/New York (EST · -05:00)" },
+  { value: "Europe/London", label: "Europe/London (GMT · +00:00)" },
+  { value: "Asia/Dubai", label: "Asia/Dubai (GST · +04:00)" },
+  { value: "Asia/Singapore", label: "Asia/Singapore (SGT · +08:00)" },
+];
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<GlobalSettings>(DEFAULT_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [savingSection, setSavingSection] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"branding" | "maintenance" | "alerts" | "security" | "ai">("branding");
+  const [activeTab, setActiveTab] = useState<
+    "business" | "schedule" | "voice" | "branding" | "maintenance" | "alerts" | "security" | "ai"
+  >("business");
   const [toast, setToast] = useState<{ message: string; tone: "success" | "error" | "info" } | null>(null);
 
+  // Companies & Workspace management
+  const [companies, setCompanies] = useState<CompanyProfile[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string>("");
+  const [currentCompany, setCurrentCompany] = useState<CompanyProfile | null>(null);
+  const [loadingCompany, setLoadingCompany] = useState(false);
+  const [customVoices, setCustomVoices] = useState<Array<{ id: string; name?: string; display_name?: string }>>([]);
+
+  // Company editable fields
+  const [compName, setCompName] = useState("");
+  const [legalName, setLegalName] = useState("");
+  const [industry, setIndustry] = useState("");
+  const [timezone, setTimezone] = useState("Asia/Kolkata");
+  const [businessEmail, setBusinessEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [website, setWebsite] = useState("");
+  const [country, setCountry] = useState("India");
+  const [address, setAddress] = useState("");
+  const [businessDesc, setBusinessDesc] = useState("");
+
+  // Voice & Greetings fields
+  const [defaultLanguage, setDefaultLanguage] = useState("en-IN");
+  const [defaultVoice, setDefaultVoice] = useState("ritu");
+  const [inboundGreeting, setInboundGreeting] = useState("");
+  const [outboundGreeting, setOutboundGreeting] = useState("");
+  const [customerPolicies, setCustomerPolicies] = useState("");
+  const [generatingGreeting, setGeneratingGreeting] = useState<"inbound" | "outbound" | null>(null);
+
+  // Weekly Schedule
+  const [scheduleData, setScheduleData] = useState<any>(null);
+
   // Logo state
+  const [logoVersion, setLogoVersion] = useState(Date.now());
   const [uploadingLogo, setUploadingLogo] = useState(false);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  const companyLogoInputRef = useRef<HTMLInputElement>(null);
+  const platformLogoInputRef = useRef<HTMLInputElement>(null);
 
-  // Webhook / WhatsApp custom state
+  // Alert fields
   const [whatsappNumber, setWhatsappNumber] = useState("+919099887880");
-  const [slackWebhook, setSlackWebhook] = useState("https://hooks.slack.com/services/T00/B00/XXXXX");
+  const [slackWebhook, setSlackWebhook] = useState("");
 
+  // 1. Initial Load: Platform Settings + Companies List
   useEffect(() => {
-    async function load() {
+    async function loadInitial() {
       try {
-        const data = await getAdminSettings();
-        setSettings({
-          ...DEFAULT_SETTINGS,
-          ...data,
-          platform: { ...DEFAULT_SETTINGS.platform, ...data.platform },
-          ai_defaults: { ...DEFAULT_SETTINGS.ai_defaults, ...data.ai_defaults },
-          security: { ...DEFAULT_SETTINGS.security, ...data.security },
-          notifications: { ...DEFAULT_SETTINGS.notifications, ...data.notifications },
-          system: { ...DEFAULT_SETTINGS.system, ...data.system },
-        });
-        if ((data as any).logo_url || data.platform?.logo_path) {
-          setLogoPreview((data as any).logo_url || data.platform?.logo_path);
+        const [settingsRes, compListRes] = await Promise.allSettled([
+          getAdminSettings(),
+          fetchApi<{ companies: CompanyProfile[] }>("/companies"),
+        ]);
+
+        if (settingsRes.status === "fulfilled" && settingsRes.value) {
+          const s = settingsRes.value;
+          setSettings({
+            ...DEFAULT_SETTINGS,
+            ...s,
+            platform: { ...DEFAULT_SETTINGS.platform, ...s.platform },
+            ai_defaults: { ...DEFAULT_SETTINGS.ai_defaults, ...s.ai_defaults },
+            security: { ...DEFAULT_SETTINGS.security, ...s.security },
+            notifications: { ...DEFAULT_SETTINGS.notifications, ...s.notifications },
+            system: { ...DEFAULT_SETTINGS.system, ...s.system },
+          });
+          if (s.notifications?.whatsapp_number) {
+            setWhatsappNumber(s.notifications.whatsapp_number);
+          }
+          if (s.notifications?.slack_webhook_url) {
+            setSlackWebhook(s.notifications.slack_webhook_url);
+          }
         }
-      } catch {
-        setToast({ message: "Loaded default platform control profile.", tone: "info" });
+
+        if (compListRes.status === "fulfilled" && compListRes.value?.companies) {
+          const comps = compListRes.value.companies;
+          setCompanies(comps);
+          // Prefer admin_workspace or first company
+          const preferred = comps.find((c: any) => c.slug === "admin_workspace") || comps[0];
+          if (preferred) {
+            setSelectedCompanyId(preferred.id);
+          }
+        }
+      } catch (err: any) {
+        console.error("Settings load error:", err);
       } finally {
         setLoading(false);
       }
     }
-    load();
+
+    loadInitial();
   }, []);
 
-  const saveSection = async (section: keyof GlobalSettings) => {
+  // 2. Load Selected Company Details
+  useEffect(() => {
+    if (!selectedCompanyId) return;
+
+    let isMounted = true;
+    async function loadCompanyDetails() {
+      setLoadingCompany(true);
+      try {
+        const comp = await companySettingsApi.getCompany(selectedCompanyId);
+        if (!isMounted) return;
+
+        setCurrentCompany(comp);
+        setCompName(comp.name || "");
+        setLegalName(comp.settings?.legal_name || "");
+        setIndustry(comp.industry || "");
+        setTimezone(comp.timezone || "Asia/Kolkata");
+        setBusinessEmail(comp.settings?.business_email || "");
+        setPhone(comp.settings?.phone || "");
+        setWebsite(comp.settings?.website || "");
+        setCountry(comp.country || "India");
+        setAddress(comp.settings?.address || "");
+        setBusinessDesc(comp.settings?.business_description || "");
+
+        // Voice & Greetings
+        setDefaultLanguage(comp.settings?.default_language || "en-IN");
+        setDefaultVoice(comp.settings?.default_voice || "ritu");
+        setInboundGreeting(comp.settings?.inbound_greeting || comp.settings?.greeting_message || "");
+        setOutboundGreeting(comp.settings?.outbound_greeting || "");
+        setCustomerPolicies(comp.settings?.customer_policies || "");
+        setScheduleData(comp.settings?.business_hours || null);
+
+        // Custom voices
+        try {
+          const voiceRes = await companySettingsApi.listCustomVoices(selectedCompanyId);
+          if (isMounted) setCustomVoices(voiceRes.voices || []);
+        } catch {
+          if (isMounted) setCustomVoices([]);
+        }
+      } catch (err: any) {
+        if (isMounted) {
+          setToast({ message: "Could not load selected workspace profile.", tone: "error" });
+        }
+      } finally {
+        if (isMounted) setLoadingCompany(false);
+      }
+    }
+
+    loadCompanyDetails();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedCompanyId]);
+
+  // ── Company Logo Handlers ──────────────────────────────────────────────────
+  const handleCompanyLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !currentCompany) return;
+
+    setUploadingLogo(true);
+    try {
+      await companySettingsApi.uploadCompanyLogo(currentCompany.id, file);
+      // Reload company
+      const refreshed = await companySettingsApi.getCompany(currentCompany.id);
+      setCurrentCompany(refreshed);
+      setLogoVersion(Date.now());
+      setToast({ message: "Company logo uploaded and updated successfully!", tone: "success" });
+    } catch (err: any) {
+      setToast({ message: err?.message || "Failed to upload logo.", tone: "error" });
+    } finally {
+      setUploadingLogo(false);
+      if (event.target) event.target.value = "";
+    }
+  };
+
+  const handleCompanyLogoRemove = async () => {
+    if (!currentCompany) return;
+    if (!confirm("Are you sure you want to remove the company logo?")) return;
+
+    setUploadingLogo(true);
+    try {
+      await companySettingsApi.removeCompanyLogo(currentCompany.id);
+      const refreshed = await companySettingsApi.getCompany(currentCompany.id);
+      setCurrentCompany(refreshed);
+      setLogoVersion(Date.now());
+      setToast({ message: "Company logo removed successfully.", tone: "info" });
+    } catch (err: any) {
+      setToast({ message: err?.message || "Failed to remove logo.", tone: "error" });
+    } finally {
+      setUploadingLogo(false);
+    }
+  };
+
+  // ── Company Profile Save ───────────────────────────────────────────────────
+  const saveCompanyProfile = async () => {
+    if (!currentCompany) return;
+    setSavingSection("business");
+    try {
+      const updated = await companySettingsApi.updateCompany(currentCompany.id, {
+        name: compName,
+        industry,
+        country,
+        timezone,
+        settings: {
+          ...currentCompany.settings,
+          legal_name: legalName,
+          business_email: businessEmail,
+          phone,
+          website,
+          address,
+          business_description: businessDesc,
+        },
+      });
+      setCurrentCompany(updated);
+      setToast({ message: "Business profile & office address saved permanently!", tone: "success" });
+    } catch (err: any) {
+      setToast({ message: err?.message || "Failed to save business profile.", tone: "error" });
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  // ── Company Operating Hours Save ───────────────────────────────────────────
+  const saveOperatingHours = async () => {
+    if (!currentCompany) return;
+    setSavingSection("schedule");
+    try {
+      const updated = await companySettingsApi.updateCompany(currentCompany.id, {
+        settings: {
+          ...currentCompany.settings,
+          business_hours: scheduleData,
+        },
+      });
+      setCurrentCompany(updated);
+      setToast({ message: "Weekly operating hours & schedule synchronized!", tone: "success" });
+    } catch (err: any) {
+      setToast({ message: err?.message || "Failed to save schedule.", tone: "error" });
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  // ── Voice & Greetings Save ─────────────────────────────────────────────────
+  const saveVoiceAndGreetings = async () => {
+    if (!currentCompany) return;
+    setSavingSection("voice");
+    try {
+      const updated = await companySettingsApi.updateCompany(currentCompany.id, {
+        settings: {
+          ...currentCompany.settings,
+          default_language: defaultLanguage,
+          default_voice: defaultVoice,
+          greeting_message: inboundGreeting,
+          inbound_greeting: inboundGreeting,
+          outbound_greeting: outboundGreeting,
+          customer_policies: customerPolicies,
+        },
+      });
+      setCurrentCompany(updated);
+      setToast({ message: "AI voice, greetings & customer policies updated!", tone: "success" });
+    } catch (err: any) {
+      setToast({ message: err?.message || "Failed to save voice settings.", tone: "error" });
+    } finally {
+      setSavingSection(null);
+    }
+  };
+
+  const generateAIGreeting = async (direction: "inbound" | "outbound") => {
+    if (!currentCompany) return;
+    setGeneratingGreeting(direction);
+    try {
+      const res = await companySettingsApi.generateGreeting(currentCompany.id, direction, defaultLanguage);
+      if (direction === "inbound") {
+        setInboundGreeting(res.greeting);
+      } else {
+        setOutboundGreeting(res.greeting);
+      }
+      setToast({ message: `AI generated high-converting ${direction} greeting! Click Save to apply.`, tone: "success" });
+    } catch (err: any) {
+      setToast({ message: err?.message || `Failed to generate ${direction} greeting.`, tone: "error" });
+    } finally {
+      setGeneratingGreeting(null);
+    }
+  };
+
+  // ── Platform Accent Color Handler ──────────────────────────────────────────
+  const handleSelectAccent = async (hex: string) => {
+    const updated = {
+      ...settings,
+      platform: {
+        ...settings.platform,
+        accent_color: hex,
+      },
+    };
+    setSettings(updated);
+
+    // Apply CSS variable immediately for instant visual feedback
+    if (typeof document !== "undefined") {
+      document.documentElement.style.setProperty("--primary-accent", hex);
+    }
+
+    try {
+      await updateAdminSettings({
+        platform: {
+          ...settings.platform,
+          accent_color: hex,
+        },
+      });
+      setToast({ message: `Theme accent color set to ${hex} permanently!`, tone: "success" });
+    } catch {
+      setToast({ message: "Failed to persist theme accent color.", tone: "error" });
+    }
+  };
+
+  // ── Platform Settings Save Handlers ────────────────────────────────────────
+  const savePlatformSection = async (section: keyof GlobalSettings) => {
     setSavingSection(String(section));
     try {
-      await updateAdminSettings({ [section]: settings[section] });
+      let payload: any = { [section]: settings[section] };
+
+      if (section === "notifications") {
+        payload.notifications = {
+          ...settings.notifications,
+          whatsapp_number: whatsappNumber,
+          slack_webhook_url: slackWebhook,
+        };
+      }
+
+      const res = await updateAdminSettings(payload);
+      setSettings(res);
       setToast({ message: `${String(section).toUpperCase()} preferences updated permanently!`, tone: "success" });
     } catch {
       setToast({ message: "Failed to persist platform changes.", tone: "error" });
@@ -149,62 +493,162 @@ export default function AdminSettingsPage() {
 
   const isMaintenanceOn = Boolean(settings.system?.maintenance_mode);
 
+  // Logo URL resolution
+  const companyLogoUrl =
+    currentCompany && currentCompany.settings?.logo_url
+      ? `${getCompanyLogoUrl(currentCompany.id, currentCompany.settings.logo_url)}&t=${logoVersion}`
+      : null;
+
+  const currentAccent = settings.platform?.accent_color || "#0C4A31";
+
+  // Merged voice options
+  const combinedVoiceOptions = [
+    ...STANDARD_VOICES,
+    ...customVoices.map((v) => ({
+      value: v.id,
+      label: `✨ ${v.display_name || v.name || v.id} (Custom Cloned)`,
+    })),
+  ];
+
   return (
-    <div className="mx-auto max-w-7xl space-y-7 pb-12">
+    <div className="mx-auto max-w-7xl space-y-7 pb-16">
       {/* ── Futuristic Hero Command Banner with Emergency Kill-Switch ─────── */}
-      <section className="relative overflow-hidden rounded-[28px] border border-[#BDE0C8] bg-gradient-to-br from-[#061D13] via-[#0B3523] to-[#04140D] px-6 py-8 text-white shadow-[0_24px_75px_rgba(7,36,24,0.25)] sm:px-9">
-        <div className="absolute right-[-3rem] top-[-3rem] h-72 w-72 rounded-full bg-[#5BE697]/15 blur-3xl" />
+      <section className="relative overflow-hidden rounded-[28px] border border-[#BDE0C8] bg-gradient-to-br from-[#092D1F] via-[#0D3B2A] to-[#082419] px-7 py-8 text-white shadow-[0_20px_60px_rgba(10,45,32,0.22)]">
+        <div className="absolute -right-16 -top-20 h-72 w-72 rounded-full bg-[#10B981]/15 blur-3xl" />
+        <div className="absolute left-1/3 -bottom-16 h-56 w-56 rounded-full bg-[#059669]/10 blur-2xl" />
 
         <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.18em] text-[#9EEAB5]">
-              <Settings2 size={14} className="text-[#4BEB92]" /> Global Infrastructure & Security Command
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1 text-xs font-bold uppercase tracking-widest text-[#A7F3D0] backdrop-blur-md">
+              <Sparkles size={13} className="text-[#34D399]" /> Global Infrastructure & Business Command
             </div>
-            <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">
-              Platform Settings
+            <h1 className="text-3xl font-black tracking-tight sm:text-4xl text-white">
+              Platform & Workspace Settings
             </h1>
-            <p className="mt-2 max-w-xl text-sm leading-relaxed text-[#CCE2D5]">
-              Configure white-label branding, emergency maintenance kill-switches, WhatsApp alert dispatchers, and global AI guardrails.
+            <p className="max-w-2xl text-xs sm:text-sm text-[#C8E5D3] leading-relaxed">
+              Configure company profile, weekly business hours, uploaded brand logos, custom AI voice greetings, emergency kill-switches, and WhatsApp alerts.
             </p>
           </div>
 
-          {/* Quick Emergency Status Pill */}
-          <div className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md">
+          {/* Quick Runtime Badge & Maintenance Toggle */}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3.5 rounded-2xl border border-white/15 bg-white/10 p-3.5 backdrop-blur-md">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[#A2DEC0]">Global Runtime State</p>
-              <p className="mt-0.5 text-lg font-black text-white">
-                {isMaintenanceOn ? "🛑 Maintenance Mode" : "🟢 Platform Open & Live"}
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#A7F3D0]">
+                Global Runtime State
+              </p>
+              <p className="text-sm font-bold flex items-center gap-2 mt-0.5">
+                <span
+                  className={`inline-block h-2.5 w-2.5 rounded-full animate-pulse ${
+                    isMaintenanceOn ? "bg-amber-400" : "bg-[#34D399]"
+                  }`}
+                />
+                {isMaintenanceOn ? "🛑 Maintenance Active" : "🟢 Platform Open & Live"}
               </p>
             </div>
-            <button
+
+            <Button
+              size="sm"
               onClick={() => handleMaintenanceToggle(!isMaintenanceOn)}
-              className={`rounded-xl px-4 py-2 text-xs font-black transition-all ${
+              disabled={savingSection === "system"}
+              className={`rounded-xl px-4 text-xs font-bold transition-all shadow-md ${
                 isMaintenanceOn
-                  ? "bg-red-600 text-white shadow-[0_0_20px_rgba(239,68,68,0.6)] animate-pulse"
-                  : "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md shadow-emerald-900/30"
+                  ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                  : "bg-amber-600 hover:bg-amber-500 text-white"
               }`}
             >
-              {isMaintenanceOn ? "Exit Maintenance" : "Maintenance Mode"}
-            </button>
+              {savingSection === "system" ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+              ) : (
+                <Power className="h-3.5 w-3.5 mr-1" />
+              )}
+              {isMaintenanceOn ? "Resume Platform" : "Maintenance Mode"}
+            </Button>
           </div>
         </div>
 
-        {/* ── Segmented Control Navigation Tabs ── */}
-        <div className="mt-8 flex flex-wrap gap-2 border-t border-[#A8E2BC]/20 pt-5">
+        {/* ── Active Workspace Switcher Banner ────────────────────────────── */}
+        <div className="mt-7 pt-5 border-t border-white/10 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 text-[#34D399] border border-white/15">
+              <Building2 size={18} />
+            </span>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-[#A7F3D0]">
+                Active Workspace
+              </p>
+              <div className="relative inline-block mt-0.5">
+                <select
+                  value={selectedCompanyId}
+                  onChange={(e) => setSelectedCompanyId(e.target.value)}
+                  className="appearance-none rounded-lg bg-white/15 hover:bg-white/20 border border-white/25 px-3 py-1 pr-8 text-xs font-bold text-white focus:outline-none cursor-pointer"
+                >
+                  {companies.map((c) => (
+                    <option key={c.id} value={c.id} className="text-slate-900 bg-white font-medium">
+                      {c.name} {c.slug === "admin_workspace" ? "(Default / Primary)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={13} className="pointer-events-none absolute right-2.5 top-2.5 text-white/70" />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-xs text-[#A7F3D0]/80">
+            <span className="h-2 w-2 rounded-full bg-[#34D399]" />
+            <span>ID: <code className="font-mono text-white text-[11px]">{selectedCompanyId || "none"}</code></span>
+            {loadingCompany && <Loader2 size={12} className="animate-spin text-white ml-1" />}
+          </div>
+        </div>
+
+        {/* ── Modern Futuristic Tab Navigation ─────────────────────────────── */}
+        <div className="mt-6 flex flex-wrap gap-2 border-t border-white/10 pt-5">
           <button
-            onClick={() => setActiveTab("branding")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
-              activeTab === "branding"
+            onClick={() => setActiveTab("business")}
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
+              activeTab === "business"
                 ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
                 : "bg-white/5 text-white/80 hover:bg-white/10"
             }`}
           >
             <Building2 size={13} />
-            🎨 Branding & Identity
+            🏢 Business Profile & Logo
+          </button>
+          <button
+            onClick={() => setActiveTab("schedule")}
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
+              activeTab === "schedule"
+                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
+                : "bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
+          >
+            <CalendarClock size={13} />
+            ⏰ Operating Hours & Time
+          </button>
+          <button
+            onClick={() => setActiveTab("voice")}
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
+              activeTab === "voice"
+                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
+                : "bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
+          >
+            <Mic size={13} />
+            🎙️ Voice, Greetings & Policy
+          </button>
+          <button
+            onClick={() => setActiveTab("branding")}
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
+              activeTab === "branding"
+                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
+                : "bg-white/5 text-white/80 hover:bg-white/10"
+            }`}
+          >
+            <Sparkles size={13} />
+            🎨 Theme & Accent Palette
           </button>
           <button
             onClick={() => setActiveTab("maintenance")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
               activeTab === "maintenance"
                 ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
                 : "bg-white/5 text-white/80 hover:bg-white/10"
@@ -215,18 +659,18 @@ export default function AdminSettingsPage() {
           </button>
           <button
             onClick={() => setActiveTab("alerts")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
               activeTab === "alerts"
                 ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
                 : "bg-white/5 text-white/80 hover:bg-white/10"
             }`}
           >
             <BellRing size={13} />
-            🔔 Alerts & Webhooks
+            🔔 WhatsApp & Slack Alerts
           </button>
           <button
             onClick={() => setActiveTab("security")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
               activeTab === "security"
                 ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
                 : "bg-white/5 text-white/80 hover:bg-white/10"
@@ -237,7 +681,7 @@ export default function AdminSettingsPage() {
           </button>
           <button
             onClick={() => setActiveTab("ai")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
               activeTab === "ai"
                 ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
                 : "bg-white/5 text-white/80 hover:bg-white/10"
@@ -249,15 +693,536 @@ export default function AdminSettingsPage() {
         </div>
       </section>
 
-      {/* ── Tab 1: Branding & White-Label ──────────────────────────────────── */}
-      {activeTab === "branding" && (
-        <Card className="border-[#D5E4DB] bg-white shadow-sm">
+      {/* ── TAB 1: Business Profile & Brand Logo ──────────────────────────── */}
+      {activeTab === "business" && (
+        <Card className="border-[#D5E4DB] bg-white shadow-sm overflow-hidden">
           <CardContent className="p-7 space-y-6">
-            <div className="border-b border-slate-100 pb-4">
-              <h2 className="text-lg font-bold text-[#19372B]">White-Label Branding & Identity</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Customize the platform appearance, brand name, timezone, and portal headers.
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-[#19372B] flex items-center gap-2">
+                  <Building2 size={19} className="text-[#087F5B]" />
+                  Company & Workspace Profile
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Update business identity, contact details, official office address, and uploaded brand logo.
+                </p>
+              </div>
+              <Button
+                onClick={saveCompanyProfile}
+                disabled={savingSection === "business" || !currentCompany}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "business" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Save Business Profile
+              </Button>
+            </div>
+
+            {/* Logo Preview & Upload Section */}
+            <div className="rounded-2xl border border-slate-200/80 bg-gradient-to-r from-[#F7FAF8] to-white p-5">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+                <div className="flex items-center gap-5">
+                  <div className="relative grid h-20 w-20 place-items-center rounded-2xl border-2 border-dashed border-[#BDE0C8] bg-white shadow-sm overflow-hidden p-2">
+                    {companyLogoUrl ? (
+                      <img
+                        key={companyLogoUrl}
+                        src={companyLogoUrl}
+                        alt="Company Logo"
+                        className="max-h-full max-w-full object-contain"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <Building2 className="text-slate-300" size={32} />
+                    )}
+                  </div>
+
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-slate-800">Workspace Brand Logo</p>
+                      {companyLogoUrl ? (
+                        <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                          Active & Uploaded
+                        </span>
+                      ) : (
+                        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                          No Logo Uploaded
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Displayed on caller screens, customer portals, and GST invoices. PNG, SVG, JPG. Max 2MB.
+                    </p>
+
+                    <div className="mt-3 flex items-center gap-2">
+                      <input
+                        ref={companyLogoInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={handleCompanyLogoUpload}
+                        className="hidden"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={uploadingLogo || !currentCompany}
+                        onClick={() => companyLogoInputRef.current?.click()}
+                        className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+                      >
+                        {uploadingLogo ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        {companyLogoUrl ? "Replace Logo" : "Upload Logo"}
+                      </Button>
+
+                      {companyLogoUrl && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={uploadingLogo}
+                          onClick={handleCompanyLogoRemove}
+                          className="border-red-200 text-red-600 hover:bg-red-50 text-xs font-bold"
+                        >
+                          <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                          Remove
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-100 bg-white p-3 text-xs text-slate-600 space-y-1">
+                  <p className="font-bold text-slate-800">Tenant Slug: <span className="font-mono text-[#0C4A31]">{currentCompany?.slug || "—"}</span></p>
+                  <p className="text-[11px] text-slate-400">Plan: <span className="font-medium text-slate-700 capitalize">{currentCompany?.plan || "Standard"}</span></p>
+                </div>
+              </div>
+            </div>
+
+            {/* Profile Input Grid */}
+            <div className="grid gap-5 md:grid-cols-2">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Company / Organization Name
+                </label>
+                <Input
+                  value={compName}
+                  onChange={(e) => setCompName(e.target.value)}
+                  placeholder="e.g. ZeniaOne Technologies"
+                  className="font-bold text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Legal Entity Name
+                </label>
+                <Input
+                  value={legalName}
+                  onChange={(e) => setLegalName(e.target.value)}
+                  placeholder="e.g. ZeniaOne Private Limited"
+                  className="font-medium text-slate-800"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Industry & Category
+                </label>
+                <Input
+                  value={industry}
+                  onChange={(e) => setIndustry(e.target.value)}
+                  placeholder="e.g. Healthcare, Telephony AI, FinTech"
+                  className="text-xs font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Business Timezone
+                </label>
+                <select
+                  value={timezone}
+                  onChange={(e) => setTimezone(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-medium focus:border-[#285A42] focus:outline-none"
+                >
+                  {TIMEZONE_OPTIONS.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
+                  <Mail size={12} className="text-slate-400" /> Business Contact Email
+                </label>
+                <Input
+                  type="email"
+                  value={businessEmail}
+                  onChange={(e) => setBusinessEmail(e.target.value)}
+                  placeholder="support@zeniaone.ai"
+                  className="text-xs font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
+                  <Phone size={12} className="text-slate-400" /> Primary Phone Number
+                </label>
+                <Input
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+91 90998 87880"
+                  className="text-xs font-medium font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
+                  <Globe2 size={12} className="text-slate-400" /> Website URL
+                </label>
+                <Input
+                  value={website}
+                  onChange={(e) => setWebsite(e.target.value)}
+                  placeholder="https://zeniaone.ai"
+                  className="text-xs font-medium"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Country
+                </label>
+                <Input
+                  value={country}
+                  onChange={(e) => setCountry(e.target.value)}
+                  placeholder="India"
+                  className="text-xs font-medium"
+                />
+              </div>
+            </div>
+
+            {/* Office Address Full Width */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
+                <MapPin size={13} className="text-[#087F5B]" /> Official Physical Office Address
+              </label>
+              <Input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder="305, Capitol Icon, Opp. Aashka Hospital, Nr. Sargasan Cross Road, Gandhinagar, Gujarat 382421, India"
+                className="text-xs font-medium"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                Used in AI customer assistant responses whenever callers ask "where is your clinic/office located?".
               </p>
+            </div>
+
+            {/* Business Description */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                Business Description & Overview
+              </label>
+              <Textarea
+                rows={3}
+                value={businessDesc}
+                onChange={(e) => setBusinessDesc(e.target.value)}
+                placeholder="Provide a clear overview of services, core offerings, and specialties to align voice agents..."
+                className="text-xs leading-relaxed"
+              />
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-slate-100">
+              <Button
+                onClick={saveCompanyProfile}
+                disabled={savingSection === "business" || !currentCompany}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "business" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Save Business Profile
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── TAB 2: Operating Hours & Time Management ("comny ka time manag karna") ─ */}
+      {activeTab === "schedule" && (
+        <Card className="border-[#D5E4DB] bg-white shadow-sm overflow-hidden">
+          <CardContent className="p-7 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-[#19372B] flex items-center gap-2">
+                  <CalendarClock size={19} className="text-[#087F5B]" />
+                  Weekly Operating Schedule & Time Management
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Configure day-to-day open and closing hours. When outside these hours, AI assistants politely notify callers or take voicemails.
+                </p>
+              </div>
+              <Button
+                onClick={saveOperatingHours}
+                disabled={savingSection === "schedule" || !currentCompany}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "schedule" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Save Operating Hours
+              </Button>
+            </div>
+
+            <div className="rounded-2xl border border-slate-200 bg-[#FCFDFC] p-5">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Business Hours Matrix (Monday - Sunday)
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Toggle days on/off and adjust start/end shifts for {currentCompany?.name || "the workspace"}.
+                  </p>
+                </div>
+                <span className="rounded-lg bg-[#E6F4EB] px-2.5 py-1 text-xs font-bold text-[#087F5B]">
+                  Timezone: {timezone}
+                </span>
+              </div>
+
+              {/* Dynamic Smart Weekly Schedule Component */}
+              <SmartWeeklySchedule
+                initialSchedule={scheduleData}
+                onChange={(updated) => setScheduleData(updated)}
+              />
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-slate-100">
+              <Button
+                onClick={saveOperatingHours}
+                disabled={savingSection === "schedule" || !currentCompany}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "schedule" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Save Operating Hours
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── TAB 3: Voice, Greetings & Policy ──────────────────────────────── */}
+      {activeTab === "voice" && (
+        <Card className="border-[#D5E4DB] bg-white shadow-sm overflow-hidden">
+          <CardContent className="p-7 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-[#19372B] flex items-center gap-2">
+                  <Mic size={19} className="text-[#087F5B]" />
+                  Voice Persona, Greetings & Call Experience
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Define voice tone, default language, inbound welcome message, outbound opener, and customer rules.
+                </p>
+              </div>
+              <Button
+                onClick={saveVoiceAndGreetings}
+                disabled={savingSection === "voice" || !currentCompany}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "voice" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Save Voice & Greetings
+              </Button>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Default Platform Language
+                </label>
+                <select
+                  value={defaultLanguage}
+                  onChange={(e) => setDefaultLanguage(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-medium focus:border-[#285A42] focus:outline-none"
+                >
+                  {LANGUAGE_OPTIONS.map((l) => (
+                    <option key={l.value} value={l.value}>
+                      {l.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
+                  Default Voice Persona
+                </label>
+                <select
+                  value={defaultVoice}
+                  onChange={(e) => setDefaultVoice(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-medium focus:border-[#285A42] focus:outline-none"
+                >
+                  {combinedVoiceOptions.map((v) => (
+                    <option key={v.value} value={v.value}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Inbound Welcome Greeting with AI Generate */}
+            <div className="rounded-2xl border border-[#DDEBE1] bg-[#F9FCF9] p-5 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-[#315342]">
+                    Inbound Welcome Greeting
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Spoken automatically the instant a customer calls your phone numbers.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => generateAIGreeting("inbound")}
+                  disabled={generatingGreeting !== null || !currentCompany}
+                  className="border-[#B7D8C0] text-[#286044] hover:bg-[#EAF5ED] text-xs font-bold"
+                >
+                  {generatingGreeting === "inbound" ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5 text-[#087F5B]" />
+                  )}
+                  ✨ AI Generate Inbound
+                </Button>
+              </div>
+              <Textarea
+                rows={2}
+                value={inboundGreeting}
+                onChange={(e) => setInboundGreeting(e.target.value)}
+                placeholder="Hello, thank you for calling ZeniaOne. How may I assist you today?"
+                className="text-xs font-medium bg-white"
+              />
+            </div>
+
+            {/* Outbound Greeting with AI Generate */}
+            <div className="rounded-2xl border border-[#DDEBE1] bg-[#F9FCF9] p-5 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-[#315342]">
+                    Outbound Campaign Greeting
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    Spoken when the AI initiates an outbound phone call or appointment reminder.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => generateAIGreeting("outbound")}
+                  disabled={generatingGreeting !== null || !currentCompany}
+                  className="border-[#B7D8C0] text-[#286044] hover:bg-[#EAF5ED] text-xs font-bold"
+                >
+                  {generatingGreeting === "outbound" ? (
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5 text-[#087F5B]" />
+                  )}
+                  ✨ AI Generate Outbound
+                </Button>
+              </div>
+              <Textarea
+                rows={2}
+                value={outboundGreeting}
+                onChange={(e) => setOutboundGreeting(e.target.value)}
+                placeholder="Hello! This is an automated update from ZeniaOne regarding your upcoming booking..."
+                className="text-xs font-medium bg-white"
+              />
+            </div>
+
+            {/* Customer Policies & Important Rules */}
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
+                <FileText size={13} className="text-[#087F5B]" /> Customer Policies & Operating Guidelines
+              </label>
+              <Textarea
+                rows={4}
+                value={customerPolicies}
+                onChange={(e) => setCustomerPolicies(e.target.value)}
+                placeholder="Provide cancellation policies, refund terms, appointment booking guidelines, or emergency disclaimers..."
+                className="text-xs leading-relaxed"
+              />
+              <p className="text-[11px] text-slate-400 mt-1">
+                The AI assistant strictly abides by these policies during live phone interactions and chats.
+              </p>
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-slate-100">
+              <Button
+                onClick={saveVoiceAndGreetings}
+                disabled={savingSection === "voice" || !currentCompany}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "voice" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Save Voice & Greetings
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── TAB 4: Theme & Accent Palette (NOW 100% WORKING & INTERACTIVE) ─── */}
+      {activeTab === "branding" && (
+        <Card className="border-[#D5E4DB] bg-white shadow-sm overflow-hidden">
+          <CardContent className="p-7 space-y-6">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-[#19372B] flex items-center gap-2">
+                  <Sparkles size={19} className="text-[#087F5B]" />
+                  Theme, White-Label & Accent Palette
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Select your primary accent palette and customize platform white-label identity.
+                </p>
+              </div>
+              <Button
+                onClick={() => savePlatformSection("platform")}
+                disabled={savingSection === "platform"}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "platform" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Save Platform Branding
+              </Button>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
@@ -292,10 +1257,11 @@ export default function AdminSettingsPage() {
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-medium focus:border-[#285A42] focus:outline-none"
                   >
-                    <option value="Asia/Kolkata">Asia/Kolkata (IST · +05:30)</option>
-                    <option value="UTC">UTC (Universal Coordinated Time)</option>
-                    <option value="America/New_York">America/New York (EST)</option>
-                    <option value="Asia/Dubai">Asia/Dubai (GST · +04:00)</option>
+                    {TIMEZONE_OPTIONS.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -313,47 +1279,114 @@ export default function AdminSettingsPage() {
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-medium focus:border-[#285A42] focus:outline-none"
                   >
-                    <option value="en-IN">English (India · en-IN)</option>
-                    <option value="hi-IN">Hindi / Hinglish (hi-IN)</option>
-                    <option value="gu-IN">Gujarati (gu-IN)</option>
+                    {LANGUAGE_OPTIONS.map((l) => (
+                      <option key={l.value} value={l.value}>
+                        {l.label}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
 
-              {/* Logo & Accent Preview */}
-              <div className="rounded-2xl border border-slate-100 bg-[#FBFDFC] p-5 space-y-4">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
-                  Platform Logo & Accent Theme
-                </p>
-                <div className="flex items-center gap-4">
-                  <div className="grid h-16 w-16 place-items-center rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden p-2">
+              {/* Working Primary Accent Palette Section */}
+              <div className="rounded-2xl border border-slate-200 bg-[#FBFDFC] p-5 space-y-5">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                    Primary Accent Palette (Interactive)
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Click any preset below to instantly activate and persist the primary UI accent.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {ACCENT_PALETTES.map((pal) => {
+                    const isSelected = currentAccent.toLowerCase() === pal.hex.toLowerCase();
+                    return (
+                      <button
+                        key={pal.id}
+                        type="button"
+                        onClick={() => handleSelectAccent(pal.hex)}
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
+                          isSelected
+                            ? "border-emerald-500 bg-white shadow-md ring-2 ring-emerald-500/30"
+                            : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
+                        }`}
+                      >
+                        <span
+                          className="h-7 w-7 rounded-full shadow-inner flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: pal.hex }}
+                        >
+                          {isSelected && <Check size={14} className="text-white" />}
+                        </span>
+                        <div>
+                          <p className="text-xs font-bold text-slate-800">{pal.label}</p>
+                          <p className="text-[10px] font-mono text-slate-400 uppercase">{pal.hex}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Global Header Logo Upload */}
+                <div className="pt-4 border-t border-slate-100 flex items-center gap-4">
+                  <div className="grid h-14 w-14 place-items-center rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden p-1.5">
                     <img
-                      src="/brand/zeniaone-logo.png"
-                      alt="Logo"
+                      src={`${API_BASE_URL}/settings/logo?t=${logoVersion}`}
+                      alt="Platform Logo"
                       className="max-h-full max-w-full object-contain"
                       onError={(e) => {
-                        (e.target as HTMLElement).style.display = "none";
+                        (e.target as HTMLImageElement).src = "/brand/zeniaone-logo.png";
                       }}
                     />
-                    <Sparkles className="text-[#087F5B]" size={28} />
                   </div>
                   <div>
                     <p className="text-xs font-bold text-slate-800">Global Header Logo</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">PNG, SVG or WebP. Max 2MB.</p>
-                    <label className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-[#0C4A31] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#093A27] cursor-pointer">
-                      <Upload size={12} /> Upload New
-                      <input type="file" className="hidden" accept="image/*" />
-                    </label>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <p className="text-xs font-bold text-slate-700 mb-2">Primary Accent Palette</p>
-                  <div className="flex items-center gap-2">
-                    <button className="h-7 w-7 rounded-full bg-[#0C4A31] ring-2 ring-offset-2 ring-[#0C4A31]" title="Emerald Cyber" />
-                    <button className="h-7 w-7 rounded-full bg-[#4F46E5] opacity-70 hover:opacity-100 transition" title="Indigo Quantum" />
-                    <button className="h-7 w-7 rounded-full bg-[#0EA5E9] opacity-70 hover:opacity-100 transition" title="Oceanic Blue" />
-                    <button className="h-7 w-7 rounded-full bg-[#18181B] opacity-70 hover:opacity-100 transition" title="Obsidian Dark" />
+                    <p className="text-[11px] text-slate-400">PNG or SVG · Max 2MB</p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <input
+                        ref={platformLogoInputRef}
+                        type="file"
+                        accept="image/*"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            await uploadPlatformLogo(file);
+                            setLogoVersion(Date.now());
+                            setToast({ message: "Global platform logo updated!", tone: "success" });
+                          } catch {
+                            setToast({ message: "Failed to upload logo.", tone: "error" });
+                          }
+                        }}
+                        className="hidden"
+                      />
+                      <Button
+                        size="sm"
+                        type="button"
+                        onClick={() => platformLogoInputRef.current?.click()}
+                        className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-[11px] h-7 px-3 font-bold"
+                      >
+                        <Upload size={11} className="mr-1" /> Upload
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await removePlatformLogo();
+                            setLogoVersion(Date.now());
+                            setToast({ message: "Global logo removed.", tone: "info" });
+                          } catch {
+                            setToast({ message: "Failed to remove logo.", tone: "error" });
+                          }
+                        }}
+                        className="border-slate-200 text-slate-600 text-[11px] h-7 px-2.5 font-medium"
+                      >
+                        Reset
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -361,11 +1394,15 @@ export default function AdminSettingsPage() {
 
             <div className="flex justify-end pt-4 border-t border-slate-100">
               <Button
-                onClick={() => saveSection("platform")}
+                onClick={() => savePlatformSection("platform")}
                 disabled={savingSection === "platform"}
                 className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
               >
-                {savingSection === "platform" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                {savingSection === "platform" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
                 Save Branding Settings
               </Button>
             </div>
@@ -373,41 +1410,61 @@ export default function AdminSettingsPage() {
         </Card>
       )}
 
-      {/* ── Tab 2: Maintenance & Kill-Switch ────────────────────────────────── */}
+      {/* ── TAB 5: Maintenance & Emergency Kill-Switch ────────────────────── */}
       {activeTab === "maintenance" && (
-        <Card className="border-[#D5E4DB] bg-white shadow-sm">
+        <Card className="border-[#D5E4DB] bg-white shadow-sm overflow-hidden">
           <CardContent className="p-7 space-y-6">
-            <div className="border-b border-slate-100 pb-4">
-              <h2 className="text-lg font-bold text-[#19372B]">Platform Maintenance & Emergency Controls</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Safely isolate telephony webhooks and database writes during updates without crashing active callers.
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-[#19372B] flex items-center gap-2">
+                  <RadioTower size={19} className="text-amber-600" />
+                  Platform Maintenance & Emergency Controls
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Safely isolate telephony webhooks and database writes during updates without crashing active callers.
+                </p>
+              </div>
+              <Button
+                onClick={() => savePlatformSection("system")}
+                disabled={savingSection === "system"}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "system" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Save Maintenance Config
+              </Button>
             </div>
 
-            <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-5 space-y-4">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-6 space-y-4">
               <div className="flex items-start gap-3">
-                <AlertTriangle className="text-amber-600 mt-0.5" size={20} />
+                <AlertTriangle className="text-amber-600 shrink-0 mt-0.5" size={20} />
                 <div>
                   <h3 className="text-sm font-bold text-amber-900">Emergency Platform Kill-Switch</h3>
-                  <p className="text-xs text-amber-800 leading-relaxed mt-1">
+                  <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">
                     When Maintenance Mode is ON, inbound calls will hear the broadcast message below and gracefully disconnect. Background queues will be paused.
                   </p>
                 </div>
               </div>
 
-              <div className="pt-2 flex items-center gap-3">
-                <button
+              <div className="flex items-center gap-4 pt-2">
+                <Button
                   onClick={() => handleMaintenanceToggle(!isMaintenanceOn)}
-                  className={`rounded-xl px-5 py-2.5 text-xs font-black transition-all ${
+                  className={`rounded-xl px-5 text-xs font-bold transition-all shadow-sm ${
                     isMaintenanceOn
-                      ? "bg-red-600 text-white shadow-lg shadow-red-500/40 animate-pulse"
-                      : "bg-[#0C4A31] text-white hover:bg-[#093A27]"
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                      : "bg-red-600 hover:bg-red-700 text-white"
                   }`}
                 >
-                  {isMaintenanceOn ? "🛑 Deactivate Maintenance Mode (Go Live)" : "Activate Maintenance Mode"}
-                </button>
-                <span className="text-xs font-semibold text-slate-600">
-                  Current Status: <span className="font-bold text-slate-900">{isMaintenanceOn ? "PAUSED" : "OPERATIONAL"}</span>
+                  <Power className="mr-1.5 h-3.5 w-3.5" />
+                  {isMaintenanceOn ? "Deactivate Maintenance Mode" : "Activate Maintenance Mode"}
+                </Button>
+                <span className="text-xs font-medium text-slate-600">
+                  Current Status: <strong className={isMaintenanceOn ? "text-red-600" : "text-emerald-700"}>
+                    {isMaintenanceOn ? "MAINTENANCE ACTIVE" : "OPERATIONAL"}
+                  </strong>
                 </span>
               </div>
             </div>
@@ -418,146 +1475,165 @@ export default function AdminSettingsPage() {
               </label>
               <Textarea
                 rows={3}
-                value={settings.system?.maintenance_message || ""}
+                value={settings.system.maintenance_message}
                 onChange={(e) =>
                   setSettings({
                     ...settings,
                     system: { ...settings.system, maintenance_message: e.target.value },
                   })
                 }
-                className="text-xs text-slate-800"
+                className="text-xs font-medium"
               />
-              <p className="text-[11px] text-slate-400 mt-1">
-                This message will be spoken by Sarvam TTS to incoming callers during platform maintenance.
-              </p>
             </div>
 
             <div className="flex justify-end pt-4 border-t border-slate-100">
               <Button
-                onClick={() => saveSection("system")}
+                onClick={() => savePlatformSection("system")}
                 disabled={savingSection === "system"}
                 className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
               >
-                {savingSection === "system" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
-                Save Maintenance Broadcast
+                {savingSection === "system" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Save Maintenance Config
               </Button>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* ── Tab 3: Alerts & Webhook Dispatchers ─────────────────────────────── */}
+      {/* ── TAB 6: Urgent Alerts & Webhooks ───────────────────────────────── */}
       {activeTab === "alerts" && (
-        <Card className="border-[#D5E4DB] bg-white shadow-sm">
+        <Card className="border-[#D5E4DB] bg-white shadow-sm overflow-hidden">
           <CardContent className="p-7 space-y-6">
-            <div className="border-b border-slate-100 pb-4">
-              <h2 className="text-lg font-bold text-[#19372B]">Urgent Alerts & Webhook Dispatchers</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Instant real-time notifications sent to WhatsApp, Slack, or Discord when call drops or AI provider failures occur.
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-[#19372B] flex items-center gap-2">
+                  <BellRing size={19} className="text-[#087F5B]" />
+                  Urgent Alerts & Webhook Dispatchers
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Instant real-time notifications sent to WhatsApp, Slack, or Discord when call drops or AI provider failures occur.
+                </p>
+              </div>
+              <Button
+                onClick={() => savePlatformSection("notifications")}
+                disabled={savingSection === "notifications"}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "notifications" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Save Alert Webhooks
+              </Button>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                    WhatsApp Alert Number (High Priority)
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
+                    <Smartphone size={13} className="text-[#087F5B]" /> WhatsApp Alert Number (High Priority)
                   </label>
-                  <div className="relative">
-                    <Smartphone className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-600" />
-                    <Input
-                      value={whatsappNumber}
-                      onChange={(e) => setWhatsappNumber(e.target.value)}
-                      className="pl-9 text-xs font-mono font-bold text-slate-800"
-                      placeholder="+919099887880"
-                    />
-                  </div>
+                  <Input
+                    value={whatsappNumber}
+                    onChange={(e) => setWhatsappNumber(e.target.value)}
+                    placeholder="+919099887880"
+                    className="font-mono text-xs font-bold"
+                  />
                   <p className="text-[11px] text-slate-400 mt-1">
                     Critical call drops or circuit breaker trips will be dispatched via WhatsApp instantly.
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                    Slack / Discord Incoming Webhook URL
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5 flex items-center gap-1.5">
+                    <Send size={13} className="text-[#087F5B]" /> Slack / Discord Incoming Webhook URL
                   </label>
                   <Input
                     value={slackWebhook}
                     onChange={(e) => setSlackWebhook(e.target.value)}
-                    className="text-xs font-mono text-slate-700"
+                    placeholder="https://hooks.slack.com/services/T00/B00/XXXXX"
+                    className="font-mono text-xs font-medium"
                   />
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-slate-100 bg-[#FBFDFC] p-5 space-y-3">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+              <div className="rounded-2xl border border-slate-100 bg-[#F9FCF9] p-5 space-y-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-700">
                   Notification Triggers & Toggles
                 </p>
-                <div className="space-y-3 pt-1">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={settings.notifications.admin_notifications_enabled}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          notifications: {
-                            ...settings.notifications,
-                            admin_notifications_enabled: e.target.checked,
-                          },
-                        })
-                      }
-                      className="h-4 w-4 accent-[#0C4A31] rounded"
-                    />
-                    <span className="text-xs font-bold text-slate-700">Dispatch alerts for AI Provider Failovers</span>
-                  </label>
 
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={settings.notifications.system_alerts_enabled}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          notifications: {
-                            ...settings.notifications,
-                            system_alerts_enabled: e.target.checked,
-                          },
-                        })
-                      }
-                      className="h-4 w-4 accent-[#0C4A31] rounded"
-                    />
-                    <span className="text-xs font-bold text-slate-700">Dispatch alerts for Call Minutes Quota Exhaustion (85%+)</span>
-                  </label>
+                <label className="flex items-center gap-2.5 text-xs font-medium text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.notifications.admin_notifications_enabled}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        notifications: {
+                          ...settings.notifications,
+                          admin_notifications_enabled: e.target.checked,
+                        },
+                      })
+                    }
+                    className="rounded text-[#0C4A31] focus:ring-[#0C4A31]"
+                  />
+                  Dispatch alerts for AI Provider Failovers
+                </label>
 
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={settings.notifications.security_alerts_enabled}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          notifications: {
-                            ...settings.notifications,
-                            security_alerts_enabled: e.target.checked,
-                          },
-                        })
-                      }
-                      className="h-4 w-4 accent-[#0C4A31] rounded"
-                    />
-                    <span className="text-xs font-bold text-slate-700">Dispatch alerts for Suspicious Logins from Unknown IPs</span>
-                  </label>
-                </div>
+                <label className="flex items-center gap-2.5 text-xs font-medium text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.notifications.system_alerts_enabled}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        notifications: {
+                          ...settings.notifications,
+                          system_alerts_enabled: e.target.checked,
+                        },
+                      })
+                    }
+                    className="rounded text-[#0C4A31] focus:ring-[#0C4A31]"
+                  />
+                  Dispatch alerts for Call Minutes Quota Exhaustion (85%+)
+                </label>
+
+                <label className="flex items-center gap-2.5 text-xs font-medium text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={settings.notifications.security_alerts_enabled}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        notifications: {
+                          ...settings.notifications,
+                          security_alerts_enabled: e.target.checked,
+                        },
+                      })
+                    }
+                    className="rounded text-[#0C4A31] focus:ring-[#0C4A31]"
+                  />
+                  Dispatch alerts for Suspicious Logins from Unknown IPs
+                </label>
               </div>
             </div>
 
             <div className="flex justify-end pt-4 border-t border-slate-100">
               <Button
-                onClick={() => saveSection("notifications")}
+                onClick={() => savePlatformSection("notifications")}
                 disabled={savingSection === "notifications"}
                 className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
               >
-                {savingSection === "notifications" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                {savingSection === "notifications" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
                 Save Alert Webhooks
               </Button>
             </div>
@@ -565,15 +1641,32 @@ export default function AdminSettingsPage() {
         </Card>
       )}
 
-      {/* ── Tab 4: Security Armor & Session Policies ───────────────────────── */}
+      {/* ── TAB 7: Security Armor ─────────────────────────────────────────── */}
       {activeTab === "security" && (
-        <Card className="border-[#D5E4DB] bg-white shadow-sm">
+        <Card className="border-[#D5E4DB] bg-white shadow-sm overflow-hidden">
           <CardContent className="p-7 space-y-6">
-            <div className="border-b border-slate-100 pb-4">
-              <h2 className="text-lg font-bold text-[#19372B]">Security Armor & Session Governance</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Session timeouts, password complexity requirements, and multi-tenant isolation safeguards.
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-[#19372B] flex items-center gap-2">
+                  <ShieldCheck size={19} className="text-[#087F5B]" />
+                  Security Armor & Session Governance
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Session timeouts, password complexity requirements, and multi-tenant isolation safeguards.
+                </p>
+              </div>
+              <Button
+                onClick={() => savePlatformSection("security")}
+                disabled={savingSection === "security"}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "security" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Save Security Policies
+              </Button>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
@@ -609,54 +1702,44 @@ export default function AdminSettingsPage() {
                   </div>
                 </div>
 
-                <div className="pt-2">
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={settings.security.require_strong_passwords}
-                      onChange={(e) =>
-                        setSettings({
-                          ...settings,
-                          security: {
-                            ...settings.security,
-                            require_strong_passwords: e.target.checked,
-                          },
-                        })
-                      }
-                      className="h-4 w-4 accent-[#0C4A31] rounded"
-                    />
-                    <div>
-                      <span className="text-xs font-bold text-slate-800">Enforce Strict Password Complexity</span>
-                      <p className="text-[11px] text-slate-500">
-                        Requires minimum 10 characters with numbers and special symbols for all tenant admins.
-                      </p>
-                    </div>
-                  </label>
-                </div>
+                <label className="flex items-center gap-3 rounded-xl border border-slate-200 p-4 cursor-pointer hover:bg-slate-50">
+                  <input
+                    type="checkbox"
+                    checked={settings.security.require_strong_passwords}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        security: {
+                          ...settings.security,
+                          require_strong_passwords: e.target.checked,
+                        },
+                      })
+                    }
+                    className="rounded text-[#0C4A31] focus:ring-[#0C4A31]"
+                  />
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">Enforce Strict Password Complexity</p>
+                    <p className="text-[11px] text-slate-500">Requires minimum 10 characters with numbers and special symbols for all tenant admins.</p>
+                  </div>
+                </label>
               </div>
 
-              <div className="rounded-2xl border border-slate-100 bg-[#FBFDFC] p-5 space-y-3">
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
+              <div className="rounded-2xl border border-slate-100 bg-[#F8FAFC] p-5 space-y-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-700">
                   Platform Security Safeguards
                 </p>
                 <div className="space-y-2 text-xs">
-                  <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
+                  <div className="flex justify-between py-1.5 border-b border-slate-200/60">
                     <span className="text-slate-600">JWT Token Signing</span>
-                    <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                      HS256 Verified
-                    </span>
+                    <span className="font-mono font-bold text-emerald-700">HS256 Verified</span>
                   </div>
-                  <div className="flex items-center justify-between py-1.5 border-b border-slate-100">
+                  <div className="flex justify-between py-1.5 border-b border-slate-200/60">
                     <span className="text-slate-600">Telephony Webhook HMAC</span>
-                    <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                      Active
-                    </span>
+                    <span className="font-mono font-bold text-emerald-700">Active</span>
                   </div>
-                  <div className="flex items-center justify-between py-1.5">
+                  <div className="flex justify-between py-1.5">
                     <span className="text-slate-600">Cross-Tenant DB Isolation</span>
-                    <span className="font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-                      Enforced (company_id)
-                    </span>
+                    <span className="font-mono font-bold text-emerald-700">Enforced (company_id)</span>
                   </div>
                 </div>
               </div>
@@ -664,11 +1747,15 @@ export default function AdminSettingsPage() {
 
             <div className="flex justify-end pt-4 border-t border-slate-100">
               <Button
-                onClick={() => saveSection("security")}
+                onClick={() => savePlatformSection("security")}
                 disabled={savingSection === "security"}
                 className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
               >
-                {savingSection === "security" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                {savingSection === "security" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
                 Save Security Policies
               </Button>
             </div>
@@ -676,15 +1763,32 @@ export default function AdminSettingsPage() {
         </Card>
       )}
 
-      {/* ── Tab 5: AI Guardrails & Token Budget ─────────────────────────────── */}
+      {/* ── TAB 8: AI Guardrails & Token Budget ───────────────────────────── */}
       {activeTab === "ai" && (
-        <Card className="border-[#D5E4DB] bg-white shadow-sm">
+        <Card className="border-[#D5E4DB] bg-white shadow-sm overflow-hidden">
           <CardContent className="p-7 space-y-6">
-            <div className="border-b border-slate-100 pb-4">
-              <h2 className="text-lg font-bold text-[#19372B]">Global AI Guardrails & Token Budget</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Default LLM engines, maximum tokens per phone call, and hallucination containment limits.
-              </p>
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+              <div>
+                <h2 className="text-lg font-bold text-[#19372B] flex items-center gap-2">
+                  <Bot size={19} className="text-[#087F5B]" />
+                  Global AI Guardrails & Token Budget
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Default LLM engines, maximum tokens per phone call, and hallucination containment limits.
+                </p>
+              </div>
+              <Button
+                onClick={() => savePlatformSection("ai_defaults")}
+                disabled={savingSection === "ai_defaults"}
+                className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
+              >
+                {savingSection === "ai_defaults" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Save AI Guardrails
+              </Button>
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
@@ -703,9 +1807,9 @@ export default function AdminSettingsPage() {
                     }
                     className="w-full rounded-xl border border-slate-200 bg-white p-2.5 text-xs font-bold focus:border-[#285A42] focus:outline-none"
                   >
+                    <option value="sarvam">Sarvam AI (Specialized Indic Speech)</option>
                     <option value="groq">Groq (Ultra-fast 0.11s TTFT)</option>
                     <option value="gemini">Google Gemini (Multi-turn & High Context)</option>
-                    <option value="sarvam">Sarvam AI (Specialized Indic Speech)</option>
                   </select>
                 </div>
 
@@ -793,11 +1897,15 @@ export default function AdminSettingsPage() {
 
             <div className="flex justify-end pt-4 border-t border-slate-100">
               <Button
-                onClick={() => saveSection("ai_defaults")}
+                onClick={() => savePlatformSection("ai_defaults")}
                 disabled={savingSection === "ai_defaults"}
                 className="bg-[#0C4A31] hover:bg-[#093A27] text-white text-xs font-bold"
               >
-                {savingSection === "ai_defaults" ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+                {savingSection === "ai_defaults" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Save className="mr-1.5 h-3.5 w-3.5" />
+                )}
                 Save AI Guardrails
               </Button>
             </div>

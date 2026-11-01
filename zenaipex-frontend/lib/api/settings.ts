@@ -6,6 +6,7 @@ export interface PlatformSettings {
   default_timezone: string;
   logo_path?: string;
   has_logo?: boolean;
+  accent_color?: string;
 }
 
 export interface AIDefaults {
@@ -24,6 +25,8 @@ export interface NotificationSettings {
   admin_notifications_enabled: boolean;
   system_alerts_enabled: boolean;
   security_alerts_enabled: boolean;
+  whatsapp_number?: string;
+  slack_webhook_url?: string;
 }
 
 export interface SystemSettings {
@@ -102,6 +105,7 @@ export interface CompanySettingsData {
 export interface CompanyProfile {
   id: string;
   name: string;
+  slug?: string;
   industry?: string;
   country: string;
   timezone: string;
