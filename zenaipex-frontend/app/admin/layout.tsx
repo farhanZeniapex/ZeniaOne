@@ -138,6 +138,7 @@ export default function AdminLayout({
   const [userProfile, setUserProfile] = useState<{
     name: string;
     email: string;
+    is_platform_admin?: boolean;
   } | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isFocusHeaderOpen, setIsFocusHeaderOpen] = useState(false);
@@ -173,6 +174,7 @@ export default function AdminLayout({
     platformName,
     hasLogo: platformHasLogo,
     timestamp: logoTimestamp,
+    accentColor,
   } = useBranding();
 
   useEffect(() => {
@@ -193,7 +195,11 @@ export default function AdminLayout({
 
         if (res.is_platform_admin) {
           setIsAdmin(true);
-          setUserProfile({ name: res.name, email: res.email });
+          setUserProfile({
+            name: res.name,
+            email: res.email,
+            is_platform_admin: res.is_platform_admin,
+          });
           setIsLoading(false);
 
           // Polite background warm: only fetch company overview when browser is completely idle
@@ -424,7 +430,18 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="admin-shell flex min-h-screen bg-[#F7F8F5] text-foreground font-sans">
+    <div
+      className="admin-shell flex min-h-screen bg-[#F7F8F5] text-foreground font-sans"
+      style={{ ["--primary-accent" as any]: accentColor || "#0C4A31" }}
+    >
+      <style>{`
+        :root {
+          --primary-accent: ${accentColor || "#0C4A31"};
+        }
+        .admin-shell [data-accent-bg] {
+          background-color: var(--primary-accent, #0C4A31) !important;
+        }
+      `}</style>
       {/* Mobile Backdrop */}
       {isMobileMenuOpen && (
         <div
@@ -690,7 +707,7 @@ export default function AdminLayout({
                   {userProfile?.name || "Platform Admin"}
                 </span>
                 <span className="block text-[10px] font-medium leading-tight text-slate-500">
-                  Super Admin
+                  {userProfile?.is_platform_admin ? "Super Admin" : "Tenant Admin"}
                 </span>
               </div>
             </div>
@@ -792,7 +809,7 @@ export default function AdminLayout({
                   {userProfile?.name || "Platform Admin"}
                 </span>
                 <span className="text-[11px] font-medium text-slate-500">
-                  Super Admin
+                  {userProfile?.is_platform_admin ? "Super Admin" : "Tenant Admin"}
                 </span>
               </div>
               <ChevronDown
@@ -828,7 +845,7 @@ export default function AdminLayout({
                         {userProfile?.email}
                       </p>
                       <span className="mt-1 inline-flex rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-sage-600">
-                        Super Admin
+                        {userProfile?.is_platform_admin ? "Super Admin" : "Tenant Admin"}
                       </span>
                     </div>
                   </div>

@@ -129,6 +129,7 @@ export function LeadForm() {
                                         type="text" 
                                         id="name" 
                                         name="name" 
+                                        suppressHydrationWarning
                                         value={formData.name} 
                                         onChange={handleChange} 
                                         className="w-full p-3 rounded-xl border border-[#EAE5DC] bg-white focus:outline-none focus:ring-2 focus:ring-[#3E5448]"
@@ -141,6 +142,7 @@ export function LeadForm() {
                                         type="tel" 
                                         id="phone" 
                                         name="phone" 
+                                        suppressHydrationWarning
                                         value={formData.phone} 
                                         onChange={handleChange} 
                                         className="w-full p-3 rounded-xl border border-[#EAE5DC] bg-white focus:outline-none focus:ring-2 focus:ring-[#3E5448]"
@@ -156,6 +158,7 @@ export function LeadForm() {
                                         type="email" 
                                         id="email" 
                                         name="email" 
+                                        suppressHydrationWarning
                                         value={formData.email} 
                                         onChange={handleChange} 
                                         className="w-full p-3 rounded-xl border border-[#EAE5DC] bg-white focus:outline-none focus:ring-2 focus:ring-[#3E5448]"
@@ -168,6 +171,7 @@ export function LeadForm() {
                                         type="text" 
                                         id="company_name" 
                                         name="company_name" 
+                                        suppressHydrationWarning
                                         value={formData.company_name} 
                                         onChange={handleChange} 
                                         className="w-full p-3 rounded-xl border border-[#EAE5DC] bg-white focus:outline-none focus:ring-2 focus:ring-[#3E5448]"
@@ -182,6 +186,7 @@ export function LeadForm() {
                                     type="datetime-local" 
                                     id="preferred_call_time" 
                                     name="preferred_call_time" 
+                                    suppressHydrationWarning
                                     value={formData.preferred_call_time} 
                                     onChange={handleChange} 
                                     className="w-full p-3 rounded-xl border border-[#EAE5DC] bg-white focus:outline-none focus:ring-2 focus:ring-[#3E5448]"
@@ -194,6 +199,7 @@ export function LeadForm() {
                                     id="notes" 
                                     name="notes" 
                                     rows={4} 
+                                    suppressHydrationWarning
                                     value={formData.notes} 
                                     onChange={handleChange} 
                                     className="w-full p-3 rounded-xl border border-[#EAE5DC] bg-white focus:outline-none focus:ring-2 focus:ring-[#3E5448]"
@@ -210,6 +216,7 @@ export function LeadForm() {
                             <Button 
                                 type="submit" 
                                 disabled={status === 'loading'}
+                                suppressHydrationWarning
                                 className="w-full h-12 bg-[#3E5448] hover:bg-[#33463B] text-white rounded-xl text-[15px] font-semibold"
                             >
                                 {status === 'loading' ? 'Submitting...' : 'Request a Call'}

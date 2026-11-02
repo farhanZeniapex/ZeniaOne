@@ -27,6 +27,15 @@ class AIDefaultsUpdate(BaseModel):
     default_model: Optional[str] = None
     default_token_limit: Optional[int] = None
     default_temperature: Optional[float] = None
+    profanity_filter_enabled: Optional[bool] = None
+    pii_redaction_enabled: Optional[bool] = None
+    prompt_injection_shield: Optional[bool] = None
+    strict_grounding: Optional[bool] = None
+    competitor_blocklist: Optional[str] = None
+    max_call_duration_minutes: Optional[int] = None
+
+class GuardrailTestRequest(BaseModel):
+    message: str
 
 class SecuritySettingsUpdate(BaseModel):
     session_timeout_minutes: Optional[int] = None
@@ -72,6 +81,12 @@ def get_default_settings() -> Dict[str, Any]:
             "default_model": "sarvam-105b",
             "default_token_limit": 1024,
             "default_temperature": 0.7,
+            "profanity_filter_enabled": True,
+            "pii_redaction_enabled": True,
+            "prompt_injection_shield": True,
+            "strict_grounding": True,
+            "competitor_blocklist": "vapi, bland, synthflow, retell, elevenlabs",
+            "max_call_duration_minutes": 15,
         },
         "security": {
             "session_timeout_minutes": 60,
@@ -272,20 +287,88 @@ async def remove_logo(user: dict = Depends(get_platform_admin)):
         })
         
     return {"success": True}
+        
+@router.post("/guardrails/test", summary="Test AI Guardrails live")
+async def test_guardrail(body: GuardrailTestRequest, user: dict = Depends(get_platform_admin)):
+    """Simulate and evaluate real-time guardrail checks against input text."""
+    doc = await fetch_or_create_settings()
+    ai_defaults = doc.get("ai_defaults", {})
+    
+    import re
+    text = body.message.strip()
+    flags = []
+    sanitized = text
+    
+    # 1. Profanity & Abuse Check
+    if ai_defaults.get("profanity_filter_enabled", True):
+        profane_words = ["abuse", "scam", "cheat", "bastard", "idiot", "fraud", "kill", "stupid", "bakwas", "chutiya", "harami"]
+        for w in profane_words:
+            if re.search(rf"\b{w}\b", text, re.IGNORECASE):
+                flags.append(f"Abusive Language: Flagged keyword '{w}'")
+                sanitized = re.sub(rf"\b{w}\b", "[REDACTED]", sanitized, flags=re.IGNORECASE)
+                
+    # 2. PII Check
+    if ai_defaults.get("pii_redaction_enabled", True):
+        if re.search(r"\b(?:\d[ -]*?){13,16}\b", text):
+            flags.append("PII: Credit Card / Account Number detected")
+            sanitized = re.sub(r"\b(?:\d[ -]*?){13,16}\b", "[CARD_REDACTED]", sanitized)
+        if re.search(r"\b(?:\+91[\-\s]?)?[6-9]\d{9}\b", text):
+            flags.append("PII: Phone Number detected")
+            sanitized = re.sub(r"\b(?:\+91[\-\s]?)?[6-9]\d{9}\b", "[PHONE_REDACTED]", sanitized)
+            
+    # 3. Prompt Injection Shield
+    if ai_defaults.get("prompt_injection_shield", True):
+        jailbreaks = [
+            r"ignore (all )?previous instructions",
+            r"you are now (in )?dan mode",
+            r"developer (mode|key|override)",
+            r"system override",
+            r"reveal (your )?secret (key|prompt)",
+            r"disregard (all )?(rules|safety)",
+        ]
+        for pattern in jailbreaks:
+            if re.search(pattern, text, re.IGNORECASE):
+                flags.append("Jailbreak / Prompt Injection Attempt Intercepted")
+                sanitized = "I am a secure enterprise voice assistant and cannot process override instructions."
+                break
+                
+    # 4. Competitor Blocklist Check
+    competitors_str = ai_defaults.get("competitor_blocklist") or "vapi,bland,synthflow,retell,elevenlabs"
+    competitors = [c.strip() for c in competitors_str.split(",") if c.strip()]
+    for comp in competitors:
+        if re.search(rf"\b{re.escape(comp)}\b", text, re.IGNORECASE):
+            flags.append(f"Competitor Mention Forbidden: '{comp}'")
+            
+    passed = len(flags) == 0
+    return {
+        "passed": passed,
+        "flags": flags,
+        "sanitized": sanitized,
+        "action": "ALLOWED" if passed else "INTERCEPTED",
+        "active_rules": {
+            "profanity_filter": ai_defaults.get("profanity_filter_enabled", True),
+            "pii_redaction": ai_defaults.get("pii_redaction_enabled", True),
+            "prompt_injection_shield": ai_defaults.get("prompt_injection_shield", True),
+            "strict_grounding": ai_defaults.get("strict_grounding", True),
+        }
+    }
 
 @public_router.get("/public")
 async def get_public_settings():
     """Public endpoint to fetch basic branding settings for login/sidebar."""
     doc = await col_platform_settings().find_one({"type": "global"})
     if not doc:
-        return {"platform_name": "ZeniaOne", "has_logo": False}
+        return {"platform_name": "ZeniaOne", "has_logo": False, "accent_color": "#0C4A31"}
         
-    has_logo = bool(doc.get("platform", {}).get("logo_path"))
-    platform_name = doc.get("platform", {}).get("platform_name", "ZeniaOne")
+    platform = doc.get("platform", {})
+    has_logo = bool(platform.get("logo_path") or platform.get("logo_data"))
+    platform_name = platform.get("platform_name", "ZeniaOne")
+    accent_color = platform.get("accent_color", "#0C4A31")
     
     return {
         "platform_name": platform_name,
-        "has_logo": has_logo
+        "has_logo": has_logo,
+        "accent_color": accent_color,
     }
 
 @public_router.get("/logo")

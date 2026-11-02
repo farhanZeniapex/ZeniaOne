@@ -150,7 +150,14 @@ export function VoiceCoreHero() {
           <div className={styles.sceneBottom}>
             <div className={styles.modeTabs} role="group" aria-label="Conversation preview mode">
               {modes.map((item) => (
-                <button key={item} type="button" aria-pressed={mode === item} className={`${styles.modeTab} ${mode === item ? styles.modeTabActive : ""}`} onClick={() => selectMode(item)}>
+                <button
+                  key={item}
+                  type="button"
+                  suppressHydrationWarning
+                  aria-pressed={mode === item}
+                  className={`${styles.modeTab} ${mode === item ? styles.modeTabActive : ""}`}
+                  onClick={() => selectMode(item)}
+                >
                   {item === "chat" ? <MessageCircle size={15} /> : item === "voice" ? <AudioLines size={16} /> : <PhoneCall size={15} />}
                   {modeCopy[item].label}
                 </button>
@@ -160,7 +167,16 @@ export function VoiceCoreHero() {
               <div className={styles.previewIcon}>{mode === "chat" ? <MessageCircle size={21} /> : mode === "voice" ? <AudioLines size={22} /> : <PhoneCall size={20} />}</div>
               <div className={styles.previewText}><strong>{modeCopy[mode].title}</strong><span>{listening ? "Your voice is moving the core." : modeCopy[mode].detail}</span></div>
               {mode === "voice" ? (
-                <button type="button" className={styles.micButton} onClick={toggleVoicePulse} aria-pressed={listening} aria-label={listening ? "Stop voice pulse preview" : "Try voice pulse preview"}>{listening ? <MicOff size={19} /> : <Mic size={19} />}</button>
+                <button
+                  type="button"
+                  suppressHydrationWarning
+                  className={styles.micButton}
+                  onClick={toggleVoicePulse}
+                  aria-pressed={listening}
+                  aria-label={listening ? "Stop voice pulse preview" : "Try voice pulse preview"}
+                >
+                  {listening ? <MicOff size={19} /> : <Mic size={19} />}
+                </button>
               ) : mode === "calls" ? <span className={styles.callSignal} aria-hidden="true"><i /><i /><i /></span> : <span className={styles.chatCheck} aria-hidden="true"><Check size={17} /><Check size={17} /></span>}
             </div>
             <span className={styles.previewCaption}>{mode === "voice" ? "Tap mic to make the core react to your voice" : "A visual preview of your agent in action"}</span>

@@ -14,6 +14,12 @@ export interface AIDefaults {
   default_model: string;
   default_token_limit: number;
   default_temperature: number;
+  profanity_filter_enabled?: boolean;
+  pii_redaction_enabled?: boolean;
+  prompt_injection_shield?: boolean;
+  strict_grounding?: boolean;
+  competitor_blocklist?: string;
+  max_call_duration_minutes?: number;
 }
 
 export interface SecuritySettings {
@@ -81,6 +87,19 @@ export async function uploadPlatformLogo(file: File): Promise<void> {
 export async function removePlatformLogo(): Promise<void> {
   await fetchApi("/admin/settings/logo", {
     method: "DELETE",
+  });
+}
+
+export async function testGuardrail(message: string): Promise<{
+  passed: boolean;
+  flags: string[];
+  sanitized: string;
+  action: string;
+  active_rules: Record<string, boolean>;
+}> {
+  return fetchApi("/admin/settings/guardrails/test", {
+    method: "POST",
+    body: JSON.stringify({ message }),
   });
 }
 
