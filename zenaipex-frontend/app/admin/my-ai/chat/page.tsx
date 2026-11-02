@@ -700,21 +700,25 @@ function ChatScreen({
                           const suggestions: string[] = [];
                           const cleanLines: string[] = [];
                           
-                          // First pass: extract bullets that are questions (at the very end of the message)
-                          // We only extract them if they are in the last block of lines
+                          // First pass: extract trailing suggestions only from the bottom of the message
                           let extractingSuggestions = true;
                           for (let j = lines.length - 1; j >= 0; j--) {
-                            const trimmed = lines[j].trim();
-                            if (!trimmed) continue;
+                            const rawLine = lines[j];
+                            const trimmed = rawLine.trim();
                             
-                            const matchBullet = trimmed.match(/^(?:[\-\*•]|\d+\.)\s*['"‘“]?([^'"’”]+?\?)['"’”]?$/);
-                            if (extractingSuggestions && matchBullet && matchBullet[1] && matchBullet[1].length > 6 && matchBullet[1].length < 120) {
-                              suggestions.unshift(matchBullet[1].trim());
-                            } else {
-                              // Once we hit a non-suggestion line, stop extracting (so we only pull from the bottom)
-                              extractingSuggestions = false;
-                              cleanLines.unshift(lines[j]);
+                            if (extractingSuggestions) {
+                              if (!trimmed) continue; // skip trailing blank lines only
+                              const matchBullet = trimmed.match(/^(?:[\-\*•]|\d+\.)\s*['"‘“]?([^'"’”]+?\?)['"’”]?$/);
+                              if (matchBullet && matchBullet[1] && matchBullet[1].length > 6 && matchBullet[1].length < 120) {
+                                suggestions.unshift(matchBullet[1].trim());
+                                continue;
+                              } else {
+                                extractingSuggestions = false;
+                              }
                             }
+                            
+                            // Important: preserve original line breaks, blank lines, and table rows
+                            cleanLines.unshift(rawLine);
                           }
                           
                           const cleanContent = cleanLines.join('\n')

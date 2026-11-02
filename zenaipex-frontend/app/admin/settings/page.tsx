@@ -468,10 +468,16 @@ export default function AdminSettingsPage() {
       },
     }));
 
-    // Apply CSS variable immediately for instant visual feedback
+    // Apply CSS variables immediately for instant visual feedback
     if (typeof document !== "undefined") {
       document.documentElement.style.setProperty("--primary-accent", hex);
+      document.documentElement.style.setProperty("--admin-jade", hex);
       document.documentElement.setAttribute("data-theme-accent", hex);
+      const shell = document.querySelector(".admin-shell") as HTMLElement;
+      if (shell) {
+        shell.style.setProperty("--primary-accent", hex);
+        shell.style.setProperty("--admin-jade", hex);
+      }
       window.dispatchEvent(new CustomEvent("branding_updated", { detail: { accent_color: hex } }));
     }
 
@@ -571,8 +577,10 @@ export default function AdminSettingsPage() {
           borderColor: `color-mix(in srgb, ${currentAccent} 40%, white)`,
         }}
       >
-        <div className="pointer-events-none absolute -right-16 -top-20 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
-        <div className="pointer-events-none absolute left-1/3 -bottom-16 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
+        <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+          <div className="absolute -right-16 -top-20 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute left-1/3 -bottom-24 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
+        </div>
 
         <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
@@ -658,7 +666,7 @@ export default function AdminSettingsPage() {
         </div>
 
         {/* ── Modern Futuristic Tab Navigation ─────────────────────────────── */}
-        <div className="relative z-20 mt-6 flex flex-wrap gap-2 border-t border-white/10 pt-5">
+        <div className="relative z-30 isolate mt-6 flex flex-wrap gap-2 border-t border-white/10 pt-5">
           {SETTINGS_TABS.map((tab) => {
             const isActive = activeTab === tab.id;
             const IconComponent = tab.icon;
@@ -667,10 +675,10 @@ export default function AdminSettingsPage() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id as any)}
-                className={`relative z-30 flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer ${
+                className={`select-none relative z-30 flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition-all cursor-pointer ${
                   isActive
                     ? "shadow-md border text-white"
-                    : "bg-white/5 text-white/80 hover:bg-white/15 hover:text-white"
+                    : "bg-white/10 text-white/90 hover:bg-white/20 hover:text-white"
                 }`}
                 style={isActive ? {
                   backgroundColor: currentAccent,
@@ -678,8 +686,8 @@ export default function AdminSettingsPage() {
                   boxShadow: `0 4px 14px color-mix(in srgb, ${currentAccent} 60%, transparent)`,
                 } : undefined}
               >
-                <IconComponent size={13} />
-                {tab.label}
+                <IconComponent size={14} className="pointer-events-none shrink-0" />
+                <span className="pointer-events-none">{tab.label}</span>
               </button>
             );
           })}

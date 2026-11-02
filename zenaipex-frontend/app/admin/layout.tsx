@@ -178,6 +178,23 @@ export default function AdminLayout({
   } = useBranding();
 
   useEffect(() => {
+    const handleBranding = (e: any) => {
+      const col = e?.detail?.accent_color;
+      if (col && typeof document !== "undefined") {
+        document.documentElement.style.setProperty("--primary-accent", col);
+        document.documentElement.style.setProperty("--admin-jade", col);
+        const shell = document.querySelector(".admin-shell") as HTMLElement;
+        if (shell) {
+          shell.style.setProperty("--primary-accent", col);
+          shell.style.setProperty("--admin-jade", col);
+        }
+      }
+    };
+    window.addEventListener("branding_updated", handleBranding);
+    return () => window.removeEventListener("branding_updated", handleBranding);
+  }, []);
+
+  useEffect(() => {
     async function checkAdmin() {
       try {
         const token = localStorage.getItem("zenaipex_token");
