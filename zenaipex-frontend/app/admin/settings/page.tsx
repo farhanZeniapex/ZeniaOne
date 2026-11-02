@@ -460,14 +460,13 @@ export default function AdminSettingsPage() {
 
   // ── Platform Accent Color Handler ──────────────────────────────────────────
   const handleSelectAccent = async (hex: string) => {
-    const updated = {
-      ...settings,
+    setSettings((prev) => ({
+      ...prev,
       platform: {
-        ...settings.platform,
+        ...prev.platform,
         accent_color: hex,
       },
-    };
-    setSettings(updated);
+    }));
 
     // Apply CSS variable immediately for instant visual feedback
     if (typeof document !== "undefined") {
@@ -566,7 +565,7 @@ export default function AdminSettingsPage() {
     <div className="mx-auto max-w-7xl space-y-7 pb-16">
       {/* ── Futuristic Hero Command Banner with Emergency Kill-Switch ─────── */}
       <section
-        className="relative overflow-hidden rounded-[28px] border px-7 py-8 text-white shadow-[0_20px_60px_rgba(10,45,32,0.22)] transition-all duration-300"
+        className="admin-hero-gradient relative overflow-hidden rounded-[28px] border px-7 py-8 text-white shadow-[0_20px_60px_rgba(10,45,32,0.22)] transition-all duration-300"
         style={{
           background: `linear-gradient(135deg, color-mix(in srgb, ${currentAccent} 80%, black) 0%, ${currentAccent} 50%, color-mix(in srgb, ${currentAccent} 70%, black) 100%)`,
           borderColor: `color-mix(in srgb, ${currentAccent} 40%, white)`,

@@ -876,7 +876,9 @@ Description: The human resources management product that handles policies, payro
             # cut off after a pricing list, address, or workflow step.
             p_max_tokens = self.max_tokens
             if stage == "generation" and not is_voice:
-                p_max_tokens = min(max(self.max_tokens, 420), 600)
+                p_max_tokens = min(max(self.max_tokens, 800), 2048)
+            if p_name == "gemini" and not is_voice:
+                p_max_tokens = max(p_max_tokens, 1500)
             if "nvidia" in p_name.lower() or "nemotron" in model.lower():
                 p_max_tokens = max(self.max_tokens, 2500)
             

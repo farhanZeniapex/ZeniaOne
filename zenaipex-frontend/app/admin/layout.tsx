@@ -201,19 +201,6 @@ export default function AdminLayout({
             is_platform_admin: res.is_platform_admin,
           });
           setIsLoading(false);
-
-          // Polite background warm: only fetch company overview when browser is completely idle
-          if (typeof window !== "undefined") {
-            const idleWindow = window as Window & {
-              requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
-            };
-            const warm = () => {
-              void fetchApi("/admin/companies");
-            };
-            if (idleWindow.requestIdleCallback) {
-              idleWindow.requestIdleCallback(warm, { timeout: 4000 });
-            }
-          }
         } else {
           // They are logged in but not an admin.
           setIsLoading(false);
@@ -473,12 +460,25 @@ export default function AdminLayout({
         /* Dynamic Hero Banners across Overview, Settings, Telemetry, Logs */
         .admin-shell .bg-gradient-to-r.from-\[\#0C4A31\],
         .admin-shell section.bg-gradient-to-br.from-\[\#092D1F\],
+        .admin-shell section.bg-gradient-to-br.from-\[\#061D13\],
+        .admin-shell .from-\[\#061D13\],
         .admin-shell .admin-hero-gradient {
           background: linear-gradient(135deg,
             color-mix(in srgb, var(--primary-accent, #0C4A31) 85%, black) 0%,
             var(--primary-accent, #0C4A31) 50%,
             color-mix(in srgb, var(--primary-accent, #0C4A31) 70%, black) 100%
           ) !important;
+          border-color: color-mix(in srgb, var(--primary-accent, #0C4A31) 35%, white) !important;
+        }
+        /* Dynamic Interactive Glow and Border Highlights */
+        .admin-shell .border-\[\#BDE0C8\],
+        .admin-shell .border-\[\#C5DDD0\],
+        .admin-shell .border-\[\#9EEAB5\]\/40 {
+          border-color: color-mix(in srgb, var(--primary-accent, #0C4A31) 35%, white) !important;
+        }
+        .admin-shell .bg-\[\#0E3D2B\]\/80,
+        .admin-shell .hover\:bg-\[\#15533A\]:hover {
+          background-color: color-mix(in srgb, var(--primary-accent, #0C4A31) 75%, black) !important;
         }
       `}</style>
       {/* Mobile Backdrop */}

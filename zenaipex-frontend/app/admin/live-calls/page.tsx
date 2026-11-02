@@ -134,6 +134,7 @@ export default function LiveCallsPage() {
   const [recentCallMessages, setRecentCallMessages] = useState<any[]>([]);
   const [loadingRecentMessages, setLoadingRecentMessages] = useState(false);
   const [recentAudioPlaying, setRecentAudioPlaying] = useState(false);
+  const [isPageVisible, setIsPageVisible] = useState(true);
   const recentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -141,6 +142,14 @@ export default function LiveCallsPage() {
   const lastMsgTimeByCall = useRef<Record<string, number>>({});
   const agentsMapRef = useRef<AgentMap>({});
   const loadedPhoneRef = useRef<string>("");
+
+  // Do not spend network/CPU resources while this live-monitoring tab is hidden.
+  useEffect(() => {
+    const updateVisibility = () => setIsPageVisible(document.visibilityState === "visible");
+    updateVisibility();
+    document.addEventListener("visibilitychange", updateVisibility);
+    return () => document.removeEventListener("visibilitychange", updateVisibility);
+  }, []);
 
   // 1. Load Agents and existing active calls on mount
   useEffect(() => {
@@ -161,6 +170,7 @@ export default function LiveCallsPage() {
       .catch(() => { });
 
     const syncActiveCalls = () => {
+      if (document.visibilityState !== "visible") return;
       fetchApi<any>(`/admin/conversations?status=active&_t=${Date.now()}`)
         .then(res => {
           if (res.conversations) {
@@ -220,6 +230,7 @@ export default function LiveCallsPage() {
 
   // Live call duration timer
   useEffect(() => {
+    if (!isPageVisible) return;
     const timer = setInterval(() => {
       setCallDurations(prev => {
         const next = { ...prev };
@@ -234,7 +245,7 @@ export default function LiveCallsPage() {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [activeCalls]);
+  }, [activeCalls, isPageVisible]);
 
   // Auto scroll to latest message smoothly
   useEffect(() => {
@@ -612,6 +623,8 @@ export default function LiveCallsPage() {
   // Polling fallback: If no messages yet, poll conversation messages every 3s
   useEffect(() => {
     if (!selectedCallId) return;
+    // WebSocket delivers live messages. Poll only as a fallback when it is down.
+    if (isConnected || !isPageVisible) return;
     const call = activeCalls.find(c => c.id === selectedCallId);
     if (!call) return;
 
@@ -639,7 +652,7 @@ export default function LiveCallsPage() {
     fetchMessages();
     const pollInterval = setInterval(fetchMessages, 3000);
     return () => clearInterval(pollInterval);
-  }, [selectedCallId, activeCalls]);
+  }, [selectedCallId, activeCalls, isConnected, isPageVisible]);
 
   const endSelectedCall = async () => {
     if (!selectedCall || endingCallId) return;
