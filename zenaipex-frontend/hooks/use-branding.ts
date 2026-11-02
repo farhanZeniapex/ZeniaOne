@@ -53,7 +53,14 @@ export function useBranding() {
   useEffect(() => {
     fetchBranding();
 
-    const handleBrandingUpdate = () => {
+    const handleBrandingUpdate = (e: any) => {
+      if (e?.detail?.accent_color) {
+        setAccentColor(e.detail.accent_color);
+        applyAccentTheme(e.detail.accent_color);
+        if (cachedBranding) {
+          cachedBranding.accent_color = e.detail.accent_color;
+        }
+      }
       setTimestamp(Date.now());
       fetchPromise = null; // force refetch
       fetchBranding();

@@ -104,6 +104,17 @@ const ACCENT_PALETTES = [
   { id: "obsidian", label: "Obsidian Dark", hex: "#18181B", borderHex: "#71717A" },
 ];
 
+const SETTINGS_TABS = [
+  { id: "business", label: "🏢 Business Profile & Logo", icon: Building2 },
+  { id: "schedule", label: "⏰ Operating Hours & Time", icon: CalendarClock },
+  { id: "voice", label: "🎙️ Voice, Greetings & Policy", icon: Mic },
+  { id: "branding", label: "🎨 Theme & Accent Palette", icon: Sparkles },
+  { id: "maintenance", label: "🛑 Maintenance & Kill-Switch", icon: RadioTower },
+  { id: "alerts", label: "🔔 WhatsApp & Slack Alerts", icon: BellRing },
+  { id: "security", label: "🛡️ Security Armor", icon: ShieldCheck },
+  { id: "ai", label: "🤖 AI Guardrails", icon: Bot },
+] as const;
+
 const STANDARD_VOICES = [
   { value: "ritu", label: "Ritu (Warm & Professional · Hindi/English)" },
   { value: "priya", label: "Priya (Friendly & Clear · Hinglish)" },
@@ -462,7 +473,7 @@ export default function AdminSettingsPage() {
     if (typeof document !== "undefined") {
       document.documentElement.style.setProperty("--primary-accent", hex);
       document.documentElement.setAttribute("data-theme-accent", hex);
-      window.dispatchEvent(new Event("branding_updated"));
+      window.dispatchEvent(new CustomEvent("branding_updated", { detail: { accent_color: hex } }));
     }
 
     try {
@@ -554,19 +565,25 @@ export default function AdminSettingsPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-7 pb-16">
       {/* ── Futuristic Hero Command Banner with Emergency Kill-Switch ─────── */}
-      <section className="relative overflow-hidden rounded-[28px] border border-[#BDE0C8] bg-gradient-to-br from-[#092D1F] via-[#0D3B2A] to-[#082419] px-7 py-8 text-white shadow-[0_20px_60px_rgba(10,45,32,0.22)]">
-        <div className="absolute -right-16 -top-20 h-72 w-72 rounded-full bg-[#10B981]/15 blur-3xl" />
-        <div className="absolute left-1/3 -bottom-16 h-56 w-56 rounded-full bg-[#059669]/10 blur-2xl" />
+      <section
+        className="relative overflow-hidden rounded-[28px] border px-7 py-8 text-white shadow-[0_20px_60px_rgba(10,45,32,0.22)] transition-all duration-300"
+        style={{
+          background: `linear-gradient(135deg, color-mix(in srgb, ${currentAccent} 80%, black) 0%, ${currentAccent} 50%, color-mix(in srgb, ${currentAccent} 70%, black) 100%)`,
+          borderColor: `color-mix(in srgb, ${currentAccent} 40%, white)`,
+        }}
+      >
+        <div className="pointer-events-none absolute -right-16 -top-20 h-72 w-72 rounded-full bg-white/10 blur-3xl" />
+        <div className="pointer-events-none absolute left-1/3 -bottom-16 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
 
-        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1 text-xs font-bold uppercase tracking-widest text-[#A7F3D0] backdrop-blur-md">
-              <Sparkles size={13} className="text-[#34D399]" /> Global Infrastructure & Business Command
+            <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3.5 py-1 text-xs font-bold uppercase tracking-widest text-white/90 backdrop-blur-md">
+              <Sparkles size={13} className="text-white" /> Global Infrastructure & Business Command
             </div>
             <h1 className="text-3xl font-black tracking-tight sm:text-4xl text-white">
               Platform & Workspace Settings
             </h1>
-            <p className="max-w-2xl text-xs sm:text-sm text-[#C8E5D3] leading-relaxed">
+            <p className="max-w-2xl text-xs sm:text-sm text-white/80 leading-relaxed">
               Configure company profile, weekly business hours, uploaded brand logos, custom AI voice greetings, emergency kill-switches, and WhatsApp alerts.
             </p>
           </div>
@@ -574,13 +591,13 @@ export default function AdminSettingsPage() {
           {/* Quick Runtime Badge & Maintenance Toggle */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3.5 rounded-2xl border border-white/15 bg-white/10 p-3.5 backdrop-blur-md">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[#A7F3D0]">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/80">
                 Global Runtime State
               </p>
               <p className="text-sm font-bold flex items-center gap-2 mt-0.5">
                 <span
                   className={`inline-block h-2.5 w-2.5 rounded-full animate-pulse ${
-                    isMaintenanceOn ? "bg-amber-400" : "bg-[#34D399]"
+                    isMaintenanceOn ? "bg-amber-400" : "bg-emerald-400"
                   }`}
                 />
                 {isMaintenanceOn ? "🛑 Maintenance Active" : "🟢 Platform Open & Live"}
@@ -608,13 +625,13 @@ export default function AdminSettingsPage() {
         </div>
 
         {/* ── Active Workspace Switcher Banner ────────────────────────────── */}
-        <div className="mt-7 pt-5 border-t border-white/10 flex flex-wrap items-center justify-between gap-4">
+        <div className="relative z-10 mt-7 pt-5 border-t border-white/10 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 text-[#34D399] border border-white/15">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-white/10 text-white border border-white/15">
               <Building2 size={18} />
             </span>
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-[#A7F3D0]">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-white/80">
                 Active Workspace
               </p>
               <div className="relative inline-block mt-0.5">
@@ -634,103 +651,39 @@ export default function AdminSettingsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs text-[#A7F3D0]/80">
-            <span className="h-2 w-2 rounded-full bg-[#34D399]" />
+          <div className="flex items-center gap-2 text-xs text-white/80">
+            <span className="h-2 w-2 rounded-full bg-emerald-400" />
             <span>ID: <code className="font-mono text-white text-[11px]">{selectedCompanyId || "none"}</code></span>
             {loadingCompany && <Loader2 size={12} className="animate-spin text-white ml-1" />}
           </div>
         </div>
 
         {/* ── Modern Futuristic Tab Navigation ─────────────────────────────── */}
-        <div className="mt-6 flex flex-wrap gap-2 border-t border-white/10 pt-5">
-          <button
-            onClick={() => setActiveTab("business")}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-              activeTab === "business"
-                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
-                : "bg-white/5 text-white/80 hover:bg-white/10"
-            }`}
-          >
-            <Building2 size={13} />
-            🏢 Business Profile & Logo
-          </button>
-          <button
-            onClick={() => setActiveTab("schedule")}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-              activeTab === "schedule"
-                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
-                : "bg-white/5 text-white/80 hover:bg-white/10"
-            }`}
-          >
-            <CalendarClock size={13} />
-            ⏰ Operating Hours & Time
-          </button>
-          <button
-            onClick={() => setActiveTab("voice")}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-              activeTab === "voice"
-                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
-                : "bg-white/5 text-white/80 hover:bg-white/10"
-            }`}
-          >
-            <Mic size={13} />
-            🎙️ Voice, Greetings & Policy
-          </button>
-          <button
-            onClick={() => setActiveTab("branding")}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-              activeTab === "branding"
-                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
-                : "bg-white/5 text-white/80 hover:bg-white/10"
-            }`}
-          >
-            <Sparkles size={13} />
-            🎨 Theme & Accent Palette
-          </button>
-          <button
-            onClick={() => setActiveTab("maintenance")}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-              activeTab === "maintenance"
-                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
-                : "bg-white/5 text-white/80 hover:bg-white/10"
-            }`}
-          >
-            <RadioTower size={13} />
-            🛑 Maintenance & Kill-Switch
-          </button>
-          <button
-            onClick={() => setActiveTab("alerts")}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-              activeTab === "alerts"
-                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
-                : "bg-white/5 text-white/80 hover:bg-white/10"
-            }`}
-          >
-            <BellRing size={13} />
-            🔔 WhatsApp & Slack Alerts
-          </button>
-          <button
-            onClick={() => setActiveTab("security")}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-              activeTab === "security"
-                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
-                : "bg-white/5 text-white/80 hover:bg-white/10"
-            }`}
-          >
-            <ShieldCheck size={13} />
-            🛡️ Security Armor
-          </button>
-          <button
-            onClick={() => setActiveTab("ai")}
-            className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all ${
-              activeTab === "ai"
-                ? "bg-[#0C4A31] text-[#A7F3D0] shadow-md border border-[#34D399]/40"
-                : "bg-white/5 text-white/80 hover:bg-white/10"
-            }`}
-          >
-            <Bot size={13} />
-            🤖 AI Guardrails
-          </button>
+        <div className="relative z-20 mt-6 flex flex-wrap gap-2 border-t border-white/10 pt-5">
+          {SETTINGS_TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            const IconComponent = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as any)}
+                className={`relative z-30 flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition-all cursor-pointer ${
+                  isActive
+                    ? "shadow-md border text-white"
+                    : "bg-white/5 text-white/80 hover:bg-white/15 hover:text-white"
+                }`}
+                style={isActive ? {
+                  backgroundColor: currentAccent,
+                  borderColor: "rgba(255, 255, 255, 0.4)",
+                  boxShadow: `0 4px 14px color-mix(in srgb, ${currentAccent} 60%, transparent)`,
+                } : undefined}
+              >
+                <IconComponent size={13} />
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
       </section>
 
@@ -1348,11 +1301,15 @@ export default function AdminSettingsPage() {
                         key={pal.id}
                         type="button"
                         onClick={() => handleSelectAccent(pal.hex)}
-                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left ${
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left cursor-pointer ${
                           isSelected
-                            ? "border-emerald-500 bg-white shadow-md ring-2 ring-emerald-500/30"
+                            ? "bg-white shadow-md ring-2"
                             : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-sm"
                         }`}
+                        style={isSelected ? {
+                          borderColor: pal.hex,
+                          boxShadow: `0 0 0 2px ${pal.hex}33, 0 4px 12px ${pal.hex}22`,
+                        } : undefined}
                       >
                         <span
                           className="h-7 w-7 rounded-full shadow-inner flex items-center justify-center shrink-0"

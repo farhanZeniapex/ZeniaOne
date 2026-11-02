@@ -438,8 +438,47 @@ export default function AdminLayout({
         :root {
           --primary-accent: ${accentColor || "#0C4A31"};
         }
-        .admin-shell [data-accent-bg] {
+        /* Dynamic Primary Action Buttons & Highlights */
+        .admin-shell [data-accent-bg],
+        .admin-shell .bg-\[\#0C4A31\] {
           background-color: var(--primary-accent, #0C4A31) !important;
+        }
+        .admin-shell .hover\:bg-\[\#093A27\]:hover,
+        .admin-shell button.bg-\[\#0C4A31\]:hover {
+          filter: brightness(0.88);
+        }
+        /* Dynamic Text and Icon Colors */
+        .admin-shell .text-\[\#0C4A31\],
+        .admin-shell .text-sage-700,
+        .admin-shell .text-sage-800,
+        .admin-shell .text-\[\#17613C\],
+        .admin-shell .text-\[\#174D34\],
+        .admin-shell .text-\[\#087F5B\] {
+          color: var(--primary-accent, #0C4A31) !important;
+        }
+        .admin-shell .bg-sage-600 {
+          background-color: var(--primary-accent, #0C4A31) !important;
+        }
+        /* Dynamic Sidebar Active Pill */
+        .admin-shell .bg-\[\#DCE8E2\],
+        .admin-shell .bg-\[\#DCEEE2\],
+        .admin-shell .bg-\[\#E4F0E8\] {
+          background-color: color-mix(in srgb, var(--primary-accent, #0C4A31) 14%, white) !important;
+          color: var(--primary-accent, #0C4A31) !important;
+        }
+        .admin-shell .border-sage-600,
+        .admin-shell .border-\[\#0C4A31\] {
+          border-color: var(--primary-accent, #0C4A31) !important;
+        }
+        /* Dynamic Hero Banners across Overview, Settings, Telemetry, Logs */
+        .admin-shell .bg-gradient-to-r.from-\[\#0C4A31\],
+        .admin-shell section.bg-gradient-to-br.from-\[\#092D1F\],
+        .admin-shell .admin-hero-gradient {
+          background: linear-gradient(135deg,
+            color-mix(in srgb, var(--primary-accent, #0C4A31) 85%, black) 0%,
+            var(--primary-accent, #0C4A31) 50%,
+            color-mix(in srgb, var(--primary-accent, #0C4A31) 70%, black) 100%
+          ) !important;
         }
       `}</style>
       {/* Mobile Backdrop */}
