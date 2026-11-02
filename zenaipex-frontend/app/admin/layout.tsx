@@ -168,7 +168,6 @@ export default function AdminLayout({
   ]);
   const [expandedItems, setExpandedItems] = useState<string[]>(["System"]);
   const profileRef = useRef<HTMLDivElement>(null);
-  const sidebarBeforeFocusRef = useRef<boolean | null>(null);
 
   const {
     platformName,
@@ -271,20 +270,6 @@ export default function AdminLayout({
     return () =>
       window.removeEventListener("zenia:toggle-admin-header", toggleFocusHeader);
   }, []);
-
-  useEffect(() => {
-    if (isFocusChat) {
-      setIsSidebarOpen((current) => {
-        if (sidebarBeforeFocusRef.current === null) {
-          sidebarBeforeFocusRef.current = current;
-        }
-        return false;
-      });
-    } else if (sidebarBeforeFocusRef.current !== null) {
-      setIsSidebarOpen(sidebarBeforeFocusRef.current);
-      sidebarBeforeFocusRef.current = null;
-    }
-  }, [isFocusChat]);
 
   const toggleGroup = (title: string) => {
     setExpandedGroups((prev) =>

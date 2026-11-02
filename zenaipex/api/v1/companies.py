@@ -371,15 +371,15 @@ async def get_company_logo(company_id: str = Path(...)):
     if logo_data:
         return StreamingResponse(
             BytesIO(bytes(logo_data)),
-            media_type=company_settings.get("logo_content_type") or "image/png",
-            headers={"Cache-Control": "public, max-age=86400"},
+            media_type=company_settings.get("logo_content_type") or "image/webp",
+            headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"},
         )
 
     logo_path = company_settings.get("logo_url")
     if not logo_path or not os.path.exists(logo_path):
         raise HTTPException(status_code=404, detail="Logo not found")
         
-    return FileResponse(logo_path, headers={"Cache-Control": "public, max-age=86400"})
+    return FileResponse(logo_path, headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"})
 
 
 @router.post("/{company_id}/logo", summary="Upload company logo")
@@ -403,9 +403,16 @@ async def upload_company_logo(
     from services.upload_validation import validate_image_upload
     validate_image_upload(content, content_type, max_bytes=MAX_SIZE)
 
+    from services.image_optimizer import optimize_logo_image
+    opt_content, opt_content_type, opt_ext = optimize_logo_image(
+        content, content_type, max_dimension=800, quality=85
+    )
+
     # Save new file
-    filename = file.filename or "logo.png"
-    storage_path = await save_upload(company_id=company_id, filename=filename, content=content)
+    orig_filename = file.filename or "logo.png"
+    base_name = os.path.splitext(orig_filename)[0]
+    filename = f"{base_name}.{opt_ext}"
+    storage_path = await save_upload(company_id=company_id, filename=filename, content=opt_content)
     
     # Delete old logo if exists
     company = await tenant_service.get_company(company_id)
@@ -416,10 +423,10 @@ async def upload_company_logo(
     # Update DB
     db_settings = company.get("settings", {})
     db_settings["logo_url"] = f"mongo://company/{company_id}/logo"
-    db_settings["logo_data"] = Binary(content)
-    db_settings["logo_content_type"] = content_type
+    db_settings["logo_data"] = Binary(opt_content)
+    db_settings["logo_content_type"] = opt_content_type
     db_settings["logo_filename"] = filename
-    db_settings["logo_size"] = size
+    db_settings["logo_size"] = len(opt_content)
     db_settings["logo_uploaded_at"] = datetime.now(timezone.utc).isoformat()
     
     await col_companies().update_one(

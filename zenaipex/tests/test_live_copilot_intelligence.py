@@ -1,4 +1,6 @@
 import asyncio
+import os
+import pytest
 from core.database import connect_db
 from api.v1.admin.copilot import (
     _normalize_analytics_query,
@@ -7,7 +9,23 @@ from api.v1.admin.copilot import (
 )
 
 
+def _is_mongo_reachable():
+    try:
+        from pymongo import MongoClient
+        uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+        client = MongoClient(uri, serverSelectionTimeoutMS=1500)
+        client.admin.command("ping")
+        return True
+    except Exception:
+        return False
+
+
+_mongo_ready = _is_mongo_reachable()
+
+
 def _run(coro):
+    if not _mongo_ready:
+        pytest.skip("MongoDB server is not reachable for live copilot query tests")
     async def _runner():
         await connect_db()
         return await coro

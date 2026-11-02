@@ -5,7 +5,9 @@ from api.v1.admin.monitoring import configuration_gaps
 
 def test_configuration_gaps_are_explicit_and_secret_free(monkeypatch):
     import api.v1.admin.monitoring as monitoring
+    from core.config import settings as core_settings
 
+    monkeypatch.setattr(core_settings, "encryption_key", "ci-only-test-encryption-key-0123456789abcdef")
     original = monitoring.settings
     monitoring.settings = SimpleNamespace(
         atlas_backup_verified=False,

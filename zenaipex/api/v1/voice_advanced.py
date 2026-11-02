@@ -2234,12 +2234,13 @@ async def exotel_status_webhook(company_id: str, agent_id: str, request: Request
         logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
         
         # Determine internal status based on Exotel status
-        internal_status = status.lower()
-        if internal_status in ["completed", "terminal"]:
+        raw_status = (status or "").lower()
+        if raw_status in ["completed", "terminal"]:
             internal_status = "completed"
-        elif internal_status in ["failed", "busy", "no-answer", "canceled", "cancelled"]:
-            if internal_status == "canceled":
-                internal_status = "cancelled"
+        elif raw_status in ["failed", "busy", "no-answer", "no_answer", "canceled", "cancelled"]:
+            internal_status = "cancelled" if raw_status in ["canceled", "cancelled"] else raw_status
+        elif raw_status in ["in-progress", "in_progress", "active", "answered", "call-attempt", "queued", "ringing", "started"]:
+            internal_status = "active"
         else:
             internal_status = "unknown"
             
@@ -2248,16 +2249,23 @@ async def exotel_status_webhook(company_id: str, agent_id: str, request: Request
         
         # Multi-tenant safety: Check existing conversation strictly within company_id
         existing_conv = await col_conversations().find_one({"company_id": company_id, "call_sid": call_sid})
-        if existing_conv and existing_conv.get("status") in ["completed", "failed", "cancelled"] and internal_status not in ["completed", "failed", "cancelled"]:
-            logger.info(f"[EXOTEL_STATUS] Ignoring non-terminal status '{internal_status}' for already terminal call '{call_sid}'")
-            return {"status": "ok"}
+        if existing_conv:
+            existing_status = existing_conv.get("status")
+            if existing_status in ["completed", "failed", "cancelled"] and internal_status not in ["completed", "failed", "cancelled"]:
+                logger.info(f"[EXOTEL_STATUS] Ignoring non-terminal status '{internal_status}' for already terminal call '{call_sid}'")
+                return {"status": "ok"}
+            # If the call is actively ongoing (e.g. connected via WebSocket) and the webhook sends an interim/unknown status,
+            # preserve the active status so the dashboard and live monitoring do not prematurely disconnect.
+            if existing_status in ["active", "calling"] and internal_status == "unknown":
+                logger.info(f"[EXOTEL_STATUS] Preserving active state for call '{call_sid}' (received interim status '{raw_status}')")
+                internal_status = existing_status
 
         update_data = {
             "status": internal_status,
-            "provider_status": status.lower(),
+            "provider_status": raw_status or status.lower(),
             "provider_event": event_type or None,
         }
-        if internal_status in ["completed", "failed", "cancelled", "busy", "no-answer"]:
+        if internal_status in ["completed", "failed", "cancelled", "busy", "no-answer", "no_answer"]:
             update_data["ended_at"] = datetime.now(timezone.utc)
         
         # Capture Talk Time if provided by Exotel

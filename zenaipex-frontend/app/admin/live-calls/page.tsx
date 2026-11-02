@@ -179,10 +179,13 @@ export default function LiveCallsPage() {
             setActiveCalls(prev => {
               const updated = prev.map(c => {
                 if (c.status === "active" && !serverIds.has(c.id)) {
-                  return { ...c, status: "completed", ended_at: Date.now() };
+                  // Grace period: if call was started within 20s, let WebSocket & server settle
+                  const ageSec = (Date.now() - (c.started_at || 0)) / 1000;
+                  if (ageSec < 20) return c;
+                  return { ...c, status: "completed", ended_at: c.ended_at || Date.now() };
                 }
                 return c;
-              }).filter(c => c.status === "active" || (c.ended_at && Date.now() - c.ended_at < 3500));
+              }).filter(c => c.status === "active" || (c.ended_at && Date.now() - c.ended_at < 6000));
               serverActive.forEach((sc: any) => {
                 if (!updated.some(c => c.id === sc.id)) {
                   updated.push({

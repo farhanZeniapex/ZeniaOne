@@ -81,7 +81,7 @@ const VOICE_MODES = [
   },
   {
     id: "gemini_s2s",
-    title: "Gemini Live S2S Â· Browser + Phone",
+    title: "Gemini Live S2S · Browser + Phone",
     description: "Gemini's native real-time voice-to-voice mode for browser voice and Exotel calls. The selected clone voice is bypassed in this mode.",
     flow: "Microphone / Phone â†’ Gemini Live â†’ Gemini native audio",
     voiceEngine: "gemini_live",
@@ -1338,7 +1338,7 @@ export default function AdminChannelDetailPage({
           <strong>
             {channel.is_active ? "Channel active" : "Channel inactive"}
           </strong>{" "}
-          Â· {channel.type?.replaceAll("_", " ")} Â· Agent: {agentName}. Use a
+          · {channel.type?.replaceAll("_", " ")} · Agent: {agentName}. Use a
           test call and recent history to verify the live connection.
         </span>
       </div>
@@ -1395,7 +1395,7 @@ export default function AdminChannelDetailPage({
             <strong>Latest recorded event</strong>
             <span>
               {conversations[0]?.created_at
-                ? `${conversations[0].status || "Unknown outcome"} Â· ${format(new Date(conversations[0].created_at), "dd MMM yyyy, hh:mm a")}`
+                ? `${conversations[0].status || "Unknown outcome"} · ${format(new Date(conversations[0].created_at), "dd MMM yyyy, hh:mm a")}`
                 : "No event recorded"}
             </span>
           </div>
@@ -1450,7 +1450,7 @@ export default function AdminChannelDetailPage({
               {analytics.total_calls || 0}
             </strong>
             <span className={org.metricSub}>
-              {analytics.inbound_calls || 0} inbound Â·{" "}
+              {analytics.inbound_calls || 0} inbound ·{" "}
               {analytics.outbound_calls || 0} outbound
             </span>
           </div>
@@ -1804,7 +1804,7 @@ export default function AdminChannelDetailPage({
                   <Zap className="w-4 h-4 mr-2 text-emerald-700" /> AI
                   Configuration & Routing
                 </h3>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Editable Â· validated</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Editable · validated</span>
               </div>
               <div className="p-5 space-y-5">
                 <div className="col-span-2 sm:col-span-1">
@@ -2058,10 +2058,10 @@ export default function AdminChannelDetailPage({
                 <button type="button" key={conv.id || idx} onClick={() => openCallDetails(conv)} className="grid w-full grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-slate-50">
                   <span className="min-w-0">
                     <span className="block truncate text-xs font-bold capitalize text-slate-900">
-                      {conv.direction === "outbound" ? "Outbound" : "Inbound"} Â· {conv.status ? conv.status.replace("-", " ") : "Unknown"}
+                      {conv.direction === "outbound" ? "Outbound" : "Inbound"} · {conv.status ? conv.status.replace("-", " ") : "Unknown"}
                     </span>
                     <span className="mt-0.5 block truncate font-mono text-[11px] text-slate-500">
-                      {conv.contact_name ? `${conv.contact_name} Â· ` : ""}{conv.to_phone || conv.caller_phone || "Unknown"}
+                      {conv.contact_name ? `${conv.contact_name} · ` : ""}{conv.to_phone || conv.caller_phone || "Unknown"}
                     </span>
                   </span>
                   <span className="text-[11px] font-semibold text-slate-500">{formatSecs(conv.duration_seconds)}</span>
@@ -3567,7 +3567,7 @@ export default function AdminChannelDetailPage({
           open={Boolean(selectedCall)}
           onClose={() => setSelectedCall(null)}
           title="Call details"
-          description={`${selectedCall.direction === "outbound" ? "Outbound" : "Inbound"} Â· ${selectedCall.status || "Active"}`}
+          description={`${selectedCall.direction === "outbound" ? "Outbound" : "Inbound"} · ${selectedCall.status || "Active"}`}
           className="max-w-xl bg-[#FCFDFB]"
         >
           <div className="flex flex-col">

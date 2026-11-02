@@ -13,10 +13,16 @@ jobs:
   backend:
     name: Backend tests
     runs-on: ubuntu-latest
+    services:
+      mongodb:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
     env:
       PYTHONPATH: zenaipex
       APP_ENV: test
       APP_SECRET_KEY: ci-only-test-secret-0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ
+      ENCRYPTION_KEY: ci-only-test-encryption-key-0123456789abcdef
       MONGODB_URI: mongodb://localhost:27017/zenaipex_test
       MONGODB_DB_NAME: zenaipex_test
     steps:

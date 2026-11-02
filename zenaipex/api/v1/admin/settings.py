@@ -227,8 +227,15 @@ async def upload_logo(
     from services.upload_validation import validate_image_upload
     validate_image_upload(content_bytes, content_type, max_bytes=max_bytes)
 
-    filename = file.filename or "logo.png"
-    storage_path = await save_upload("platform", filename, content_bytes)
+    from services.image_optimizer import optimize_logo_image
+    opt_bytes, opt_content_type, opt_ext = optimize_logo_image(
+        content_bytes, content_type, max_dimension=800, quality=85
+    )
+
+    orig_filename = file.filename or "logo.png"
+    base_name = os.path.splitext(orig_filename)[0]
+    filename = f"{base_name}.{opt_ext}"
+    storage_path = await save_upload("platform", filename, opt_bytes)
     
     current = await fetch_or_create_settings()
     old_logo = current.get("platform", {}).get("logo_path")
@@ -237,9 +244,10 @@ async def upload_logo(
         {"type": "global"},
         {"$set": {
             "platform.logo_path": "mongo://platform/logo",
-            "platform.logo_data": Binary(content_bytes),
-            "platform.logo_content_type": content_type,
+            "platform.logo_data": Binary(opt_bytes),
+            "platform.logo_content_type": opt_content_type,
             "platform.logo_filename": filename,
+            "platform.logo_size": len(opt_bytes),
             "updated_at": datetime.now(timezone.utc),
         }}
     )
@@ -252,7 +260,7 @@ async def upload_logo(
         "actor_email": user.get("email"),
         "action": "settings_updated",
         "target": "Platform Logo",
-        "details": "Uploaded a new platform logo",
+        "details": f"Uploaded a new platform logo ({len(opt_bytes)} bytes, {opt_content_type})",
         "created_at": datetime.now(timezone.utc)
     })
 
@@ -387,12 +395,12 @@ async def get_logo():
     if logo_data:
         return StreamingResponse(
             BytesIO(bytes(logo_data)),
-            media_type=platform.get("logo_content_type") or "image/png",
-            headers={"Cache-Control": "public, max-age=86400"},
+            media_type=platform.get("logo_content_type") or "image/webp",
+            headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"},
         )
 
     logo_path = platform.get("logo_path")
     if not logo_path or not os.path.exists(logo_path):
         raise HTTPException(status_code=404, detail="Logo not found")
         
-    return FileResponse(path=logo_path, headers={"Cache-Control": "public, max-age=86400"})
+    return FileResponse(path=logo_path, headers={"Cache-Control": "public, max-age=86400, stale-while-revalidate=604800"})

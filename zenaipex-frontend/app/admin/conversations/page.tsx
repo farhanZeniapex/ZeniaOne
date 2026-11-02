@@ -603,9 +603,12 @@ export default function AdminConversationsPage() {
     }
   };
 
-  const loadConvs = async () => {
-    setIsLoading(true);
-    setLoadError(null);
+  const loadConvs = async (isBackground: boolean | any = false) => {
+    const bg = typeof isBackground === "boolean" ? isBackground : false;
+    if (!bg) {
+      setIsLoading(true);
+      setLoadError(null);
+    }
     try {
       const qs = viewMode === "all"
         ? ""
@@ -620,7 +623,7 @@ export default function AdminConversationsPage() {
       if (dataRes.status === "fulfilled" && dataRes.value?.conversations) {
         setConversations(dataRes.value.conversations);
         if (dataRes.value.conversations.length === 0) setIsSelecting(false);
-      } else {
+      } else if (!bg) {
         const errorMsg = dataRes.status === "rejected" ? (dataRes.reason?.message || "Failed to load conversations") : "Could not retrieve conversations";
         console.warn("Conversations fetch status:", errorMsg);
         setLoadError(errorMsg);
@@ -634,17 +637,38 @@ export default function AdminConversationsPage() {
         setCompaniesMap(compMap);
       }
 
-      setSelectedIds(new Set());
+      if (!bg) {
+        setSelectedIds(new Set());
+      }
     } catch (err: any) {
       console.error("Failed to load conversations", err);
-      setLoadError(err?.message || "Connection timeout or server restarting");
+      if (!bg) {
+        setLoadError(err?.message || "Connection timeout or server restarting");
+      }
     } finally {
-      setIsLoading(false);
+      if (!bg) {
+        setIsLoading(false);
+      }
     }
   };
 
   useEffect(() => {
     loadConvs();
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadConvs(true);
+      }
+    }, 10000);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        loadConvs(true);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [viewMode]);
 
   const handleArchive = async (cid: string, id: string) => {

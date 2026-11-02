@@ -102,45 +102,49 @@ const VOICE_RUNTIME_MODES = [
   },
 ] as const;
 
-const GEMINI_VOICES_DATA: [string, string, "Male" | "Female"][] = [
-  ["Zephyr", "Bright", "Female"],
-  ["Puck", "Upbeat", "Male"],
-  ["Charon", "Informative", "Male"],
-  ["Kore", "Firm", "Female"],
-  ["Fenrir", "Excitable", "Male"],
-  ["Leda", "Youthful", "Female"],
-  ["Orus", "Firm", "Male"],
-  ["Aoede", "Breezy", "Female"],
-  ["Callirrhoe", "Easy-going", "Female"],
-  ["Autonoe", "Bright", "Female"],
-  ["Enceladus", "Breathy", "Male"],
-  ["Iapetus", "Clear", "Male"],
-  ["Umbriel", "Easy-going", "Male"],
-  ["Algieba", "Smooth", "Female"],
-  ["Despina", "Smooth", "Female"],
-  ["Erinome", "Clear", "Female"],
-  ["Algenib", "Gravelly", "Male"],
-  ["Rasalgethi", "Informative", "Male"],
-  ["Laomedeia", "Upbeat", "Female"],
-  ["Achernar", "Soft", "Male"],
-  ["Alnilam", "Firm", "Male"],
-  ["Schedar", "Even", "Male"],
-  ["Gacrux", "Mature", "Male"],
-  ["Pulcherrima", "Forward", "Female"],
-  ["Achird", "Friendly", "Male"],
-  ["Zubenelgenubi", "Casual", "Male"],
-  ["Vindemiatrix", "Gentle", "Female"],
-  ["Sadachbia", "Lively", "Female"],
-  ["Sadaltager", "Knowledgeable", "Male"],
-  ["Sulafat", "Warm", "Female"],
+export type VoicePersonaStyle = "all" | "professional" | "cold" | "natural" | "human" | "indian";
+
+const GEMINI_VOICES_DATA: [string, string, "Male" | "Female", ("professional" | "cold" | "natural" | "human" | "indian")[], string][] = [
+  ["Zephyr", "Bright", "Female", ["natural", "human", "indian"], "Uplifting customer greeting, active support"],
+  ["Puck", "Upbeat", "Male", ["natural", "indian"], "Dynamic assistant, enthusiastic sales"],
+  ["Charon", "Informative", "Male", ["professional", "cold", "indian"], "Executive advisory, formal corporate, cold calling"],
+  ["Kore", "Firm", "Female", ["professional", "cold", "indian"], "Composed corporate reception, firm notifications"],
+  ["Fenrir", "Excitable", "Male", ["cold"], "High-tempo outbound push, urgent notices"],
+  ["Leda", "Youthful", "Female", ["human", "natural"], "E-commerce, consumer app guides, friendly chat"],
+  ["Orus", "Firm", "Male", ["cold", "professional"], "Cold calling, debt recovery, authoritative operations"],
+  ["Aoede", "Breezy", "Female", ["natural", "indian", "human"], "Everyday natural support, popular Hindi/Hinglish calls"],
+  ["Callirrhoe", "Easy-going", "Female", ["natural", "human"], "Relaxed customer service, travel, hospitality"],
+  ["Autonoe", "Bright", "Female", ["natural"], "Cheerful consumer assist, lifestyle, education"],
+  ["Enceladus", "Breathy", "Male", ["human", "natural"], "Calm, soothing, patient customer care"],
+  ["Iapetus", "Clear", "Male", ["professional"], "Crisp technical support, business consulting"],
+  ["Umbriel", "Easy-going", "Male", ["natural", "human"], "Approachable casual support, tech onboarding"],
+  ["Algieba", "Smooth", "Female", ["professional"], "Polished corporate reception, luxury brand concierge"],
+  ["Despina", "Smooth", "Female", ["professional"], "Sophisticated enterprise B2B, legal/financial intake"],
+  ["Erinome", "Clear", "Female", ["cold", "professional"], "Direct matter-of-fact notifications, cold outreach"],
+  ["Algenib", "Gravelly", "Male", ["cold"], "Deep authoritative baritone, logistics, dispatch"],
+  ["Rasalgethi", "Informative", "Male", ["professional"], "News-anchor authoritative, market reporting"],
+  ["Laomedeia", "Upbeat", "Female", ["natural"], "Retail promotions, marketing campaigns, booking"],
+  ["Achernar", "Soft", "Male", ["human"], "Thoughtful patient counseling, healthcare scheduling"],
+  ["Alnilam", "Firm", "Male", ["professional", "cold"], "Disciplined banking updates, security verification"],
+  ["Schedar", "Even", "Male", ["professional"], "Balanced neutral voice, automated dispatch"],
+  ["Gacrux", "Mature", "Male", ["professional"], "Senior advisor persona, dependable enterprise trust"],
+  ["Pulcherrima", "Forward", "Female", ["cold"], "Bold assertive outbound sales, direct acquisition"],
+  ["Achird", "Friendly", "Male", ["human", "natural", "indian"], "Warm friendly helper, reliable customer support"],
+  ["Zubenelgenubi", "Casual", "Male", ["natural", "indian"], "Everyday peer conversational, Hinglish friendly"],
+  ["Vindemiatrix", "Gentle", "Female", ["human"], "Gentle healthcare, patient reminders, compassionate care"],
+  ["Sadachbia", "Lively", "Female", ["natural"], "Expressive animated assistant, entertainment"],
+  ["Sadaltager", "Knowledgeable", "Male", ["professional"], "Expert tech guide, corporate trainer, advisory"],
+  ["Sulafat", "Warm", "Female", ["human", "indian"], "Warm empathetic care, VIP concierge, reassuring support"],
 ];
 
-const GEMINI_VOICES = GEMINI_VOICES_DATA.map(([name, tone, gender]) => ({
+const GEMINI_VOICES = GEMINI_VOICES_DATA.map(([name, tone, gender, styles, useCase]) => ({
   id: name.toLowerCase(),
   name,
   tone,
   gender,
-  description: `Gemini Live native ${gender.toLowerCase()} voice with a ${tone.toLowerCase()} delivery.`,
+  styles,
+  useCase,
+  description: `Gemini Live ${gender.toLowerCase()} voice with a ${tone.toLowerCase()} delivery. Best for: ${useCase}.`,
 }));
 
 const AZURE_VOICES = [
@@ -230,6 +234,7 @@ export default function AdminAgentsPage() {
   const [geminiGenderFilter, setGeminiGenderFilter] = useState<"all" | "Male" | "Female">(
     "all",
   );
+  const [geminiStyleFilter, setGeminiStyleFilter] = useState<VoicePersonaStyle>("all");
   const [compareVoices, setCompareVoices] = useState<[string, string]>([
     VOICES[0].id,
     VOICES[1].id,
@@ -1468,8 +1473,12 @@ export default function AdminAgentsPage() {
     )
     .filter(
       (voice) =>
+        geminiStyleFilter === "all" || voice.styles.includes(geminiStyleFilter as any),
+    )
+    .filter(
+      (voice) =>
         !search.trim() ||
-        `${voice.name} ${voice.tone} ${voice.gender}`
+        `${voice.name} ${voice.tone} ${voice.gender} ${voice.useCase} ${voice.styles.join(" ")}`
           .toLowerCase()
           .includes(search.trim().toLowerCase()),
     )
@@ -1681,47 +1690,87 @@ export default function AdminAgentsPage() {
           {/* Left: Dynamic Segmented Pills based on activeTab */}
           <div className="flex items-center gap-1.5 flex-wrap">
             {activeTab === "gemini_voices" && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => setGeminiGenderFilter("all")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    geminiGenderFilter === "all"
-                      ? "bg-slate-900 text-white shadow-sm"
-                      : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-100"
-                  }`}
-                >
-                  All ({GEMINI_VOICES.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGeminiGenderFilter("Male")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
-                    geminiGenderFilter === "Male"
-                      ? "bg-blue-600 text-white shadow-sm"
-                      : "bg-white text-slate-600 border border-slate-200/80 hover:text-blue-700 hover:border-blue-200"
-                  }`}
-                >
-                  <span>♂ Male</span>
-                  <span className="text-[10px] opacity-80 font-semibold">
-                    ({GEMINI_VOICES.filter((v) => v.gender === "Male").length})
+              <div className="flex flex-col gap-2 w-full">
+                {/* Row 1: Style / Persona Category Filter */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
+                    <Sparkles className="h-3 w-3 text-emerald-600" /> Style:
                   </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setGeminiGenderFilter("Female")}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
-                    geminiGenderFilter === "Female"
-                      ? "bg-purple-600 text-white shadow-sm"
-                      : "bg-white text-slate-600 border border-slate-200/80 hover:text-purple-700 hover:border-purple-200"
-                  }`}
-                >
-                  <span>♀ Female</span>
-                  <span className="text-[10px] opacity-80 font-semibold">
-                    ({GEMINI_VOICES.filter((v) => v.gender === "Female").length})
+                  {[
+                    { id: "all", label: "All Styles", icon: "🌟", count: GEMINI_VOICES.length },
+                    { id: "professional", label: "Professional", icon: "💼", count: GEMINI_VOICES.filter(v => v.styles.includes("professional")).length },
+                    { id: "cold", label: "Cold Calling", icon: "🧊", count: GEMINI_VOICES.filter(v => v.styles.includes("cold")).length },
+                    { id: "natural", label: "Natural", icon: "🌿", count: GEMINI_VOICES.filter(v => v.styles.includes("natural")).length },
+                    { id: "human", label: "Human & Warm", icon: "💖", count: GEMINI_VOICES.filter(v => v.styles.includes("human")).length },
+                    { id: "indian", label: "Indian Tuned", icon: "🇮🇳", count: GEMINI_VOICES.filter(v => v.styles.includes("indian")).length },
+                  ].map((st) => (
+                    <button
+                      key={st.id}
+                      type="button"
+                      onClick={() => setGeminiStyleFilter(st.id as any)}
+                      className={`px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
+                        geminiStyleFilter === st.id
+                          ? "bg-emerald-700 text-white shadow-sm ring-2 ring-emerald-500/20"
+                          : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-50 hover:border-slate-300"
+                      }`}
+                    >
+                      <span>{st.icon}</span>
+                      <span>{st.label}</span>
+                      <span className={`text-[10px] px-1 py-0.2 rounded-full font-semibold ${
+                        geminiStyleFilter === st.id ? "bg-emerald-800 text-emerald-100" : "bg-slate-100 text-slate-500"
+                      }`}>
+                        {st.count}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Row 2: Gender Selector */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-1 border-t border-slate-100">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1">
+                    Gender:
                   </span>
-                </button>
-              </>
+                  <button
+                    type="button"
+                    onClick={() => setGeminiGenderFilter("all")}
+                    className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition-all ${
+                      geminiGenderFilter === "all"
+                        ? "bg-slate-800 text-white"
+                        : "bg-white text-slate-600 border border-slate-200/80 hover:bg-slate-100"
+                    }`}
+                  >
+                    All ({GEMINI_VOICES.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGeminiGenderFilter("Male")}
+                    className={`px-2 py-0.5 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all ${
+                      geminiGenderFilter === "Male"
+                        ? "bg-blue-600 text-white"
+                        : "bg-white text-slate-600 border border-slate-200/80 hover:text-blue-700 hover:border-blue-200"
+                    }`}
+                  >
+                    <span>♂ Male</span>
+                    <span className="text-[10px] opacity-80">
+                      ({GEMINI_VOICES.filter((v) => v.gender === "Male").length})
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGeminiGenderFilter("Female")}
+                    className={`px-2 py-0.5 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-all ${
+                      geminiGenderFilter === "Female"
+                        ? "bg-purple-600 text-white"
+                        : "bg-white text-slate-600 border border-slate-200/80 hover:text-purple-700 hover:border-purple-200"
+                    }`}
+                  >
+                    <span>♀ Female</span>
+                    <span className="text-[10px] opacity-80">
+                      ({GEMINI_VOICES.filter((v) => v.gender === "Female").length})
+                    </span>
+                  </button>
+                </div>
+              </div>
             )}
 
             {activeTab === "voices" && (
@@ -2662,6 +2711,30 @@ export default function AdminAgentsPage() {
       {/* ─────────────────── TAB 2B: GEMINI LIVE VOICES ─────────────────── */}
       {activeTab === "gemini_voices" && (
         <div className="space-y-4">
+          {geminiStyleFilter === "indian" && (
+            <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50/90 to-amber-100/40 p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <span className="text-2xl shrink-0">🇮🇳</span>
+                <div>
+                  <p className="text-xs font-bold text-amber-950 flex items-center gap-2">
+                    Gemini Live Indic-Tuned Personas ({orderedGeminiVoices.length} Voices)
+                    <span className="px-1.5 py-0.2 rounded-md bg-amber-200/80 text-amber-900 text-[9px] font-extrabold uppercase">High Clarity</span>
+                  </p>
+                  <p className="text-[11px] text-amber-800 leading-snug mt-0.5">
+                    These Gemini voices have the highest acoustic resonance for Hindi, Hinglish, and Gujarati phonemes.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveTab("voices")}
+                className="shrink-0 px-3 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs shadow-xs transition inline-flex items-center gap-1.5"
+              >
+                <span>View 100% Indian Sarvam Personas</span>
+                <span>→</span>
+              </button>
+            </div>
+          )}
           <div
             className={
               viewMode === "grid"

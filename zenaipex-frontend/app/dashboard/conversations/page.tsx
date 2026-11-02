@@ -83,11 +83,26 @@ export default function ConversationsPage() {
       if (!isCompanyLoading) setIsLoading(false);
       return;
     }
-    setIsLoading(true);
-    conversationsApi.list(companyId)
-      .then(res => setConversations(res.conversations || []))
-      .catch(console.error)
-      .finally(() => setIsLoading(false));
+    const loadData = (bg = false) => {
+      if (!bg) setIsLoading(true);
+      conversationsApi.list(companyId)
+        .then(res => setConversations(res.conversations || []))
+        .catch(console.error)
+        .finally(() => { if (!bg) setIsLoading(false); });
+    };
+
+    loadData();
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") loadData(true);
+    }, 10000);
+    const onVis = () => {
+      if (document.visibilityState === "visible") loadData(true);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, [companyId, isCompanyLoading, refreshKey]);
 
   const handlePin = async (id: string) => {

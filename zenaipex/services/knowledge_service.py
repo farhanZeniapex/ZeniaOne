@@ -745,8 +745,11 @@ async def list_documents(
     skip: int = 0,
     limit: int = 50,
 ) -> List[Dict[str, Any]]:
-    """List documents for a knowledge base, scoped to company."""
-    return await col_documents().find({
-        "company_id": company_id,
-        "knowledge_base_id": kb_id,
-    }).skip(skip).limit(limit).to_list(length=limit)
+    """List documents for a knowledge base, scoped to company. Excludes heavy extracted_text."""
+    return await col_documents().find(
+        {
+            "company_id": company_id,
+            "knowledge_base_id": kb_id,
+        },
+        {"extracted_text": 0}
+    ).skip(skip).limit(limit).to_list(length=limit)

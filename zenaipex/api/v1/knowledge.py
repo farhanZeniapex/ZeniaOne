@@ -164,13 +164,13 @@ async def upload_document(
     """
     # Read at most one byte beyond the limit. This prevents a malicious upload
     # from being fully materialized in memory before validation.
-    max_file_size = 50 * 1024 * 1024
+    max_file_size = 20 * 1024 * 1024
     content_bytes = await file.read(max_file_size + 1)
 
-    # 1. File size validation (Max 50MB)
+    # 1. File size validation (Max 20MB)
     if len(content_bytes) > max_file_size:
         from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail="File too large. Maximum size is 50MB.")
+        raise HTTPException(status_code=400, detail="File too large. Maximum size is 20MB.")
         
     if len(content_bytes) == 0:
         from fastapi import HTTPException
@@ -193,7 +193,10 @@ async def upload_document(
     allowed_types = [
         "application/pdf", 
         "text/plain", 
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "text/csv",
+        "text/markdown",
+        "text/x-markdown",
     ]
     if content_type not in allowed_types:
         from fastapi import HTTPException

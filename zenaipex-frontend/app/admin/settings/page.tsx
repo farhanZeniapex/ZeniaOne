@@ -332,6 +332,12 @@ export default function AdminSettingsPage() {
     const file = event.target.files?.[0];
     if (!file || !currentCompany) return;
 
+    if (file.size > 2 * 1024 * 1024) {
+      setToast({ message: "Logo file is too large. Maximum size is 2MB.", tone: "error" });
+      if (event.target) event.target.value = "";
+      return;
+    }
+
     setUploadingLogo(true);
     try {
       await companySettingsApi.uploadCompanyLogo(currentCompany.id, file);
@@ -763,7 +769,7 @@ export default function AdminSettingsPage() {
                       <input
                         ref={companyLogoInputRef}
                         type="file"
-                        accept="image/*"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
                         onChange={handleCompanyLogoUpload}
                         className="hidden"
                       />
@@ -1352,16 +1358,23 @@ export default function AdminSettingsPage() {
                       <input
                         ref={platformLogoInputRef}
                         type="file"
-                        accept="image/*"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (!file) return;
+                          if (file.size > 2 * 1024 * 1024) {
+                            setToast({ message: "Logo file is too large. Maximum size is 2MB.", tone: "error" });
+                            if (e.target) e.target.value = "";
+                            return;
+                          }
                           try {
                             await uploadPlatformLogo(file);
                             setLogoVersion(Date.now());
-                            setToast({ message: "Global platform logo updated!", tone: "success" });
-                          } catch {
-                            setToast({ message: "Failed to upload logo.", tone: "error" });
+                            setToast({ message: "Global platform logo updated and optimized to WebP!", tone: "success" });
+                          } catch (err: any) {
+                            setToast({ message: err?.message || "Failed to upload logo.", tone: "error" });
+                          } finally {
+                            if (e.target) e.target.value = "";
                           }
                         }}
                         className="hidden"

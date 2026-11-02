@@ -111,7 +111,7 @@ async def list_all_documents(
     limit: int = Query(50, le=100),
 ):
     """Admin endpoint to see all document metadata across all companies."""
-    docs = await col_documents().find().sort("created_at", -1).skip(skip).limit(limit).to_list(length=limit)
+    docs = await col_documents().find({}, {"extracted_text": 0}).sort("created_at", -1).skip(skip).limit(limit).to_list(length=limit)
     
     # Fetch company names
     company_ids = list(set([doc["company_id"] for doc in docs]))
