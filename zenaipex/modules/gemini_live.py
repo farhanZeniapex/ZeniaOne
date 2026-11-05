@@ -103,9 +103,9 @@ async def handle_gemini_live_session(
 
     # Pick best prebuilt voice according to agent preference or gender
     configured_voice = str(
-        agent.get("gemini_voice")
+        agent.get("tts_voice")
+        or agent.get("gemini_voice")
         or agent.get("live_voice")
-        or agent.get("tts_voice")
         or ""
     ).strip().lower()
     selected_voice = PREBUILT_VOICES.get(configured_voice)

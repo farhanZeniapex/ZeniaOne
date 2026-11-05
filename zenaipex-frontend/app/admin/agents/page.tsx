@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { API_BASE_URL, fetchApi, getCompanyLogoUrl } from "@/lib/api/client";
 import {
   VOICES,
@@ -55,7 +55,38 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { VoiceCloningStudio } from "@/components/VoiceCloningStudio";
+import dynamic from "next/dynamic";
+
+const AgentConfigDrawer = dynamic(
+  () => import("@/components/agents/AgentConfigDrawer"),
+  { ssr: false, loading: () => null }
+);
+
+const VoiceCatalogTabs = dynamic(
+  () => import("@/components/agents/VoiceCatalogTabs"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="p-12 flex flex-col items-center justify-center text-slate-400 gap-3">
+        <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+        <span className="text-xs font-semibold">Loading Voice Catalog…</span>
+      </div>
+    ),
+  }
+);
+
+const CustomVoiceGallery = dynamic(
+  () => import("@/components/agents/CustomVoiceGallery"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="p-12 flex flex-col items-center justify-center text-slate-400 gap-3">
+        <Loader2 className="h-6 w-6 animate-spin text-emerald-600" />
+        <span className="text-xs font-semibold">Loading Voice Studio…</span>
+      </div>
+    ),
+  }
+);
 import { SmartSelect } from "@/components/ui/smart-select";
 import { Toast } from "@/components/ui/toast";
 import org from "../organization.module.css";
@@ -391,8 +422,129 @@ export default function AdminAgentsPage() {
         description: voice.description,
         isGemini: true,
       })),
+      ...AZURE_VOICES.map((av) => ({
+        id: av.id,
+        name: av.name,
+        gender: av.gender,
+        provider: "Azure Neural",
+        enabled: true,
+        sampleText: `Namaste, mein ${av.name} hoon, ek Azure Neural voice persona.`,
+        tone: "Natural & Expressive",
+        description: `${av.name} (${av.gender}) - ${av.language} Azure Neural voice.`,
+        isAzure: true,
+      })),
     ];
   }, [customVoices]);
+
+  // Unified Multi-Catalog Voice Lookup (Sarvam 11, Custom Cloned, Gemini Live 30, Azure 11)
+  const findVoiceObj = useCallback(
+    (voiceIdOrName: string | undefined): Voice & { provider?: string; isCustom?: boolean; isGemini?: boolean; isAzure?: boolean } => {
+      if (!voiceIdOrName) return { ...VOICES[0], provider: "Sarvam Bulbul" };
+      const searchKey = voiceIdOrName.trim().toLowerCase();
+
+      // 1. Check custom voices by voice_id, id, or name
+      const customMatch = customVoices.find(
+        (cv) =>
+          (cv.voice_id && cv.voice_id.toLowerCase() === searchKey) ||
+          (cv.id && cv.id.toLowerCase() === searchKey) ||
+          (cv.name && cv.name.toLowerCase() === searchKey),
+      );
+      if (customMatch) {
+        return {
+          id: customMatch.voice_id || customMatch.id,
+          name: customMatch.name,
+          gender: (customMatch.gender as "Male" | "Female") || "Female",
+          provider: "Sarvam Cloned",
+          enabled: true,
+          sampleText:
+            customMatch.sample_text || "Hello! This is a sample of my cloned voice.",
+          isCustom: true,
+          tone: "Cloned Voice",
+          description: customMatch.description || "Custom cloned voice persona",
+        };
+      }
+
+      // 2. Check Gemini Live voices by id or name
+      const geminiMatch = GEMINI_VOICES.find(
+        (gv) =>
+          gv.id.toLowerCase() === searchKey ||
+          gv.name.toLowerCase() === searchKey,
+      );
+      if (geminiMatch) {
+        return {
+          id: geminiMatch.id,
+          name: geminiMatch.name,
+          gender: geminiMatch.gender,
+          provider: "Google Gemini Live",
+          enabled: true,
+          sampleText: `Hello, this is ${geminiMatch.name}, a ${geminiMatch.tone.toLowerCase()} Gemini Live voice.`,
+          tone: geminiMatch.tone,
+          description: geminiMatch.description,
+          isGemini: true,
+        };
+      }
+
+      // 3. Check Azure Neural voices by id or name
+      const azureMatch = AZURE_VOICES.find(
+        (av) =>
+          av.id.toLowerCase() === searchKey ||
+          av.name.toLowerCase() === searchKey,
+      );
+      if (azureMatch) {
+        return {
+          id: azureMatch.id,
+          name: azureMatch.name,
+          gender: azureMatch.gender,
+          provider: "Azure Neural",
+          enabled: true,
+          sampleText: `Namaste, mein ${azureMatch.name} hoon, ek Azure Neural voice persona.`,
+          tone: "Natural & Expressive",
+          description: `${azureMatch.name} (${azureMatch.gender}) - Azure Neural voice.`,
+          isAzure: true,
+        };
+      }
+
+      // 4. Check Sarvam 11 platform voices by id or name
+      const sarvamMatch = VOICES.find(
+        (v) =>
+          v.id.toLowerCase() === searchKey ||
+          v.name.toLowerCase() === searchKey,
+      );
+      if (sarvamMatch) {
+        return {
+          ...sarvamMatch,
+          provider: "Sarvam Bulbul",
+        };
+      }
+
+      // 5. Check platformVoices computed list
+      const platMatch = platformVoices.find(
+        (v) =>
+          v.id.toLowerCase() === searchKey ||
+          (v.name && v.name.toLowerCase() === searchKey),
+      );
+      if (platMatch) return platMatch;
+
+      // 6. If starts with svc- (unmatched clone)
+      if (searchKey.startsWith("svc-")) {
+        return {
+          id: searchKey,
+          name: `Cloned Voice (${searchKey.slice(0, 8)})`,
+          gender: "Female" as const,
+          provider: "Sarvam Cloned",
+          enabled: true,
+          sampleText: "Hello! This is a sample of my cloned voice.",
+          isCustom: true,
+          tone: "Cloned Voice",
+          description: "Custom cloned voice persona",
+        };
+      }
+
+      // 7. Last resort default
+      return { ...VOICES[0], provider: "Sarvam Bulbul" };
+    },
+    [customVoices, platformVoices],
+  );
 
   async function loadCustomVoices() {
     try {
@@ -1171,7 +1323,7 @@ export default function AdminAgentsPage() {
     }
   };
 
-  // Change Agent Voice Platform-Wide & Sync Calibration
+  // Change Agent Voice Platform-Wide & Sync Engine Calibration
   const handleUpdateVoice = async (agentId: string, newVoiceId: string) => {
     setUpdatingAgentId(agentId);
     try {
@@ -1181,22 +1333,61 @@ export default function AdminAgentsPage() {
       const clarityVal = curVoiceSetting.clarity ?? 94;
       const stabilityVal = curVoiceSetting.stability ?? 85;
 
+      const targetAgent = agents.find((a) => a.id === agentId);
+      const voiceObj = findVoiceObj(newVoiceId);
+      const canonicalVoiceId = voiceObj.id || newVoiceId;
+
+      // Deduce correct runtime engine matching voice persona and agent model
+      let deducedEngine = "pipeline";
+      const isGeminiLiveVoice = GEMINI_VOICES.some(
+        (gv) =>
+          gv.id.toLowerCase() === canonicalVoiceId.toLowerCase() ||
+          gv.name.toLowerCase() === canonicalVoiceId.toLowerCase(),
+      );
+      const isCustomCloneVoice =
+        customVoices.some(
+          (cv) =>
+            (cv.voice_id && cv.voice_id.toLowerCase() === canonicalVoiceId.toLowerCase()) ||
+            (cv.id && cv.id.toLowerCase() === canonicalVoiceId.toLowerCase()) ||
+            (cv.name && cv.name.toLowerCase() === canonicalVoiceId.toLowerCase()),
+        ) || canonicalVoiceId.startsWith("svc-");
+
+      if (isGeminiLiveVoice) {
+        deducedEngine = "gemini_live";
+      } else if (isCustomCloneVoice) {
+        const llmModel = (targetAgent?.llm_model || "").toLowerCase();
+        if (llmModel.startsWith("gemini")) {
+          deducedEngine = "gemini_clone";
+        } else {
+          deducedEngine = "pipeline";
+        }
+      } else {
+        deducedEngine = "pipeline";
+      }
+
+      // 1. Persist to MongoDB backend
       await fetchApi(`/admin/agents/${agentId}`, {
         method: "PATCH",
         body: JSON.stringify({
-          tts_voice: newVoiceId.toLowerCase(),
+          tts_voice: canonicalVoiceId,
+          voice_engine: deducedEngine,
+          gemini_voice: isGeminiLiveVoice ? canonicalVoiceId : undefined,
           voice_speed: speedVal,
           voice_volume: volumeVal,
           voice_clarity: clarityVal,
           voice_stability: stabilityVal,
         }),
       });
+
+      // 2. Update local React state immediately
       setAgents((prev) =>
         prev.map((a) =>
           a.id === agentId
             ? {
                 ...a,
-                tts_voice: newVoiceId,
+                tts_voice: canonicalVoiceId,
+                voice_engine: deducedEngine,
+                gemini_voice: isGeminiLiveVoice ? canonicalVoiceId : a.gemini_voice,
                 voice_speed: speedVal,
                 voice_volume: volumeVal,
                 voice_clarity: clarityVal,
@@ -1205,13 +1396,31 @@ export default function AdminAgentsPage() {
             : a,
         ),
       );
-      const voiceObj =
-        platformVoices.find(
-          (v) => v.id.toLowerCase() === newVoiceId.toLowerCase(),
-        ) || getVoiceById(newVoiceId);
-      const agentObj = agents.find((a) => a.id === agentId);
+
+      // 3. Immediately sync session storage cache & broadcast storage event
+      try {
+        const cached = sessionStorage.getItem("cached_admin_agents");
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed)) {
+            const updated = parsed.map((a: any) =>
+              a.id === agentId || a._id === agentId
+                ? { ...a, tts_voice: canonicalVoiceId, voice_engine: deducedEngine }
+                : a,
+            );
+            sessionStorage.setItem("cached_admin_agents", JSON.stringify(updated));
+          }
+        }
+        window.dispatchEvent(new Event("storage"));
+        window.dispatchEvent(
+          new CustomEvent("agent-voice-updated", {
+            detail: { agentId, tts_voice: canonicalVoiceId, voice_engine: deducedEngine },
+          }),
+        );
+      } catch (storageErr) {}
+
       setSuccessToast(
-        `Assigned ${voiceObj?.name || "Voice"} to ${agentObj?.name || "Agent"}`,
+        `Assigned ${voiceObj.name} (${voiceObj.provider || "Voice"}) to ${targetAgent?.name || "Agent"}`,
       );
       setTimeout(() => setSuccessToast(null), 3500);
     } catch (err: any) {
@@ -1305,10 +1514,7 @@ export default function AdminAgentsPage() {
         (typeFilter === "assigned" && hasAssignedVoice) ||
         (typeFilter === "unassigned" && !hasAssignedVoice);
 
-      const voiceObj =
-        platformVoices.find(
-          (v) => v.id.toLowerCase() === (agent.tts_voice || "").toLowerCase(),
-        ) || getVoiceById(agent.tts_voice);
+      const voiceObj = findVoiceObj(agent.tts_voice);
       const matchesGender =
         genderFilter === "all" || voiceObj.gender === genderFilter;
 
@@ -1368,6 +1574,13 @@ export default function AdminAgentsPage() {
         description: voice.tone,
         badge: "Gemini",
         group: "Gemini Live voices",
+      })),
+      ...AZURE_VOICES.map((voice) => ({
+        value: voice.id,
+        label: voice.name,
+        description: `${voice.language} - ${voice.gender}`,
+        badge: "Azure",
+        group: "Azure Neural voices",
       })),
     ],
     [customVoices],
@@ -1841,7 +2054,7 @@ export default function AdminAgentsPage() {
                 >
                   <span>♂ Male</span>
                   <span className="text-[10px] opacity-80 font-semibold">
-                    ({agents.filter((a) => (platformVoices.find((v) => v.id.toLowerCase() === (a.tts_voice || "").toLowerCase()) || getVoiceById(a.tts_voice)).gender === "Male").length})
+                    ({agents.filter((a) => findVoiceObj(a.tts_voice).gender === "Male").length})
                   </span>
                 </button>
                 <button
@@ -1855,7 +2068,7 @@ export default function AdminAgentsPage() {
                 >
                   <span>♀ Female</span>
                   <span className="text-[10px] opacity-80 font-semibold">
-                    ({agents.filter((a) => (platformVoices.find((v) => v.id.toLowerCase() === (a.tts_voice || "").toLowerCase()) || getVoiceById(a.tts_voice)).gender === "Female").length})
+                    ({agents.filter((a) => findVoiceObj(a.tts_voice).gender === "Female").length})
                   </span>
                 </button>
                 <button
@@ -2085,12 +2298,7 @@ export default function AdminAgentsPage() {
           {viewMode === "grid" && (
             <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2 xl:grid-cols-3">
               {filteredAgents.map((agent) => {
-                const voiceObj =
-                  platformVoices.find(
-                    (v) =>
-                      v.id.toLowerCase() ===
-                      (agent.tts_voice || "").toLowerCase(),
-                  ) || getVoiceById(agent.tts_voice);
+                const voiceObj = findVoiceObj(agent.tts_voice);
                 const isPreviewingThis = previewingVoiceId === voiceObj.id;
                 const isMale = voiceObj.gender === "Male";
                 const isFemale = voiceObj.gender === "Female";
@@ -2292,12 +2500,7 @@ export default function AdminAgentsPage() {
                   </tr>
                 ) : (
                   filteredAgents.map((agent) => {
-                    const voiceObj =
-                      platformVoices.find(
-                        (v) =>
-                          v.id.toLowerCase() ===
-                          (agent.tts_voice || "").toLowerCase(),
-                      ) || getVoiceById(agent.tts_voice);
+                    const voiceObj = findVoiceObj(agent.tts_voice);
                     const isPreviewingThis = previewingVoiceId === voiceObj.id;
                     const isInternalWorkspace = agent.company_name
                       ?.toLowerCase()
@@ -2483,1852 +2686,84 @@ export default function AdminAgentsPage() {
         </div>
       )}
 
-      {/* ─────────────────── TAB 2: VOICE STUDIO & SOUND GALLERY ─────────────────── */}
-      {activeTab === "voices" && (
-        <div className="space-y-4">
-          {/* 11 Voice Studio Cards */}
-          <div
-            className={
-              viewMode === "grid"
-                ? "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
-                : "flex flex-col gap-2"
-            }
-          >
-            {orderedPlatformVoices
-              .filter((v) => genderFilter === "all" || v.gender === genderFilter)
-              .map((voice) => {
-                const isPlaying = previewingVoiceId === voice.id;
-                const assignedAgents = assignedAgentsForVoice(agents, voice);
-                const acoustics = getVoiceAcoustics(voice.id);
-                const isMale = voice.gender === "Male";
-
-                if (viewMode === "list") {
-                  return (
-                    <div
-                      key={voice.id}
-                      className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-emerald-300 hover:shadow-md sm:flex-row sm:items-center"
-                    >
-                      <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <div
-                          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-extrabold ${
-                            isMale
-                              ? "border-blue-200 bg-blue-50 text-blue-800"
-                              : "border-purple-200 bg-purple-50 text-purple-800"
-                          }`}
-                        >
-                          {voice.name.charAt(0)}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="truncate text-sm font-extrabold text-slate-900">{voice.name}</h3>
-                            <span className="rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800">
-                              Platform Voice
-                            </span>
-                            <span
-                              className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
-                                isMale
-                                  ? "bg-blue-50 text-blue-700 border-blue-200"
-                                  : "bg-purple-50 text-purple-700 border-purple-200"
-                              }`}
-                            >
-                              {isMale ? "♂ Male" : "♀ Female"}
-                            </span>
-                          </div>
-                          <p className="truncate text-[11px] text-emerald-700">{voice.tone} · {voice.accent || "Indian"}</p>
-                          <p className="truncate text-[11px] text-slate-500">{voice.description}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 sm:w-44">
-                        <Users className="h-3 w-3 shrink-0 text-emerald-600" />
-                        <span className="truncate" title={assignedAgents.map((a) => a.name).join(", ")}>
-                          {assignedAgents.length > 0 ? assignedAgents.map((a) => a.name).join(", ") : "Unassigned"}
-                        </span>
-                      </div>
-                      <div className="min-w-[190px]" onClick={(event) => event.stopPropagation()}>
-                        <SmartSelect
-                          value={assignedAgents[0]?.id || ""}
-                          placeholder={assignedAgents.length > 0 ? assignedAgents[0].name : "Select company agent…"}
-                          searchPlaceholder="Search agents or companies…"
-                          onChange={(agentId) => handleUpdateVoice(agentId, voice.id)}
-                          options={agents.map((agent) => ({
-                            value: agent.id,
-                            label: `${agent.name} · ${agent.company_name}`,
-                            badge: assignedAgents.some((assigned) => assigned.id === agent.id) ? "Current" : undefined,
-                          }))}
-                          className="[&>button]:h-8 [&>button]:text-[10px]"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayVoicePreview(voice)}
-                        className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
-                          isPlaying ? "bg-red-600 text-white hover:bg-red-700" : "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800"
-                        }`}
-                      >
-                        {isPlaying ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
-                        {isPlaying ? "Stop" : "Listen"}
-                      </button>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div
-                    key={voice.id}
-                    className={`relative flex min-h-[260px] flex-col justify-between space-y-3 overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition-all ${
-                      isPlaying
-                        ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg"
-                        : "border-slate-200/80 hover:border-emerald-300 hover:shadow-md"
-                    }`}
-                  >
-                    {isPlaying && (
-                      <div className="absolute left-0 right-0 top-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 animate-pulse" />
-                    )}
-
-                    <div>
-                      {/* Top Row: Avatar, Name, Badges, Usage Count */}
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-extrabold shadow-sm ${
-                              isMale
-                                ? "border-blue-200 bg-blue-50 text-blue-800"
-                                : "border-purple-200 bg-purple-50 text-purple-800"
-                            }`}
-                          >
-                            {voice.name.charAt(0)}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="text-sm font-extrabold tracking-tight text-slate-900">{voice.name}</h3>
-                              <span className="rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800">
-                                Platform Voice
-                              </span>
-                              <span
-                                className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
-                                  isMale
-                                    ? "bg-blue-50 text-blue-700 border-blue-200"
-                                    : "bg-purple-50 text-purple-700 border-purple-200"
-                                }`}
-                              >
-                                {isMale ? "♂ Male" : "♀ Female"}
-                              </span>
-                            </div>
-                            <span className="mt-1 inline-block rounded-md bg-emerald-50/80 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                              {voice.tone}
-                            </span>
-                          </div>
-                        </div>
-
-                        <span className="shrink-0 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                          {assignedAgents.length} {assignedAgents.length === 1 ? "Agent" : "Agents"}
-                        </span>
-                      </div>
-
-                      {/* Assigned Row */}
-                      <div className="mb-2 flex items-center gap-1.5 text-[10px] text-slate-500">
-                        <Users className="h-3 w-3 shrink-0 text-emerald-600" />
-                        <span className="font-semibold text-slate-600">Assigned:</span>
-                        <span className="truncate font-medium text-slate-700" title={assignedAgents.map((agent) => agent.name).join(", ")}>
-                          {assignedAgents.length > 0 ? assignedAgents.map((agent) => agent.name).join(", ") : "Unassigned"}
-                        </span>
-                      </div>
-
-                      {/* Description */}
-                      <p className="mb-2.5 text-[11px] leading-relaxed text-slate-600 line-clamp-2 min-h-[34px]">
-                        {voice.description}
-                      </p>
-
-                      {/* Provider Spec Pill */}
-                      <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/40 p-2 text-[10px] font-mono text-emerald-700">
-                        <span className="font-bold">Provider:</span>
-                        <span>Sarvam AI · Bulbul v3</span>
-                        <span>{voice.accent || "Indian"} · Pitch {acoustics.pitch.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    {/* Bottom Action Section */}
-                    <div className="space-y-3 border-t border-slate-100 pt-3" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => handlePlayVoicePreview(voice)}
-                        disabled={isPreviewLoading && previewingVoiceId === voice.id}
-                        className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold transition-all ${
-                          isPreviewLoading && previewingVoiceId === voice.id
-                            ? "bg-slate-200 text-slate-600 cursor-not-allowed"
-                            : isPlaying
-                              ? "bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-500/20"
-                              : "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800"
-                        }`}
-                      >
-                        {isPreviewLoading && previewingVoiceId === voice.id ? (
-                          <>
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            <span>Loading voice sample...</span>
-                          </>
-                        ) : isPlaying ? (
-                          <>
-                            <Square className="h-3 w-3 fill-current" />
-                            <span>Stop voice sample</span>
-                          </>
-                        ) : (
-                          <>
-                            <Play className="h-3 w-3 fill-current" />
-                            <span>Listen voice sample</span>
-                          </>
-                        )}
-                      </button>
-
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-semibold text-slate-500">
-                          Assign this voice to platform agent:
-                        </label>
-                        <SmartSelect
-                          value={assignedAgents[0]?.id || ""}
-                          placeholder={
-                            assignedAgents.length > 0
-                              ? assignedAgents[0].name
-                              : "Choose an agent to assign…"
-                          }
-                          searchPlaceholder="Search agents…"
-                          onChange={(value) => handleUpdateVoice(value, voice.id)}
-                          options={agents.map((a) => ({
-                            value: a.id,
-                            label: `${a.name} (${a.company_name})`,
-                            badge: assignedAgents.some((assigned) => assigned.id === a.id) ? "Current" : undefined,
-                          }))}
-                          className="w-full [&>button]:h-9 [&>button]:text-[11px]"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
+      {/* ─────────────────── TAB 2: VOICE CATALOGS (SARVAM / GEMINI / AZURE) ─────────────────── */}
+      {(activeTab === "voices" || activeTab === "gemini_voices" || activeTab === "azure_voices") && (
+        <VoiceCatalogTabs
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          viewMode={viewMode}
+          genderFilter={genderFilter}
+          geminiStyleFilter={geminiStyleFilter}
+          orderedPlatformVoices={orderedPlatformVoices}
+          orderedGeminiVoices={orderedGeminiVoices}
+          orderedAzureVoices={orderedAzureVoices}
+          AZURE_VOICES={AZURE_VOICES}
+          agents={agents}
+          previewingVoiceId={previewingVoiceId}
+          isPreviewLoading={isPreviewLoading}
+          handlePlayVoicePreview={handlePlayVoicePreview}
+          handleUpdateVoice={handleUpdateVoice}
+          getVoiceAcoustics={getVoiceAcoustics}
+          assignedAgentsForVoice={assignedAgentsForVoice}
+        />
       )}
 
-      {/* ─────────────────── TAB 2B: GEMINI LIVE VOICES ─────────────────── */}
-      {activeTab === "gemini_voices" && (
-        <div className="space-y-4">
-          {geminiStyleFilter === "indian" && (
-            <div className="rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50/90 to-amber-100/40 p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
-              <div className="flex items-center gap-2.5">
-                <span className="text-2xl shrink-0">🇮🇳</span>
-                <div>
-                  <p className="text-xs font-bold text-amber-950 flex items-center gap-2">
-                    Gemini Live Indic-Tuned Personas ({orderedGeminiVoices.length} Voices)
-                    <span className="px-1.5 py-0.2 rounded-md bg-amber-200/80 text-amber-900 text-[9px] font-extrabold uppercase">High Clarity</span>
-                  </p>
-                  <p className="text-[11px] text-amber-800 leading-snug mt-0.5">
-                    These Gemini voices have the highest acoustic resonance for Hindi, Hinglish, and Gujarati phonemes.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveTab("voices")}
-                className="shrink-0 px-3 py-1.5 rounded-xl bg-amber-700 hover:bg-amber-800 text-white font-bold text-xs shadow-xs transition inline-flex items-center gap-1.5"
-              >
-                <span>View 100% Indian Sarvam Personas</span>
-                <span>→</span>
-              </button>
-            </div>
-          )}
-          <div
-            className={
-              viewMode === "grid"
-                ? "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"
-                : "flex flex-col gap-2"
-            }
-          >
-              {orderedGeminiVoices.map((voice) => {
-                const assignedAgents = assignedAgentsForVoice(agents, voice);
-                const previewVoice = {
-                  id: voice.id,
-                  name: voice.name,
-                  gender: voice.gender,
-                  provider: "Google Gemini Live",
-                  enabled: true,
-                  description: voice.description,
-                  tone: voice.tone,
-                  sampleText: `Hello, this is ${voice.name}, a ${voice.tone.toLowerCase()} Gemini Live voice.`,
-                  isGemini: true,
-                };
-
-                const isMale = voice.gender === "Male";
-
-                if (viewMode === "list") {
-                  return (
-                    <div key={voice.id} className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition hover:border-emerald-300 hover:shadow-md sm:flex-row sm:items-center">
-                      <div className="flex min-w-0 flex-1 items-center gap-3">
-                        <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-extrabold ${isMale ? "border-blue-200 bg-blue-50 text-blue-800" : "border-purple-200 bg-purple-50 text-purple-800"}`}>{voice.name.charAt(0)}</div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="truncate text-sm font-extrabold text-slate-900">{voice.name}</h3>
-                            <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-800">Gemini Live</span>
-                            <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${isMale ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-purple-50 text-purple-700 border-purple-200"}`}>
-                              {isMale ? "♂ Male" : "♀ Female"}
-                            </span>
-                          </div>
-                          <p className="truncate text-[11px] text-emerald-700">{voice.tone}</p>
-                          <p className="truncate text-[11px] text-slate-500">{voice.description}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 text-[10px] text-slate-500 sm:w-44">
-                        <Users className="h-3 w-3 shrink-0 text-emerald-600" />
-                        <span className="truncate" title={assignedAgents.map((agent) => agent.name).join(", ")}>{assignedAgents.length > 0 ? assignedAgents.map((agent) => agent.name).join(", ") : "Unassigned"}</span>
-                      </div>
-                      <div className="min-w-[190px]" onClick={(event) => event.stopPropagation()}>
-                        <SmartSelect
-                          value={assignedAgents[0]?.id || ""}
-                          placeholder={assignedAgents.length > 0 ? assignedAgents[0].name : "Select company agent…"}
-                          searchPlaceholder="Search agents or companies…"
-                          onChange={(agentId) => handleUpdateVoice(agentId, voice.id)}
-                          options={agents.map((agent) => ({
-                            value: agent.id,
-                            label: `${agent.name} · ${agent.company_name}`,
-                            badge: assignedAgents.some((assigned) => assigned.id === agent.id) ? "Current" : undefined,
-                          }))}
-                          className="[&>button]:h-8 [&>button]:text-[10px]"
-                        />
-                      </div>
-                      <button type="button" onClick={() => handlePlayVoicePreview(previewVoice)} className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-[11px] font-bold ${previewingVoiceId === voice.id ? "bg-red-600 text-white" : "bg-emerald-700 text-white"}`}>
-                        {previewingVoiceId === voice.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
-                        {previewingVoiceId === voice.id ? "Stop" : "Listen"}
-                      </button>
-                    </div>
-                  );
-                }
-
-                return (
-                  <div key={voice.id} className={`relative flex min-h-[260px] flex-col justify-between space-y-3 overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition-all ${previewingVoiceId === voice.id ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg" : "border-slate-200/80 hover:border-emerald-300 hover:shadow-md"}`}>
-                    {previewingVoiceId === voice.id && <div className="absolute left-0 right-0 top-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 animate-pulse" />}
-                    <div>
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-extrabold shadow-sm ${isMale ? "border-blue-200 bg-blue-50 text-blue-800" : "border-purple-200 bg-purple-50 text-purple-800"}`}>{voice.name.charAt(0)}</div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className="text-sm font-extrabold tracking-tight text-slate-900">{voice.name}</h3>
-                              <span className="rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800">Gemini Live</span>
-                              <span className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${isMale ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-purple-50 text-purple-700 border-purple-200"}`}>
-                                {isMale ? "♂ Male" : "♀ Female"}
-                              </span>
-                            </div>
-                            <span className="mt-1 inline-block rounded-md bg-emerald-50/80 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">{voice.tone}</span>
-                          </div>
-                        </div>
-                        <span className="shrink-0 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">{assignedAgents.length} {assignedAgents.length === 1 ? "Agent" : "Agents"}</span>
-                      </div>
-                      <div className="mb-2 flex items-center gap-1.5 text-[10px] text-slate-500">
-                        <Users className="h-3 w-3 shrink-0 text-emerald-600" />
-                        <span className="font-semibold text-slate-600">Assigned:</span>
-                        <span className="truncate" title={assignedAgents.map((agent) => agent.name).join(", ")}>
-                          {assignedAgents.length > 0 ? assignedAgents.map((agent) => agent.name).join(", ") : "Unassigned"}
-                        </span>
-                      </div>
-                      <p className="mb-2.5 text-[11px] leading-relaxed text-slate-600">{voice.description}</p>
-                      <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/40 p-2 text-[10px] font-mono text-emerald-700">
-                        <span className="font-bold">Provider:</span>
-                        <span>Google Gemini Live</span>
-                        <span>Native audio</span>
-                      </div>
-                    </div>
-                    <div className="space-y-3 border-t border-slate-100 pt-3">
-                      <button type="button" onClick={() => handlePlayVoicePreview(previewVoice)} className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold transition-all ${previewingVoiceId === voice.id ? "bg-red-600 text-white hover:bg-red-700" : "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800"}`}>
-                        {previewingVoiceId === voice.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
-                        {previewingVoiceId === voice.id ? "Stop voice sample" : "Listen voice sample"}
-                      </button>
-                      <div className="space-y-1">
-                        <label className="block text-[11px] font-semibold text-slate-500">
-                          Assign this voice to platform agent:
-                        </label>
-                        <SmartSelect
-                          value={assignedAgents[0]?.id || ""}
-                          placeholder={
-                            assignedAgents.length > 0
-                              ? assignedAgents[0].name
-                              : "Choose an agent to assign…"
-                          }
-                          searchPlaceholder="Search agents…"
-                          onChange={(agentId) => handleUpdateVoice(agentId, voice.id)}
-                          options={agents.map((agent) => ({
-                            value: agent.id,
-                            label: `${agent.name} (${agent.company_name})`,
-                            badge: assignedAgents.some((assigned) => assigned.id === agent.id) ? "Current" : undefined,
-                          }))}
-                          className="w-full [&>button]:h-9 [&>button]:text-[11px]"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
-      )}
-
-      {/* ─────────────────── TAB 2C: AZURE STANDARD VOICES ─────────────────── */}
-      {activeTab === "azure_voices" && (
-        <div className="space-y-4">
-          <section className="overflow-hidden rounded-2xl border border-[#DCE7DF] bg-white shadow-[0_5px_18px_#1b3b300a]">
-            <div className="flex flex-col gap-2 border-b border-[#E8EEE9] bg-gradient-to-r from-emerald-50/70 via-white to-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-emerald-700" />
-                  <h2 className="text-lg font-extrabold text-slate-900">Azure Speech Voices</h2>
-                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">{AZURE_VOICES.length} F0 eligible</span>
-                </div>
-                <p className="mt-1 text-xs text-slate-500">Indian Standard Neural voices available in Azure&apos;s free F0 quota.</p>
-              </div>
-              <span className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] font-semibold text-amber-800">Azure key required for live calls</span>
-            </div>
-            <div className={viewMode === "grid" ? "grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-3" : "flex flex-col gap-2 p-4"}>
-              {orderedAzureVoices.map((voice) => {
-                const previewVoice = {
-                  id: voice.id,
-                  name: voice.name,
-                  gender: voice.gender,
-                  provider: "Azure Speech",
-                  enabled: true,
-                  description: voice.description,
-                  tone: voice.tone,
-                  sampleText: `Hello, this is ${voice.name}, an Azure ${voice.language} voice.`,
-                };
-                return (
-                  <div key={voice.id} className={viewMode === "grid" ? "flex min-h-[180px] flex-col justify-between rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" : "flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center"}>
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-sm font-extrabold text-emerald-800">{voice.name.charAt(0)}</div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="truncate text-sm font-extrabold text-slate-900">{voice.name}</h3>
-                          <span className="rounded-md bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-700">{voice.gender}</span>
-                        </div>
-                        <p className="truncate text-[11px] text-emerald-700">{voice.language} · Azure Standard Neural</p>
-                        <p className="truncate text-[11px] text-slate-500">{voice.id}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="hidden text-[10px] text-slate-400 sm:inline">Catalog only</span>
-                      <Button onClick={() => handlePlayVoicePreview(previewVoice)} className="shrink-0 bg-emerald-700 text-[11px] font-bold hover:bg-emerald-800">
-                        {previewingVoiceId === voice.id ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
-                        {previewingVoiceId === voice.id ? "Stop" : "Preview"}
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        </div>
-      )}
-
-      {/* ─────────────────── TAB 3: CUSTOM VOICE STUDIO ─────────────────── */}
+      {/* ─────────────────── TAB 3: CUSTOM VOICE STUDIO & GALLERY ─────────────────── */}
       {activeTab === "custom_voices" && (
-        <div className="flex flex-col gap-6 items-start relative">
-          {/* Studio Modal */}
-          <VoiceCloningStudio
-            isOpen={isVoiceStudioOpen}
-            onClose={() => setIsVoiceStudioOpen(false)}
-            onVoiceCreated={(v) => {
-              loadCustomVoices();
-              setIsVoiceStudioOpen(false);
-            }}
-          />
-
-          {/* Right Panel: Gallery */}
-          <div className="w-full flex-1 pb-12">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start w-full">
-              {/* LEFT SIDE (70%): Gallery Grid / List */}
-              <div
-                className={`col-span-1 lg:col-span-8 ${viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 gap-4" : "flex flex-col gap-2"}`}
-              >
-                {filteredVoices.length === 0 ? (
-                  <div className="col-span-full py-12 flex flex-col items-center justify-center text-center bg-white rounded-3xl border border-slate-200 border-dashed">
-                    <Mic className="h-12 w-12 text-slate-300 mb-4" />
-                    <h4 className="text-sm font-bold text-slate-700">
-                      No Custom Voices Found
-                    </h4>
-                    <p className="text-xs text-slate-500 mt-2 max-w-sm">
-                      Try adjusting your search or filter settings.
-                    </p>
-                  </div>
-                ) : (
-                  filteredVoices.map((voice) => {
-                    const isSelected = selectedVoiceId === voice.id;
-                    const previewVoice = getVoiceForPicker(voice.voice_id || voice.id);
-                    const isPlaying = previewingVoiceId === previewVoice.id || previewingVoiceId === voice.id;
-                    const assignedAgents = assignedAgentsForVoice(agents, voice);
-                    const isMale = voice.gender === "Male";
-                    const isFemale = voice.gender === "Female";
-
-                    if (viewMode === "list") {
-                      return (
-                        <div
-                          key={voice.id}
-                          onClick={() => setSelectedVoiceId(voice.id)}
-                          className={`flex flex-col gap-3 rounded-xl border bg-white p-3 shadow-sm transition hover:border-emerald-300 hover:shadow-md sm:flex-row sm:items-center cursor-pointer ${
-                            isSelected ? "border-emerald-500 ring-1 ring-emerald-500/20" : "border-slate-200"
-                          }`}
-                        >
-                          <div className="flex min-w-0 flex-1 items-center gap-3">
-                            <div
-                              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-extrabold ${
-                                isMale
-                                  ? "border-blue-200 bg-blue-50 text-blue-800"
-                                  : isFemale
-                                    ? "border-purple-200 bg-purple-50 text-purple-800"
-                                    : "border-emerald-200 bg-emerald-50 text-emerald-800"
-                              }`}
-                            >
-                              {voice.name?.charAt(0)?.toUpperCase() || "C"}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                <h3 className="truncate text-sm font-extrabold text-slate-900">{voice.name}</h3>
-                                <span className="rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800">
-                                  ✨ Cloned
-                                </span>
-                                <span
-                                  className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
-                                    isMale
-                                      ? "bg-blue-50 text-blue-700 border-blue-200"
-                                      : isFemale
-                                        ? "bg-purple-50 text-purple-700 border-purple-200"
-                                        : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                  }`}
-                                >
-                                  {isMale ? "♂ Male" : isFemale ? "♀ Female" : "✨ Active"}
-                                </span>
-                              </div>
-                              <p className="truncate text-[11px] text-emerald-700">Cloned Voice Persona</p>
-                              <p className="truncate text-[11px] text-slate-500">{voice.description || "Custom cloned voice"}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-[10px] text-slate-500 sm:w-44">
-                            <Users className="h-3 w-3 shrink-0 text-emerald-600" />
-                            <span className="truncate" title={assignedAgents.map((a) => a.name).join(", ")}>
-                              {assignedAgents.length > 0 ? assignedAgents.map((a) => a.name).join(", ") : "Unassigned"}
-                            </span>
-                          </div>
-                          <div className="min-w-[190px]" onClick={(event) => event.stopPropagation()}>
-                            <SmartSelect
-                              value={assignedAgents[0]?.id || ""}
-                              placeholder={assignedAgents.length > 0 ? assignedAgents[0].name : "Select company agent…"}
-                              searchPlaceholder="Search agents or companies…"
-                              onChange={(agentId) => handleUpdateVoice(agentId, voice.id)}
-                              options={agents.map((agent) => ({
-                                value: agent.id,
-                                label: `${agent.name} · ${agent.company_name}`,
-                                badge: assignedAgents.some((assigned) => assigned.id === agent.id) ? "Current" : undefined,
-                              }))}
-                              className="[&>button]:h-8 [&>button]:text-[10px]"
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handlePlayVoicePreview(previewVoice);
-                            }}
-                            className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-lg px-3 py-1.5 text-[11px] font-bold transition-all ${
-                              isPlaying ? "bg-red-600 text-white hover:bg-red-700" : "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800"
-                            }`}
-                          >
-                            {isPlaying ? <Square className="h-3 w-3" /> : <Play className="h-3 w-3 fill-current" />}
-                            {isPlaying ? "Stop" : "Listen"}
-                          </button>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div
-                        key={voice.id}
-                        onClick={() => setSelectedVoiceId(voice.id)}
-                        className={`relative flex min-h-[260px] flex-col justify-between space-y-3 overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition-all cursor-pointer ${
-                          isPlaying
-                            ? "border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg"
-                            : isSelected
-                              ? "border-emerald-500 ring-1 ring-emerald-500/20 shadow-md"
-                              : "border-slate-200/80 hover:border-emerald-300 hover:shadow-md"
-                        }`}
-                      >
-                        {isPlaying && (
-                          <div className="absolute left-0 right-0 top-0 h-1.5 bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-600 animate-pulse" />
-                        )}
-
-                        <div>
-                          {/* Top Row: Avatar, Name, Badges, Usage Count */}
-                          <div className="mb-3 flex items-start justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <div
-                                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border text-sm font-extrabold shadow-sm ${
-                                  isMale
-                                    ? "border-blue-200 bg-blue-50 text-blue-800"
-                                    : isFemale
-                                      ? "border-purple-200 bg-purple-50 text-purple-800"
-                                      : "border-emerald-200 bg-emerald-50 text-emerald-800"
-                                }`}
-                              >
-                                {voice.name?.charAt(0)?.toUpperCase() || "C"}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <h3 className="text-sm font-extrabold tracking-tight text-slate-900 truncate max-w-[130px]">
-                                    {voice.name}
-                                  </h3>
-                                  <span className="rounded-md border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-emerald-800">
-                                    ✨ Cloned
-                                  </span>
-                                  <span
-                                    className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
-                                      isMale
-                                        ? "bg-blue-50 text-blue-700 border-blue-200"
-                                        : isFemale
-                                          ? "bg-purple-50 text-purple-700 border-purple-200"
-                                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                                    }`}
-                                  >
-                                    {isMale ? "♂ Male" : isFemale ? "♀ Female" : "✨ Active"}
-                                  </span>
-                                </div>
-                                <span className="mt-1 inline-block rounded-md bg-emerald-50/80 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                                  Cloned Voice Persona
-                                </span>
-                              </div>
-                            </div>
-
-                            <span className="shrink-0 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
-                              {assignedAgents.length} {assignedAgents.length === 1 ? "Agent" : "Agents"}
-                            </span>
-                          </div>
-
-                          {/* Assigned Row */}
-                          <div className="mb-2 flex items-center gap-1.5 text-[10px] text-slate-500">
-                            <Users className="h-3 w-3 shrink-0 text-emerald-600" />
-                            <span className="font-semibold text-slate-600">Assigned:</span>
-                            <span className="truncate font-medium text-slate-700" title={assignedAgents.map((a) => a.name).join(", ")}>
-                              {assignedAgents.length > 0 ? assignedAgents.map((a) => a.name).join(", ") : "Unassigned"}
-                            </span>
-                          </div>
-
-                          {/* Description */}
-                          <p className="mb-2.5 text-[11px] leading-relaxed text-slate-600 line-clamp-2 min-h-[34px]">
-                            {voice.description || "Custom enterprise cloned voice persona."}
-                          </p>
-
-                          {/* Provider Spec Pill */}
-                          <div className="flex items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/40 p-2 text-[10px] font-mono text-emerald-700">
-                            <span className="font-bold">Provider:</span>
-                            <span>Sarvam Cloned</span>
-                            <span>High Clarity · Active</span>
-                          </div>
-                        </div>
-
-                        {/* Bottom Action Section */}
-                        <div className="space-y-3 border-t border-slate-100 pt-3" onClick={(e) => e.stopPropagation()}>
-                          <button
-                            type="button"
-                            onClick={() => handlePlayVoicePreview(previewVoice)}
-                            disabled={isPreviewLoading && previewingVoiceId === previewVoice.id}
-                            className={`inline-flex w-full items-center justify-center gap-2 rounded-xl px-3 py-2 text-[11px] font-bold transition-all ${
-                              isPreviewLoading && previewingVoiceId === previewVoice.id
-                                ? "bg-slate-200 text-slate-600 cursor-not-allowed"
-                                : isPlaying
-                                  ? "bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-500/20"
-                                  : "bg-emerald-700 text-white shadow-sm hover:bg-emerald-800"
-                            }`}
-                          >
-                            {isPreviewLoading && previewingVoiceId === previewVoice.id ? (
-                              <>
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                <span>Loading voice sample...</span>
-                              </>
-                            ) : isPlaying ? (
-                              <>
-                                <Square className="h-3 w-3 fill-current" />
-                                <span>Stop voice sample</span>
-                              </>
-                            ) : (
-                              <>
-                                <Play className="h-3 w-3 fill-current" />
-                                <span>Listen voice sample</span>
-                              </>
-                            )}
-                          </button>
-
-                          <div className="space-y-1">
-                            <label className="block text-[11px] font-semibold text-slate-500">
-                              Assign this voice to platform agent:
-                            </label>
-                            <SmartSelect
-                              value={assignedAgents[0]?.id || ""}
-                              placeholder={
-                                assignedAgents.length > 0
-                                  ? assignedAgents[0].name
-                                  : "Choose an agent to assign…"
-                              }
-                              searchPlaceholder="Search agents…"
-                              onChange={(value) => handleUpdateVoice(value, voice.id)}
-                              options={agents.map((a) => ({
-                                value: a.id,
-                                label: `${a.name} (${a.company_name})`,
-                                badge: assignedAgents.some((assigned) => assigned.id === a.id) ? "Current" : undefined,
-                              }))}
-                              className="w-full [&>button]:h-9 [&>button]:text-[11px]"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-              <div className="col-span-1 lg:col-span-4 lg:sticky lg:top-24 self-start">
-                <div className="bg-white rounded-3xl border border-slate-200 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col max-h-[calc(100vh-8rem)] overflow-y-auto custom-scrollbar">
-                  {/* Sticky Header */}
-                  <div className="py-3 px-5 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2.5">
-                    <Sliders className="h-4 w-4 text-emerald-500" />
-                    <h3 className="font-bold text-slate-800 text-sm">
-                      Voice Settings
-                    </h3>
-                  </div>
-
-                  {!selectedVoiceId ||
-                  !filteredVoices.find((v) => v.id === selectedVoiceId) ? (
-                    <div className="flex flex-col items-center justify-center p-6 text-center bg-slate-50/30">
-                      <div className="h-12 w-12 bg-white rounded-full shadow-sm border border-slate-200 flex items-center justify-center mb-3">
-                        <Mic className="h-5 w-5 text-slate-300" />
-                      </div>
-                      <h4 className="text-sm font-bold text-slate-700">
-                        No Voice Selected
-                      </h4>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Select a voice from the gallery to view and configure
-                        its advanced details.
-                      </p>
-                    </div>
-                  ) : (
-                    (() => {
-                      const voice = filteredVoices.find(
-                        (v) => v.id === selectedVoiceId,
-                      )!;
-                      const assignedAgents = assignedAgentsForVoice(
-                        agents,
-                        voice,
-                      );
-                      return (
-                        <div className="p-6 flex flex-col h-full space-y-5">
-                          {/* Compact Voice Header */}
-                          <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-                            <div className="flex items-center gap-3">
-                              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 text-emerald-700 flex items-center justify-center font-black text-xl shadow-sm shrink-0">
-                                {voice.name?.charAt(0)?.toUpperCase() || "C"}
-                              </div>
-                              <div className="flex flex-col">
-                                <h2 className="text-sm font-extrabold text-slate-900 leading-tight flex items-center gap-1.5">
-                                  {voice.name}
-                                  {voice.is_pinned && (
-                                    <span className="text-xs" title="Pinned">
-                                      📌
-                                    </span>
-                                  )}
-                                </h2>
-                                <div className="flex items-center gap-1.5 mt-0.5">
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-[8px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border-none px-1 py-0 rounded-md"
-                                  >
-                                    {voice.is_archived
-                                      ? "📦 Archived"
-                                      : "✨ Cloned"}
-                                  </Badge>
-                                  <div className="text-[9px] font-mono text-slate-400">
-                                    ID: {voice.id.substring(0, 10)}...
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              <button
-                                onClick={async () => {
-                                  const newPinned = !voice.is_pinned;
-                                  try {
-                                    const formData = new FormData();
-                                    formData.append(
-                                      "is_pinned",
-                                      newPinned.toString(),
-                                    );
-                                    const res = await fetch(
-                                      `${API_BASE_URL}/companies/admin_workspace/voices/${voice.id}`,
-                                      {
-                                        method: "PATCH",
-                                        headers: {
-                                          Authorization: `Bearer ${localStorage.getItem("zenaipex_token")}`,
-                                        },
-                                        body: formData,
-                                      },
-                                    );
-                                    if (res.ok) {
-                                      setCustomVoices((prev) =>
-                                        prev.map((v) =>
-                                          v.id === voice.id
-                                            ? { ...v, is_pinned: newPinned }
-                                            : v,
-                                        ),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    setPreviewError("Failed to pin voice");
-                                  }
-                                }}
-                                className={`p-1.5 rounded-lg border transition-colors ${voice.is_pinned ? "bg-emerald-50 text-emerald-600 border-emerald-100" : "bg-slate-50 text-slate-400 hover:text-slate-600 border-slate-100 hover:bg-slate-100"}`}
-                                title={
-                                  voice.is_pinned ? "Unpin Voice" : "Pin to Top"
-                                }
-                              >
-                                <Pin className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                onClick={async () => {
-                                  const newName = prompt(
-                                    "Enter new name for this voice:",
-                                    voice.name,
-                                  );
-                                  if (
-                                    newName &&
-                                    newName.trim() !== voice.name
-                                  ) {
-                                    try {
-                                      const formData = new FormData();
-                                      formData.append("name", newName.trim());
-                                      const res = await fetch(
-                                        `${API_BASE_URL}/companies/admin_workspace/voices/${voice.id}`,
-                                        {
-                                          method: "PATCH",
-                                          headers: {
-                                            Authorization: `Bearer ${localStorage.getItem("zenaipex_token")}`,
-                                          },
-                                          body: formData,
-                                        },
-                                      );
-                                      if (res.ok) {
-                                        setCustomVoices((prev) =>
-                                          prev.map((v) =>
-                                            v.id === voice.id
-                                              ? { ...v, name: newName.trim() }
-                                              : v,
-                                          ),
-                                        );
-                                      }
-                                    } catch (e) {
-                                      setPreviewError("Failed to edit voice");
-                                    }
-                                  }
-                                }}
-                                className="p-1.5 rounded-lg border bg-slate-50 text-slate-400 hover:text-slate-600 border-slate-100 hover:bg-slate-100 transition-colors"
-                                title="Edit Voice"
-                              >
-                                <Edit3 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Audio Player */}
-                          <div className="bg-slate-50 rounded-xl border border-slate-100 p-3 flex flex-col gap-3">
-                            {/* Custom Text Input */}
-                            <div>
-                              <textarea
-                                placeholder="Type something to test this voice..."
-                                rows={2}
-                                maxLength={150}
-                                value={testText[voice.id] || ""}
-                                onChange={(e) =>
-                                  setTestText((prev) => ({
-                                    ...prev,
-                                    [voice.id]: e.target.value,
-                                  }))
-                                }
-                                className="w-full text-xs p-2 border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-200 resize-none bg-white text-slate-700 placeholder-slate-400 transition-all"
-                              />
-                              <div className="text-[9px] text-slate-400 text-right mt-0.5">
-                                {(testText[voice.id] || "").length}/150
-                              </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => {
-                                    const audioEl = document.getElementById(
-                                      `audio-panel-${voice.id}`,
-                                    ) as HTMLAudioElement;
-                                    if (audioEl && testAudioSrc[voice.id]) {
-                                      if (isLivePlaying[voice.id]) {
-                                        audioEl.pause();
-                                        setIsLivePlaying((p) => ({
-                                          ...p,
-                                          [voice.id]: false,
-                                        }));
-                                      } else {
-                                        const spd =
-                                          voiceSettings[voice.id]?.speed ??
-                                          voice.speed ??
-                                          1.15;
-                                        const vol =
-                                          voiceSettings[voice.id]?.volume ??
-                                          voice.volume ??
-                                          1.35;
-                                        audioEl.playbackRate = spd;
-                                        if (gainNodesRef.current[voice.id]) {
-                                          gainNodesRef.current[
-                                            voice.id
-                                          ].gain.value = vol;
-                                        }
-                                        audioEl.currentTime = 0;
-                                        audioEl
-                                          .play()
-                                          .catch((e) => console.warn(e));
-                                        setIsLivePlaying((p) => ({
-                                          ...p,
-                                          [voice.id]: true,
-                                        }));
-                                      }
-                                    } else {
-                                      handleTestCustomVoice(voice);
-                                    }
-                                  }}
-                                  disabled={
-                                    isGeneratingVoiceId === voice.id ||
-                                    testingCustomVoiceId === voice.id
-                                  }
-                                  className={`h-7 px-2.5 text-xs font-bold gap-1.5 rounded-lg shadow-2xs transition-all ${
-                                    isLivePlaying[voice.id]
-                                      ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
-                                      : "bg-emerald-600 hover:bg-emerald-700 text-white border-transparent"
-                                  }`}
-                                >
-                                  {isGeneratingVoiceId === voice.id ? (
-                                    <>
-                                      <Loader2 className="h-3.5 w-3.5 animate-spin" />{" "}
-                                      Synthesizing...
-                                    </>
-                                  ) : isLivePlaying[voice.id] ? (
-                                    <>
-                                      <Square className="h-3 w-3 fill-current" />{" "}
-                                      Stop Audio
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Play className="h-3 w-3 fill-current" />{" "}
-                                      Test Audio
-                                    </>
-                                  )}
-                                </Button>
-                                <SmartSelect
-                                  value={testLanguage[voice.id] || "en-IN"}
-                                  onChange={(value) => {
-                                    setTestLanguage((prev) => ({
-                                      ...prev,
-                                      [voice.id]: value,
-                                    }));
-                                    handleTestCustomVoice(voice, value, true);
-                                  }}
-                                  searchable={false}
-                                  className="w-20 [&>button]:h-8 [&>button]:rounded-md [&>button]:border-slate-200 [&>button]:px-2 [&>button]:text-[11px]"
-                                  options={[
-                                    { value: "en-IN", label: "Eng" },
-                                    { value: "hi-IN", label: "Hin" },
-                                    { value: "gu-IN", label: "Guj" },
-                                  ]}
-                                />
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <SmartSelect
-                                  value={(
-                                    voiceSettings[voice.id]?.speed ??
-                                    voice.speed ??
-                                    playbackRate[voice.id] ??
-                                    1.15
-                                  ).toFixed(2)}
-                                  onChange={(value) =>
-                                    handleVoiceParamChange(
-                                      voice.id,
-                                      "speed",
-                                      parseFloat(value),
-                                    )
-                                  }
-                                  searchable={false}
-                                  className="w-28 [&>button]:h-8 [&>button]:rounded-md [&>button]:border-amber-300 [&>button]:px-2 [&>button]:text-[11px] [&>button]:text-amber-900"
-                                  options={[
-                                    { value: "0.80", label: "0.80x Slow" },
-                                    { value: "1.00", label: "1.00x Normal" },
-                                    { value: "1.15", label: "1.15x Natural" },
-                                    { value: "1.30", label: "1.30x Quick" },
-                                    { value: "1.50", label: "1.50x Fast" },
-                                  ]}
-                                />
-                                {testAudioSrc[voice.id] && (
-                                  <>
-                                    <button
-                                      onClick={() =>
-                                        handleTestCustomVoice(
-                                          voice,
-                                          undefined,
-                                          true,
-                                        )
-                                      }
-                                      disabled={
-                                        isGeneratingVoiceId === voice.id ||
-                                        testingCustomVoiceId === voice.id
-                                      }
-                                      className={`p-1 rounded bg-white border border-slate-200 text-slate-400 hover:text-emerald-600 hover:border-emerald-300 transition-colors ${isGeneratingVoiceId === voice.id ? "opacity-50 cursor-not-allowed" : ""}`}
-                                      title="Regenerate Voice from AI Engine (Slow)"
-                                    >
-                                      <RefreshCw
-                                        className={`h-3 w-3 ${isGeneratingVoiceId === voice.id ? "animate-spin" : ""}`}
-                                      />
-                                    </button>
-                                    <a
-                                      href={`data:audio/${testAudioSrc[voice.id]?.startsWith("UklGR") ? "wav" : "mp3"};base64,${testAudioSrc[voice.id]}`}
-                                      download={`${voice.name.replace(/\s+/g, "_")}_test.${testAudioSrc[voice.id]?.startsWith("UklGR") ? "wav" : "mp3"}`}
-                                      className="p-1 rounded bg-white border border-slate-200 text-slate-400 hover:text-emerald-600 hover:border-emerald-300 transition-colors"
-                                      title="Download Audio"
-                                    >
-                                      <Download className="h-3 w-3" />
-                                    </a>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-
-                            {testAudioSrc[voice.id] ? (
-                              <div className="flex flex-col gap-1.5">
-                                <div className="relative">
-                                  <audio
-                                    id={`audio-panel-${voice.id}`}
-                                    controls
-                                    src={`data:audio/${testAudioSrc[voice.id]?.startsWith("UklGR") ? "wav" : "mp3"};base64,${testAudioSrc[voice.id]}`}
-                                    onPlay={() => {
-                                      setIsLivePlaying((p) => ({
-                                        ...p,
-                                        [voice.id]: true,
-                                      }));
-                                      // Ensure current calibrated speed & volume are immediately applied
-                                      const audioEl = document.getElementById(
-                                        `audio-panel-${voice.id}`,
-                                      ) as HTMLAudioElement;
-                                      if (audioEl) {
-                                        const curSpd =
-                                          voiceSettings[voice.id]?.speed ??
-                                          voice.speed ??
-                                          1.15;
-                                        audioEl.playbackRate = curSpd;
-                                        const curVol =
-                                          voiceSettings[voice.id]?.volume ??
-                                          voice.volume ??
-                                          1.35;
-                                        if (gainNodesRef.current[voice.id]) {
-                                          gainNodesRef.current[
-                                            voice.id
-                                          ].gain.value = curVol;
-                                        } else {
-                                          audioEl.volume = Math.min(
-                                            1.0,
-                                            curVol / 2.0,
-                                          );
-                                        }
-                                      }
-                                    }}
-                                    onPause={() =>
-                                      setIsLivePlaying((p) => ({
-                                        ...p,
-                                        [voice.id]: false,
-                                      }))
-                                    }
-                                    onEnded={() => {
-                                      setIsLivePlaying((p) => ({
-                                        ...p,
-                                        [voice.id]: false,
-                                      }));
-                                      setTestingCustomVoiceId(null);
-                                    }}
-                                    className="w-full h-9 outline-none rounded-md bg-white border border-slate-200/80 shadow-2xs"
-                                  />
-                                </div>
-                                <div className="flex items-center justify-between px-1 text-[9px]">
-                                  <span className="flex items-center gap-1.5 text-slate-500 font-medium">
-                                    <span
-                                      className={`inline-block w-2 h-2 rounded-full ${isLivePlaying[voice.id] ? "bg-emerald-500 animate-ping" : "bg-slate-300"}`}
-                                    />
-                                    {isLivePlaying[voice.id] ? (
-                                      <span className="text-emerald-700 font-bold flex items-center gap-1">
-                                        <Activity className="h-3 w-3 animate-pulse text-emerald-600" />{" "}
-                                        Live Playing
-                                      </span>
-                                    ) : (
-                                      <span>Ready to test</span>
-                                    )}
-                                  </span>
-                                  {isAudioLiveTuned[voice.id] && (
-                                    <span className="text-amber-800 font-bold bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-1 shadow-2xs">
-                                      ⚡ Live Tuned:{" "}
-                                      {(
-                                        voiceSettings[voice.id]?.speed ?? 1.15
-                                      ).toFixed(2)}
-                                      x ·{" "}
-                                      {Math.round(
-                                        (voiceSettings[voice.id]?.volume ??
-                                          1.35) * 100,
-                                      )}
-                                      % Vol
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            ) : (
-                              <Button
-                                variant="outline"
-                                className="w-full h-9 bg-white border-slate-200 hover:border-emerald-400 hover:text-emerald-700 text-slate-600 transition-all rounded-lg shadow-sm font-bold text-[11px]"
-                                onClick={() => handleTestCustomVoice(voice)}
-                                disabled={
-                                  isGeneratingVoiceId === voice.id ||
-                                  testingCustomVoiceId === voice.id
-                                }
-                              >
-                                {testingCustomVoiceId === voice.id ? (
-                                  <>
-                                    <Loader2 className="mr-1.5 h-4 w-4 animate-spin text-emerald-500" />{" "}
-                                    Synthesizing...
-                                  </>
-                                ) : (
-                                  <>
-                                    <Play className="mr-1.5 h-4 w-4 text-emerald-500" />{" "}
-                                    Generate Preview
-                                  </>
-                                )}
-                              </Button>
-                            )}
-                          </div>
-
-                          {/* Tuning Sliders Container */}
-                          <div className="flex flex-col gap-3 pt-1">
-                            <div className="flex items-center justify-between pb-0.5">
-                              <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                                🎛️ Voice Tuning & Calibration
-                              </span>
-                              {sliderSaveStatus[voice.id] ? (
-                                <span className="text-[9px] bg-emerald-50 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200/80 flex items-center gap-1 shadow-sm transition-all animate-pulse">
-                                  ✓ Saved to Database
-                                </span>
-                              ) : (
-                                <span className="text-[9px] text-slate-400 font-medium">
-                                  Auto-synced
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Voice Speed Slider */}
-                            <div className="space-y-1.5 bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-100 shadow-sm transition-all hover:border-emerald-200">
-                              <div className="flex justify-between items-center text-[10px] font-bold">
-                                <span className="text-emerald-900 flex items-center gap-1.5">
-                                  ⚡ Voice Speed
-                                </span>
-                                <span className="text-emerald-800 font-mono font-bold bg-white/90 px-1.5 py-0.5 rounded-md border border-emerald-100 text-[10px] shadow-2xs">
-                                  {(
-                                    voiceSettings[voice.id]?.speed ??
-                                    voice.speed ??
-                                    1.15
-                                  ).toFixed(2)}
-                                  x
-                                </span>
-                              </div>
-                              <input
-                                type="range"
-                                min="0.8"
-                                max="1.5"
-                                step="0.05"
-                                value={
-                                  voiceSettings[voice.id]?.speed ??
-                                  voice.speed ??
-                                  1.15
-                                }
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value);
-                                  handleVoiceParamChange(
-                                    voice.id,
-                                    "speed",
-                                    val,
-                                  );
-                                }}
-                                onPointerUp={() =>
-                                  triggerInstantAudioPreview(voice.id)
-                                }
-                                className="w-full h-1.5 bg-emerald-200/80 rounded-lg appearance-none cursor-pointer accent-emerald-600 transition-all"
-                              />
-                              <div className="flex justify-between text-[8px] font-medium text-emerald-700/80">
-                                <span>0.8x Slow</span>
-                                <span>1.15x Natural</span>
-                                <span>1.5x Fast</span>
-                              </div>
-                            </div>
-
-                            {/* Volume Boost Slider */}
-                            <div className="space-y-1.5 bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-100 shadow-sm transition-all hover:border-emerald-200">
-                              <div className="flex justify-between items-center text-[10px] font-bold">
-                                <span className="text-emerald-900 flex items-center gap-1.5">
-                                  🔊 Volume Boost
-                                </span>
-                                <span className="text-emerald-800 font-mono font-bold bg-white/90 px-1.5 py-0.5 rounded-md border border-emerald-100 text-[10px] shadow-2xs">
-                                  {Math.round(
-                                    (voiceSettings[voice.id]?.volume ??
-                                      voice.volume ??
-                                      1.35) * 100,
-                                  )}
-                                  %
-                                </span>
-                              </div>
-                              <input
-                                type="range"
-                                min="0.8"
-                                max="2.0"
-                                step="0.05"
-                                value={
-                                  voiceSettings[voice.id]?.volume ??
-                                  voice.volume ??
-                                  1.35
-                                }
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value);
-                                  handleVoiceParamChange(
-                                    voice.id,
-                                    "volume",
-                                    val,
-                                  );
-                                }}
-                                onPointerUp={() =>
-                                  triggerInstantAudioPreview(voice.id)
-                                }
-                                className="w-full h-1.5 bg-emerald-200/80 rounded-lg appearance-none cursor-pointer accent-emerald-600 transition-all"
-                              />
-                              <div className="flex justify-between text-[8px] font-medium text-emerald-700/80">
-                                <span>80% Standard</span>
-                                <span>135% Dynamic Loud</span>
-                                <span>200% Max Boost</span>
-                              </div>
-                            </div>
-
-                            {/* Clarity & Similarity Slider */}
-                            <div className="space-y-1.5 bg-gradient-to-r from-emerald-50/70 to-emerald-100/40 p-2.5 rounded-xl border border-emerald-200/70 shadow-sm transition-all hover:border-emerald-300">
-                              <div className="flex justify-between items-center text-[10px] font-bold">
-                                <span className="text-emerald-900 flex items-center gap-1.5">
-                                  🎯 Clarity & Similarity
-                                </span>
-                                <span className="text-emerald-800 font-mono font-bold bg-white/90 px-1.5 py-0.5 rounded-md border border-emerald-200 text-[10px] shadow-2xs">
-                                  {voiceSettings[voice.id]?.clarity ??
-                                    voice.clarity ??
-                                    94}
-                                  %
-                                </span>
-                              </div>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                step="1"
-                                value={
-                                  voiceSettings[voice.id]?.clarity ??
-                                  voice.clarity ??
-                                  94
-                                }
-                                onChange={(e) => {
-                                  const val = parseInt(e.target.value, 10);
-                                  handleVoiceParamChange(
-                                    voice.id,
-                                    "clarity",
-                                    val,
-                                  );
-                                }}
-                                onPointerUp={() =>
-                                  triggerInstantAudioPreview(voice.id)
-                                }
-                                className="w-full h-1.5 bg-emerald-200/80 rounded-lg appearance-none cursor-pointer accent-emerald-600 transition-all"
-                              />
-                              <div className="flex justify-between text-[8px] font-medium text-emerald-700/80">
-                                <span>0% Soft</span>
-                                <span>50% Balanced</span>
-                                <span>100% Studio Precision</span>
-                              </div>
-                            </div>
-
-                            {/* Stability (Monotone) Slider */}
-                            <div className="space-y-1.5 bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-100 shadow-sm transition-all hover:border-emerald-200">
-                              <div className="flex justify-between items-center text-[10px] font-bold">
-                                <span className="text-emerald-900 flex items-center gap-1.5">
-                                  ⚖️ Stability & Tone
-                                </span>
-                                <span className="text-emerald-800 font-mono font-bold bg-white/90 px-1.5 py-0.5 rounded-md border border-emerald-100 text-[10px] shadow-2xs">
-                                  {voiceSettings[voice.id]?.stability ??
-                                    voice.stability ??
-                                    85}
-                                  %
-                                </span>
-                              </div>
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                step="1"
-                                value={
-                                  voiceSettings[voice.id]?.stability ??
-                                  voice.stability ??
-                                  85
-                                }
-                                onChange={(e) => {
-                                  const val = parseInt(e.target.value, 10);
-                                  handleVoiceParamChange(
-                                    voice.id,
-                                    "stability",
-                                    val,
-                                  );
-                                }}
-                                onPointerUp={() =>
-                                  triggerInstantAudioPreview(voice.id)
-                                }
-                                className="w-full h-1.5 bg-emerald-200/80 rounded-lg appearance-none cursor-pointer accent-emerald-600 transition-all"
-                              />
-                              <div className="flex justify-between text-[8px] font-medium text-emerald-700/80">
-                                <span>0% Dynamic Range</span>
-                                <span>50% Conversational</span>
-                                <span>100% Monotone</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Agent Assignment */}
-                          <div className="pt-2 flex flex-col gap-2">
-                            <div className="flex items-center justify-between">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                                Assigned Agent
-                              </span>
-                              {assignedAgents.length > 0 && (
-                                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full">
-                                  {assignedAgents.length} Active
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Assigned Agent Tags */}
-                            {assignedAgents.length > 0 ? (
-                              <div className="flex flex-wrap gap-1.5 p-2 bg-slate-50/80 rounded-xl border border-slate-200/80">
-                                {assignedAgents.map((a) => (
-                                  <div
-                                    key={a.id}
-                                    className="flex items-center gap-1.5 bg-white border border-slate-200 text-slate-800 text-[11px] font-bold px-2 py-1 rounded-lg shadow-2xs"
-                                  >
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                                    <span>{a.name}</span>
-                                    <span className="text-[9px] font-normal text-slate-400">
-                                      ({a.company_name})
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="text-[10px] text-slate-400 italic px-2 py-1 bg-slate-50 rounded-lg border border-dashed border-slate-200">
-                                Currently not assigned to any agent.
-                              </div>
-                            )}
-
-                            {/* Assign/Reassign Dropdown */}
-                            <SmartSelect
-                              value={assignedAgents[0]?.id || ""}
-                              disabled={!!updatingAgentId}
-                              onChange={(value) =>
-                                handleUpdateVoice(value, voice.id)
-                              }
-                              placeholder={
-                                assignedAgents.length > 0
-                                  ? "Switch or Reassign to Agent…"
-                                  : "Assign to Agent…"
-                              }
-                              searchPlaceholder="Search agents…"
-                              options={agents.map((a) => ({
-                                value: a.id,
-                                label: `${a.name} (${a.company_name})`,
-                                badge:
-                                  a.tts_voice === voice.id ||
-                                  a.tts_voice === voice.voice_id
-                                    ? "Current"
-                                    : undefined,
-                              }))}
-                            />
-                          </div>
-
-                          {/* Actions */}
-                          <div className="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                            <button
-                              onClick={async () => {
-                                const newArchived = !voice.is_archived;
-                                if (
-                                  !newArchived ||
-                                  confirm(
-                                    "Are you sure you want to archive this voice?",
-                                  )
-                                ) {
-                                  try {
-                                    const formData = new FormData();
-                                    formData.append(
-                                      "is_archived",
-                                      newArchived.toString(),
-                                    );
-                                    const res = await fetch(
-                                      `${API_BASE_URL}/companies/admin_workspace/voices/${voice.id}`,
-                                      {
-                                        method: "PATCH",
-                                        headers: {
-                                          Authorization: `Bearer ${localStorage.getItem("zenaipex_token")}`,
-                                        },
-                                        body: formData,
-                                      },
-                                    );
-                                    if (res.ok) {
-                                      setCustomVoices((prev) =>
-                                        prev.map((v) =>
-                                          v.id === voice.id
-                                            ? { ...v, is_archived: newArchived }
-                                            : v,
-                                        ),
-                                      );
-                                      if (
-                                        voiceFilter === "active" &&
-                                        newArchived
-                                      ) {
-                                        setSelectedVoiceId(null);
-                                      }
-                                    }
-                                  } catch (e) {
-                                    setPreviewError("Failed to archive voice");
-                                  }
-                                }
-                              }}
-                              className={`flex-1 text-center py-1.5 rounded-lg text-[10px] font-bold flex justify-center items-center gap-1.5 transition-colors ${voice.is_archived ? "text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-100" : "text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-100"}`}
-                            >
-                              <Archive className="h-3 w-3" />{" "}
-                              {voice.is_archived ? "Unarchive" : "Archive"}
-                            </button>
-                            <button
-                              onClick={async () => {
-                                if (
-                                  confirm(
-                                    "Are you sure you want to permanently delete this voice?",
-                                  )
-                                ) {
-                                  try {
-                                    const res = await fetch(
-                                      `${API_BASE_URL}/companies/admin_workspace/voices/${voice.id}`,
-                                      {
-                                        method: "DELETE",
-                                        headers: {
-                                          Authorization: `Bearer ${localStorage.getItem("zenaipex_token")}`,
-                                        },
-                                      },
-                                    );
-                                    if (res.ok) {
-                                      setSelectedVoiceId(null);
-                                      setCustomVoices((prev) =>
-                                        prev.filter((v) => v.id !== voice.id),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    setPreviewError("Failed to delete voice");
-                                  }
-                                }
-                              }}
-                              className="flex-1 text-center py-1.5 rounded-lg text-[10px] font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-100 flex justify-center items-center gap-1.5 transition-colors"
-                            >
-                              <Trash2 className="h-3 w-3" /> Delete
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })()
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <CustomVoiceGallery
+          isVoiceStudioOpen={isVoiceStudioOpen}
+          setIsVoiceStudioOpen={setIsVoiceStudioOpen}
+          loadCustomVoices={loadCustomVoices}
+          filteredVoices={filteredVoices}
+          viewMode={viewMode}
+          selectedVoiceId={selectedVoiceId}
+          setSelectedVoiceId={setSelectedVoiceId}
+          getVoiceForPicker={getVoiceForPicker}
+          previewingVoiceId={previewingVoiceId}
+          handlePlayVoicePreview={handlePlayVoicePreview}
+          assignedAgentsForVoice={assignedAgentsForVoice}
+          agents={agents}
+          handleUpdateVoice={handleUpdateVoice}
+          isPreviewLoading={isPreviewLoading}
+          setCustomVoices={setCustomVoices}
+          setSuccessToast={setSuccessToast}
+          setPreviewError={setPreviewError}
+          voiceFilter={voiceFilter}
+          testText={testText}
+          setTestText={setTestText}
+          isGeneratingVoiceId={isGeneratingVoiceId}
+          testingCustomVoiceId={testingCustomVoiceId}
+          setTestingCustomVoiceId={setTestingCustomVoiceId}
+          isLivePlaying={isLivePlaying}
+          setIsLivePlaying={setIsLivePlaying}
+          testAudioSrc={testAudioSrc}
+          voiceSettings={voiceSettings}
+          gainNodesRef={gainNodesRef}
+          handleTestCustomVoice={handleTestCustomVoice}
+          testLanguage={testLanguage}
+          setTestLanguage={setTestLanguage}
+          playbackRate={playbackRate}
+          handleVoiceParamChange={handleVoiceParamChange}
+          triggerInstantAudioPreview={triggerInstantAudioPreview}
+          sliderSaveStatus={sliderSaveStatus}
+          isAudioLiveTuned={isAudioLiveTuned}
+          updatingAgentId={updatingAgentId}
+        />
       )}
 
       {/* ─────────────────── SLIDE-OVER AGENT CONFIGURATION DRAWER ─────────────────── */}
       {selectedAgentForEdit && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex justify-end animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col justify-between border-l border-slate-200 animate-in slide-in-from-right duration-300">
-            {/* Drawer Header */}
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-emerald-600">
-                  Platform Admin Config
-                </span>
-                <h3 className="text-lg font-bold text-slate-900 mt-0.5">
-                  {selectedAgentForEdit.name}
-                </h3>
-                <p className="text-xs text-slate-500 font-mono">
-                  Workspace: {selectedAgentForEdit.company_name}
-                </p>
-              </div>
-              <button
-                onClick={() => setSelectedAgentForEdit(null)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Drawer Body Form */}
-            <form
-              id="agent-edit-form"
-              onSubmit={handleSaveAgentDetails}
-              className="p-6 space-y-5 overflow-y-auto flex-1"
-            >
-              {/* Agent Name */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">
-                  Agent Display Name
-                </label>
-                <input
-                  type="text"
-                  value={editFormData.name}
-                  onChange={(e) =>
-                    setEditFormData({ ...editFormData, name: e.target.value })
-                  }
-                  required
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-
-              {/* Description */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">
-                  Description / Role
-                </label>
-                <textarea
-                  value={editFormData.description}
-                  onChange={(e) =>
-                    setEditFormData({
-                      ...editFormData,
-                      description: e.target.value,
-                    })
-                  }
-                  rows={2}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-
-              {/* Voice Persona Selector */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700 flex items-center justify-between">
-                  <span>Voice Persona (Sarvam Bulbul v3)</span>
-                  <span className="text-[11px] font-normal text-emerald-600">
-                    11 Available
-                  </span>
-                </label>
-                <SmartSelect
-                  value={editFormData.tts_voice}
-                  onChange={(value) =>
-                    setEditFormData({ ...editFormData, tts_voice: value })
-                  }
-                  searchPlaceholder="Search voice…"
-                  options={[
-                    ...customVoices.map((v) => ({
-                      value: v.id,
-                      label: v.name,
-                      group: `My Cloned Voices (${customVoices.length})`,
-                      badge: "Cloned",
-                    })),
-                    ...VOICES.map((v) => ({
-                      value: v.id,
-                      label: v.name,
-                      group: `${v.gender} Voices`,
-                      description: v.tone,
-                      badge: v.gender,
-                    })),
-                  ]}
-                />
-              </div>
-
-              {/* Phone voice runtime */}
-              <div className="space-y-2.5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <label className="text-xs font-bold text-slate-700">
-                      Phone Voice Runtime
-                    </label>
-                    <p className="mt-1 text-[11px] text-slate-500">
-                      Only one mode remains active; new calls use the selected flow.
-                    </p>
-                  </div>
-                  <span className="rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">
-                    Single select
-                  </span>
-                </div>
-                <div className="grid gap-2">
-                  {VOICE_RUNTIME_MODES.map((mode) => {
-                    const selected = editFormData.voice_engine === mode.value;
-                    const toneClasses =
-                      mode.tone === "blue"
-                        ? selected
-                          ? "border-blue-500 bg-blue-50 ring-2 ring-blue-100"
-                          : "border-slate-200 hover:border-blue-300 hover:bg-blue-50/40"
-                        : mode.tone === "emerald"
-                          ? selected
-                            ? "border-emerald-500 bg-emerald-50 ring-2 ring-emerald-100"
-                            : "border-slate-200 hover:border-emerald-300 hover:bg-emerald-50/40"
-                          : selected
-                            ? "border-violet-500 bg-violet-50 ring-2 ring-violet-100"
-                            : "border-slate-200 hover:border-violet-300 hover:bg-violet-50/40";
-                    return (
-                      <button
-                        key={mode.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        onClick={() =>
-                          setEditFormData({
-                            ...editFormData,
-                            voice_engine: mode.value,
-                          })
-                        }
-                        className={`flex w-full items-center gap-3 rounded-2xl border px-3.5 py-3 text-left transition ${toneClasses}`}
-                      >
-                        <span
-                          className={`grid h-5 w-5 shrink-0 place-items-center rounded-full border-2 ${selected ? "border-current" : "border-slate-300"}`}
-                        >
-                          <span
-                            className={`h-2.5 w-2.5 rounded-full ${selected ? "bg-current" : "bg-transparent"}`}
-                          />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="flex flex-wrap items-center gap-2">
-                            <span className="text-sm font-bold text-slate-800">
-                              {mode.shortLabel}
-                            </span>
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${selected ? "bg-white/80 text-slate-700" : "bg-slate-100 text-slate-500"}`}
-                            >
-                              {mode.badge}
-                            </span>
-                          </span>
-                          <span className="mt-0.5 block text-[11px] font-semibold text-slate-600">
-                            {mode.label}
-                          </span>
-                          <span className="mt-1 block text-[11px] leading-4 text-slate-500">
-                            {mode.detail}
-                          </span>
-                        </span>
-                        {selected && (
-                          <Check
-                            className="h-4 w-4 shrink-0 text-current"
-                            aria-hidden="true"
-                          />
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-[11px] text-slate-500">
-                  Recommended: Gemini + Clone. If Gemini STT fails, the configured
-                  fallback provider is used automatically.
-                </p>
-              </div>
-
-              {/* LLM Model Selector */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">
-                  AI Intelligence Model (Brain)
-                </label>
-                <SmartSelect
-                  value={editFormData.llm_model}
-                  onChange={(value) =>
-                    setEditFormData({ ...editFormData, llm_model: value })
-                  }
-                  searchPlaceholder="Search models…"
-                  options={[
-                    {
-                      value: "sarvam-105b",
-                      label: "Sarvam AI · sarvam-105b",
-                      badge: "Recommended",
-                    },
-                    {
-                      value: "sarvam-105b-conversations",
-                      label: "Sarvam AI · sarvam-105b-conversations",
-                    },
-                    {
-                      value: "gemini-1.5-flash",
-                      label: "Google · gemini-1.5-flash",
-                    },
-                    {
-                      value: "gemini-2.0-flash",
-                      label: "Google · gemini-2.0-flash",
-                    },
-                    {
-                      value: "gemini-3.5-flash-lite",
-                      label: "Google · gemini-3.5-flash-lite",
-                      badge: "Fast Voice",
-                    },
-                    {
-                      value: "llama-3.3-70b-versatile",
-                      label: "Groq · llama-3.3-70b-versatile",
-                      badge: "Ultra-Fast",
-                    },
-                  ]}
-                />
-              </div>
-
-              {/* Status */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">
-                  Agent Deployment Status
-                </label>
-                <SmartSelect
-                  value={editFormData.status}
-                  onChange={(value) =>
-                    setEditFormData({ ...editFormData, status: value })
-                  }
-                  searchable={false}
-                  options={[
-                    {
-                      value: "active",
-                      label: "Active",
-                      description: "Serving customer calls and voice mode",
-                      badge: "Live",
-                    },
-                    {
-                      value: "draft",
-                      label: "Draft / Paused",
-                      description: "Hidden from callers",
-                      badge: "Paused",
-                    },
-                  ]}
-                />
-              </div>
-
-              {/* Language */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-700">
-                  Default Language
-                </label>
-                <SmartSelect
-                  value={editFormData.default_language}
-                  onChange={(value) =>
-                    setEditFormData({
-                      ...editFormData,
-                      default_language: value,
-                    })
-                  }
-                  searchable={false}
-                  options={[
-                    {
-                      value: "en-IN",
-                      label: "Hinglish / Indian English",
-                      badge: "en-IN",
-                    },
-                    { value: "hi-IN", label: "Pure Hindi", badge: "hi-IN" },
-                    { value: "gu-IN", label: "Gujarati", badge: "gu-IN" },
-                  ]}
-                />
-              </div>
-              <div
-                className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-4 text-xs text-slate-700 space-y-2"
-                aria-live="polite"
-              >
-                <strong className="text-emerald-900">
-                  Review agent impact before saving
-                </strong>
-                {editFormData.tts_voice !==
-                  (selectedAgentForEdit.tts_voice || "ritu") && (
-                  <p>
-                    Voice: {selectedAgentForEdit.tts_voice || "ritu"} →{" "}
-                    {editFormData.tts_voice}. Future responses will use the
-                    selected voice.
-                  </p>
-                )}
-                {editFormData.llm_model !==
-                  (selectedAgentForEdit.llm_model || "sarvam-105b") && (
-                  <p>
-                    Model: {selectedAgentForEdit.llm_model || "sarvam-105b"} →{" "}
-                    {editFormData.llm_model}. Future requests will use this
-                    model.
-                  </p>
-                )}
-                {editFormData.status !==
-                  (selectedAgentForEdit.status || "active") && (
-                  <p
-                    className={
-                      editFormData.status === "draft"
-                        ? "text-amber-800 font-semibold"
-                        : ""
-                    }
-                  >
-                    Status: {selectedAgentForEdit.status || "active"} →{" "}
-                    {editFormData.status}.{" "}
-                    {editFormData.status === "draft"
-                      ? "The agent will stop serving new calls."
-                      : "The agent can serve new calls."}
-                  </p>
-                )}
-                {editFormData.default_language !==
-                  (selectedAgentForEdit.default_language || "en-IN") && (
-                  <p>
-                    Default language:{" "}
-                    {selectedAgentForEdit.default_language || "en-IN"} →{" "}
-                    {editFormData.default_language}.
-                  </p>
-                )}
-                {editFormData.tts_voice ===
-                  (selectedAgentForEdit.tts_voice || "ritu") &&
-                  editFormData.llm_model ===
-                    (selectedAgentForEdit.llm_model || "sarvam-105b") &&
-                  editFormData.status ===
-                    (selectedAgentForEdit.status || "active") &&
-                  editFormData.default_language ===
-                    (selectedAgentForEdit.default_language || "en-IN") && (
-                    <p>Voice, model, status and language are unchanged.</p>
-                  )}
-              </div>
-            </form>
-
-            {/* Drawer Footer */}
-            <div className="p-6 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/80">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setSelectedAgentForEdit(null)}
-                className="rounded-xl h-10 px-5 text-xs font-bold text-slate-600"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                form="agent-edit-form"
-                disabled={isSavingAgent}
-                className="rounded-xl h-10 px-6 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-sm"
-              >
-                {isSavingAgent ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Check className="h-4 w-4" />
-                )}
-                Save Agent Settings
-              </Button>
-            </div>
-          </div>
-        </div>
+        <AgentConfigDrawer
+          agent={selectedAgentForEdit}
+          onClose={() => setSelectedAgentForEdit(null)}
+          editFormData={editFormData}
+          setEditFormData={setEditFormData}
+          onSubmit={handleSaveAgentDetails}
+          isSaving={isSavingAgent}
+          customVoices={customVoices}
+          voiceRuntimeModes={VOICE_RUNTIME_MODES}
+          voices={VOICES}
+        />
       )}
     </div>
   );

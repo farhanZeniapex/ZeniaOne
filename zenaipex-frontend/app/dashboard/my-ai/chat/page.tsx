@@ -14,7 +14,20 @@ import {
 } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { VoiceModeDock } from "@/components/ai-bot/voice-mode-overlay";
+import dynamic from "next/dynamic";
+
+const VoiceModeDock = dynamic(
+  () => import("@/components/ai-bot/voice-mode-overlay").then((m) => m.VoiceModeDock),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="p-6 flex flex-col items-center justify-center text-slate-500 gap-2">
+        <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
+        <span className="text-xs font-semibold">Starting Voice Mode…</span>
+      </div>
+    ),
+  }
+);
 import { SmartSelect } from "@/components/ui/smart-select";
 import { canonicalizeCustomerFacingName } from "@/lib/utils";
 interface Source {
@@ -276,8 +289,10 @@ function ChatScreen({
   };
 
   useEffect(() => {
-    fetchDocuments();
-  }, [agent.knowledge_base_id, companyId]);
+    if (showAttach && agent.knowledge_base_id && companyId && documents.length === 0) {
+      fetchDocuments();
+    }
+  }, [showAttach, agent.knowledge_base_id, companyId, documents.length]);
 
   // Load existing chat history if convIdParam is present
   useEffect(() => {

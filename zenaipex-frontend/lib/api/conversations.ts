@@ -48,6 +48,7 @@ export const conversationsApi = {
     if (opts?.agentId) params.set("agent_id", opts.agentId);
     if (opts?.status) params.set("status", opts.status);
     if (opts?.is_archived !== undefined) params.set("is_archived", String(opts.is_archived));
+    params.set("_t", String(Date.now()));
     const qs = params.toString() ? `?${params.toString()}` : "";
     return fetchApi<{conversations: Conversation[], count: number}>(`/companies/${companyId}/conversations${qs}`);
   },

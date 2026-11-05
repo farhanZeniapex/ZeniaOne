@@ -50,17 +50,28 @@ _SUPPORTED_SARVAM_SPEAKERS = {
 }
 
 
-def _sarvam_tts_speaker(agent: dict) -> str:
-    """Return a voice supported by the configured Bulbul model.
+async def _sarvam_tts_speaker(agent: dict) -> str:
+    """Return a voice supported by the configured Bulbul or cloned model.
 
-    Older agent records used ``anushka`` as a default, but that voice is not
-    supported by Bulbul v3. A safe fallback prevents the WebSocket from being
-    closed before the caller hears the greeting.
+    Resolves custom cloned voices (by ObjectId or name) to their real 'svc-...' speaker ID.
+    If a Gemini Live voice is configured, maps to high-quality matching telephony voice persona.
     """
-    requested = str(agent.get("tts_voice") or "ritu").strip().lower()
-    if requested.startswith("svc-") or requested in _SUPPORTED_SARVAM_SPEAKERS:
-        return requested
-    logger.warning("[TWILIO_TTS] unsupported_speaker=%s fallback=ritu", requested)
+    raw_requested = str(agent.get("tts_voice") or "ritu").strip()
+    from modules.sarvam_tts import resolve_speaker
+    resolved = await resolve_speaker(raw_requested)
+    if resolved.startswith("svc-") or resolved in _SUPPORTED_SARVAM_SPEAKERS:
+        return resolved
+
+    # Check if Gemini voice
+    gemini_key = raw_requested.lower()
+    from api.v1.admin.agents import GEMINI_VOICE_MAP
+    if gemini_key in GEMINI_VOICE_MAP:
+        _, gender = GEMINI_VOICE_MAP[gemini_key]
+        mapped = "rohan" if gender == "Male" else "ritu"
+        logger.info("[TWILIO_TTS] Gemini voice %s mapped to telephony speaker %s", raw_requested, mapped)
+        return mapped
+
+    logger.warning("[TWILIO_TTS] unsupported_speaker=%s resolved=%s fallback=ritu", raw_requested, resolved)
     return "ritu"
 
 
@@ -471,7 +482,7 @@ async def process_voice_turn(websocket: WebSocket, stream_sid: str, session: dic
         
         # We use standard Sarvam TTS for this integration
         from modules.sarvam_tts import SarvamRealtimeTTS
-        speaker = _sarvam_tts_speaker(session["agent_config"])
+        speaker = await _sarvam_tts_speaker(session["agent_config"])
 
         if not session.get("tts_client"):
             session["tts_client"] = SarvamRealtimeTTS(language=session["language"], speaker=speaker)
@@ -862,7 +873,7 @@ async def media_stream_websocket(websocket: WebSocket):
                 session["is_speaking"] = True
                 
                 # We use Sarvam TTS directly for the greeting
-                speaker = _sarvam_tts_speaker(agent)
+                speaker = await _sarvam_tts_speaker(agent)
                 session["tts_client"] = SarvamRealtimeTTS(language=session["language"], speaker=speaker)
                 await session["tts_client"].connect()
                 

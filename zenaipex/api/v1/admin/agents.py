@@ -249,6 +249,30 @@ async def admin_preview_voice(body: AdminVoicePreviewRequest):
                 "volume": volume
             }
 
+    # 2b. Check if this is an Azure Neural Voice (e.g. hi-IN-SwaraNeural, gu-IN-DhwaniNeural, etc.)
+    if "neural" in voice_key or voice_key.startswith("hi-in-") or voice_key.startswith("gu-in-") or voice_key.startswith("en-in-"):
+        try:
+            import edge_tts
+            rate_str = f"{int((speed - 1.0) * 100):+d}%" if speed != 1.0 else "+0%"
+            vol_str = f"{int((volume - 1.0) * 100):+d}%" if volume != 1.0 else "+0%"
+            communicate = edge_tts.Communicate(text, voice_id, rate=rate_str, volume=vol_str)
+            chunks = []
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    chunks.append(chunk["data"])
+            if chunks:
+                audio_bytes = b"".join(chunks)
+                audio_b64 = base64.b64encode(audio_bytes).decode("utf-8")
+                return {
+                    "audio_base64": audio_b64,
+                    "fallback_tts": False,
+                    "voice": voice_id,
+                    "speed": speed,
+                    "volume": volume
+                }
+        except Exception as azure_err:
+            logging.warning(f"[AZURE_VOICE_PREVIEW_WARN] {voice_id}: {azure_err}")
+
     # 3. Resolve speaker from ObjectId to svc-... clone ID or prebuilt name
     resolved_speaker = await resolve_speaker(voice_id)
     logging.info(f"[ADMIN_VOICE_PREVIEW] speaker={resolved_speaker} (orig={voice_id}) speed={speed} volume={volume}")
@@ -290,6 +314,7 @@ class AdminAgentUpdateRequest(BaseModel):
     tts_voice: Optional[str] = None
     llm_model: Optional[str] = None
     voice_engine: Optional[str] = None
+    gemini_voice: Optional[str] = None
     status: Optional[str] = None
     default_language: Optional[str] = None
     voice_speed: Optional[float] = None

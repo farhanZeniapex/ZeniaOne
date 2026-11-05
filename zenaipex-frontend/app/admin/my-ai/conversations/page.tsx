@@ -167,6 +167,21 @@ function AdvancedHistoryPageContent() {
     }
       
     fetchConversations();
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchConversations(true);
+      }
+    }, 4000);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        fetchConversations(true);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [companyId, compLoading, searchParams, viewArchived]);
 
   // Analytics Fetch

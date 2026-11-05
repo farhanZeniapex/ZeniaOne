@@ -178,14 +178,16 @@ export default function LiveCallsPage() {
             const serverIds = new Set(serverActive.map((c: any) => c.id));
             setActiveCalls(prev => {
               const updated = prev.map(c => {
+                // Never kill an active call simply because REST poll missed one iteration.
+                // Live WebSocket events (call_ended) are authoritative.
+                // Only consider it timed out if it hasn't seen activity for > 15 minutes.
                 if (c.status === "active" && !serverIds.has(c.id)) {
-                  // Grace period: if call was started within 20s, let WebSocket & server settle
                   const ageSec = (Date.now() - (c.started_at || 0)) / 1000;
-                  if (ageSec < 20) return c;
+                  if (ageSec < 900) return c; // 15 minute safety ceiling
                   return { ...c, status: "completed", ended_at: c.ended_at || Date.now() };
                 }
                 return c;
-              }).filter(c => c.status === "active" || (c.ended_at && Date.now() - c.ended_at < 6000));
+              }).filter(c => c.status === "active" || (c.ended_at && Date.now() - c.ended_at < 30000));
               serverActive.forEach((sc: any) => {
                 if (!updated.some(c => c.id === sc.id)) {
                   updated.push({
@@ -225,6 +227,21 @@ export default function LiveCallsPage() {
 
   useEffect(() => {
     loadRecentCalls();
+    const recentInterval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        loadRecentCalls();
+      }
+    }, 3500);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        loadRecentCalls();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      clearInterval(recentInterval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [loadRecentCalls]);
 
   useEffect(() => {
@@ -544,7 +561,7 @@ export default function LiveCallsPage() {
                 setTimeout(() => {
                   setActiveCalls((prev) => prev.filter(c => c.id !== endedId));
                   setSelectedCallId((curr) => (curr === endedId ? null : curr));
-                }, 3000);
+                }, 20000);
               }
               else if (data.event === "new_message") {
                 const cid = data.data.conversation_id;
@@ -820,7 +837,10 @@ export default function LiveCallsPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setActiveQueueTab("recent")}
+                onClick={() => {
+                  setActiveQueueTab("recent");
+                  loadRecentCalls();
+                }}
                 className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-all ${
                   activeQueueTab === "recent"
                     ? "bg-white text-slate-900 shadow-xs"
@@ -860,7 +880,10 @@ export default function LiveCallsPage() {
                   {recentCalls.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => setActiveQueueTab("recent")}
+                      onClick={() => {
+                        setActiveQueueTab("recent");
+                        loadRecentCalls();
+                      }}
                       className="mt-1 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 bg-white text-[11px] font-semibold text-slate-700 hover:bg-slate-50 shadow-xs transition"
                     >
                       <History className="h-3 w-3 text-slate-500" />

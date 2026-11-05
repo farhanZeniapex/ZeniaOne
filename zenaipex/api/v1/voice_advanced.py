@@ -666,8 +666,8 @@ async def fetch_llm_response(conversation_history, active_product="ZeniaONE", ra
             text = doc.get("text", "").lower()
             source = str(doc.get("metadata", {}).get("source", "")).lower()
             if active_product == "ZeniaONE":
-                if ("zeniahr" in text or "zenia hr" in text or "zeniahr" in source or "zenia hr" in source) and \
-                   ("zeniaone" not in text and "zenia one" not in text):
+                # Strict isolation: Never inject HR, Payroll, or Biometric attendance data into ZeniaONE
+                if "zeniahr" in source or "zeniahr" in text or "payroll" in text or "hrms" in text or "biometric" in text:
                     rejected += 1
                     continue
             elif active_product == "ZeniaHR":
@@ -779,14 +779,13 @@ CRITICAL VOICE BEHAVIORS:
    - If user says a word that sounds like "Bye", "Okay then", or "Alvida", DO NOT give a long explanation. Just say a polite 1-line farewell like "Theek hai, dhanyawad, alvida!" and add <END_CALL>.
    - If user says ANY short attention check (e.g., "Hello", "Suno", "Bolo", "Hi", "Are you there", "Kem cho", "Batao"): DO NOT give a long reply and DO NOT re-introduce yourself. Respond instantly and naturally like "Haan ji, main sun raha/rahi hoon, bataiye" (Hindi), "Yes, I'm listening, please tell me" (English), or "Ha bolo, hu sambhlu chu" (Gujarati).
    - If user interrupts or is speaking, keep it brief.
-4. BRAND & PRODUCT FOCUS:
-   - Always spell the product as 'Zenia One', 'Zenia HR', 'Tender Guruji', or 'ZeniaChat'.
-   - STRICT PRODUCT BOUNDARIES: DO NOT mix up products.
-     * ZeniaONE is ONLY the AI Voice and Telephony platform. It DOES NOT have HR, Payroll, ERP, or Tender features.
-     * ZeniaHR is the HRMS & Payroll platform.
-     * Tender Guruji is for Tenders.
-     * ZeniaChat is for omnichannel chat and messaging.
-   - If the user asks about a feature, describe its technical reality (e.g., Attendance, Payroll, Omnichannel), not marketing jargon.
+4. BRAND & PRODUCT DEFINITIONS (ABSOLUTE RULE - NEVER CONFUSE):
+   - ZeniaPex: The parent software & AI engineering company founded by Yogesh Sharma that builds enterprise solutions.
+   - ZeniaONE: EXCLUSIVELY the Autonomous AI Voice Assistant & Telephony Platform (inbound/outbound calling, virtual phone numbers, voicebots, customer support, call recording). ZeniaONE DOES NOT HAVE HR, PAYROLL, BIOMETRIC, OR ERP MODULES! Never say ZeniaONE has HR or Payroll!
+   - ZeniaHR: A completely separate HRMS & Payroll solution for attendance, salary, and biometric tracking.
+   - Tender Guruji: A separate government tender search platform.
+   - If user asks "ZeniaONE kya hai?", explain clearly: "ZeniaOne ZeniaPex ka develop kiya gaya AI Voice Assistant aur Telephony platform hai jo customer support aur autonomous phone calling automate karta hai."
+   - If user asks "ZeniaPex kya hai?", explain clearly: "ZeniaPex ek software development company hai jo ZeniaONE aur enterprise AI solutions create karti hai."
 
 5. SMART AUTO-CORRECTION & CLARIFICATION:
    - Voice transcription (STT) often makes mistakes. If the user says disconnected words (e.g., "pear, roll, no", "time sit") that sound like a mistake, DO NOT hallucinate an answer.
@@ -934,9 +933,42 @@ async def text_to_speech_and_stream(text: str, exotel_ws: WebSocket, stream_sid:
         sarvam_speaker = "aditya"
         edge_speaker = "en-US-AriaNeural"
 
-    # Override with agent's configured voice persona if available
+    # Dynamically resolve latest voice speed, volume, and persona from DB on every utterance
+    agent_speed = 1.15
+    agent_volume = 1.35
     if agent_doc:
+        agent_id = agent_doc.get("_id") or agent_doc.get("id")
+        if agent_id:
+            try:
+                from core.database import col_agents
+                from bson import ObjectId
+                fresh_ag = await col_agents().find_one(
+                    {"_id": ObjectId(str(agent_id))},
+                    {"voice_speed": 1, "voice_volume": 1, "tts_voice": 1, "speed": 1, "volume": 1}
+                )
+                if fresh_ag:
+                    agent_doc.update(fresh_ag)
+            except Exception as e:
+                logger.debug(f"[LIVE_AGENT_SYNC_WARN] {e}")
+
+        agent_speed = float(agent_doc.get("voice_speed") or agent_doc.get("speed") or 1.15)
+        agent_volume = float(agent_doc.get("voice_volume") or agent_doc.get("volume") or 1.35)
+
         raw_configured_voice = (agent_doc.get("tts_voice") or "").strip()
+        if raw_configured_voice:
+            try:
+                from core.database import col_custom_voices
+                from bson import ObjectId
+                if ObjectId.is_valid(raw_configured_voice):
+                    c_voice = await col_custom_voices().find_one({"_id": ObjectId(raw_configured_voice)}, {"speed": 1, "volume": 1})
+                    if c_voice:
+                        if c_voice.get("speed") is not None:
+                            agent_speed = float(c_voice["speed"])
+                        if c_voice.get("volume") is not None:
+                            agent_volume = float(c_voice["volume"])
+            except Exception as cv_err:
+                logger.debug(f"[CUSTOM_VOICE_SYNC_WARN] {cv_err}")
+
         configured_voice = raw_configured_voice.lower()
         if configured_voice:
             from modules.sarvam_tts import PERSONA_TO_EDGE_VOICE, resolve_speaker
@@ -944,19 +976,16 @@ async def text_to_speech_and_stream(text: str, exotel_ws: WebSocket, stream_sid:
             
             persona_cfg = PERSONA_TO_EDGE_VOICE.get(configured_voice)
             if persona_cfg:
-                # Use the exact EdgeTTS voice mapped for this Sarvam persona
                 edge_speaker = persona_cfg["voice"]
-                logger.info(f"[TTS] Agent persona override: {configured_voice} → edge={edge_speaker}")
+                logger.info(f"[TTS] Agent persona override: {configured_voice} → edge={edge_speaker} speed={agent_speed} vol={agent_volume}")
             else:
-                # configured_voice might already be a direct EdgeTTS voice name (e.g. "hi-IN-SwaraNeural")
                 if "-" in configured_voice and "Neural" in agent_doc.get("tts_voice", ""):
                     edge_speaker = agent_doc["tts_voice"]
-                    logger.info(f"[TTS] Agent direct EdgeTTS voice override: {edge_speaker}")
+                    logger.info(f"[TTS] Agent direct EdgeTTS voice override: {edge_speaker} speed={agent_speed} vol={agent_volume}")
             
-            # Update Sarvam speaker if it maps cleanly or if it's a custom cloned voice
             if resolved_voice.startswith("svc-"):
                 sarvam_speaker = resolved_voice
-                logger.info(f"[TTS] Agent cloned voice override: {raw_configured_voice} → sarvam={sarvam_speaker}")
+                logger.info(f"[TTS] Agent cloned voice override: {raw_configured_voice} → sarvam={sarvam_speaker} pace={agent_speed} vol={agent_volume}")
             elif configured_voice in {"ritu", "priya", "neha", "pooja", "shreya", "kavya", "rahul", "amit", "rohan", "kabir", "aditya"}:
                 sarvam_speaker = configured_voice
 
@@ -1027,11 +1056,12 @@ async def text_to_speech_and_stream(text: str, exotel_ws: WebSocket, stream_sid:
         try:
             if allow_sarvam_tts and sarvam_speaker and sarvam_speaker.startswith("svc-"):
                 from modules.sarvam_tts import cloned_voice_tts_stream
-                agent_speed = float(agent_doc.get("voice_speed") or agent_doc.get("speed") or 1.0) if agent_doc else 1.0
                 logger.info(
-                    "[TTS_CUSTOM_CLONE_STREAM] voice=%s language=%s sample_rate=8000",
+                    "[TTS_CUSTOM_CLONE_STREAM] voice=%s language=%s sample_rate=8000 pace=%s vol=%s",
                     sarvam_speaker,
                     sarvam_lang,
+                    agent_speed,
+                    agent_volume,
                 )
                 async for pcm_8k_chunk in cloned_voice_tts_stream(
                     text,
@@ -1039,6 +1069,7 @@ async def text_to_speech_and_stream(text: str, exotel_ws: WebSocket, stream_sid:
                     language=sarvam_lang,
                     sample_rate=8000,
                     pace=agent_speed,
+                    volume=agent_volume,
                 ):
                     chunks_yielded += 1
                     if cancel_event.is_set():
@@ -1047,7 +1078,13 @@ async def text_to_speech_and_stream(text: str, exotel_ws: WebSocket, stream_sid:
                         await pace_audio(valid_chunk)
                         await send_chunk(valid_chunk)
             elif allow_sarvam_tts and not is_greeting:
-                async for chunk in realtime_tts_stream(text, language=sarvam_lang, speaker=sarvam_speaker):
+                async for chunk in realtime_tts_stream(
+                    text,
+                    language=sarvam_lang,
+                    speaker=sarvam_speaker,
+                    pace=agent_speed,
+                    volume=agent_volume,
+                ):
                     chunks_yielded += 1
                     if cancel_event.is_set():
                         if end_call_flag:
@@ -1057,7 +1094,7 @@ async def text_to_speech_and_stream(text: str, exotel_ws: WebSocket, stream_sid:
                             break
                     
                     if chunk:
-                        pcm_8k_chunk = sarvam_to_exotel_pcm(chunk, input_rate=24000)
+                        pcm_8k_chunk = sarvam_to_exotel_pcm(chunk, input_rate=24000, volume=agent_volume)
                         for valid_chunk in chunker.add_data(pcm_8k_chunk):
                             await pace_audio(valid_chunk)
                             await send_chunk(valid_chunk)
@@ -1099,17 +1136,7 @@ async def text_to_speech_and_stream(text: str, exotel_ws: WebSocket, stream_sid:
                 # If the persona is a custom cloned voice (svc-...), use it directly for fallback.
                 # Otherwise, use the mapped EdgeTTS voice.
                 fallback_speaker = sarvam_speaker if allow_sarvam_tts and sarvam_speaker.startswith("svc-") else edge_speaker
-                agent_speed = float(agent_doc.get("voice_speed") or agent_doc.get("speed") or 1.15) if agent_doc else 1.15
-                agent_volume = float(agent_doc.get("voice_volume") or agent_doc.get("volume") or 1.35) if agent_doc else 1.35
-                if agent_doc and ObjectId.is_valid(agent_doc.get("tts_voice", "")):
-                    from core.database import col_custom_voices
-                    c_voice = await col_custom_voices().find_one({"_id": ObjectId(agent_doc["tts_voice"])})
-                    if c_voice:
-                        if "speed" in c_voice and agent_doc.get("voice_speed") is None:
-                            agent_speed = float(c_voice["speed"])
-                        if "volume" in c_voice and agent_doc.get("voice_volume") is None:
-                            agent_volume = float(c_voice["volume"])
-                
+                logger.info(f"🔄 [TTS_FALLBACK] Streaming with fallback_speaker={fallback_speaker} speed={agent_speed} volume={agent_volume}")
                 async for pcm_chunk in stream_fallback_neural_tts(text, speaker=fallback_speaker, speed=agent_speed, volume=agent_volume):
                     if first_audio_ms is None:
                         first_audio_ms = int((time.time() - tts_start) * 1000)
@@ -1790,20 +1817,32 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
                         lower_text = normalized_text.lower()
                         def _is_explicit_goodbye(txt: str) -> bool:
                             c = re.sub(r"[^\w\s]", " ", txt.lower()).strip()
-                            w = c.split()
-                            if not w:
+                            words = c.split()
+                            if not words:
                                 return False
-                            # If greeting or inquiry words are present, it is not a hangup request
-                            if any(greeting_w in w for greeting_w in ["hello", "hi", "hey", "namaste", "suno", "batao", "bataiye", "bhai", "yaar", "sir", "madam"]):
+                            # If explicit inquiry/question words are present, it is an active question, not hangup
+                            inquiry_words = {"suno", "batao", "bataiye", "kya", "kaise", "kyu", "kaha", "how", "what", "where", "why"}
+                            if any(iw in words for iw in inquiry_words):
                                 return False
+                            # If greeting words are present at the beginning without explicit hangup action
+                            greeting_words = {"hello", "hi", "hey", "namaste", "bhai", "yaar"}
+                            if any(gw in words for gw in greeting_words):
+                                explicit_phrases = ["cut the call", "call cut", "hang up", "phone rakh", "rakh raha", "rakh rahi"]
+                                return any(ep in c for ep in explicit_phrases)
+
                             hangup_phrases = [
                                 "cut the call", "call cut", "hang up", "phone rakh", "rakh raha", "rakh rahi",
-                                "talk to you later", "badme baat", "baad me baat", "tata bye bye", "bye bye", "alvida"
+                                "talk to you later", "badme baat", "baad me baat", "tata bye bye", "bye bye",
+                                "thank you bye", "thanks bye", "theek hai bye", "thik hai bye", "chalo bye"
                             ]
                             if any(hp in c for hp in hangup_phrases):
                                 return True
-                            if c in {"bye", "goodbye", "alvida", "tata"}:
+                                
+                            # Check whole-word farewell tokens
+                            farewell_words = {"bye", "goodbye", "alvida", "tata"}
+                            if any(fw in words for fw in farewell_words):
                                 return True
+                                
                             return False
 
                         is_goodbye = _is_explicit_goodbye(normalized_text)
@@ -1905,6 +1944,21 @@ async def exotel_media_stream(company_id: str, agent_id: str, websocket: WebSock
                             )
                         elif streamed_tts and conversation_id:
                             await _persist_voice_metrics(conversation_id, turn_metrics)
+
+                        # End call disconnect trigger: ensure farewell audio is played then cleanly hang up carrier line
+                        if "<END_CALL>" in ai_response or is_goodbye:
+                            logger.info("[END_CALL] Goodbye detected. Allowing farewell audio to complete before disconnect.")
+                            if current_ai_task and not current_ai_task.done():
+                                try:
+                                    await asyncio.wait_for(asyncio.shield(current_ai_task), timeout=6.0)
+                                except Exception:
+                                    pass
+                            await asyncio.sleep(1.8)
+                            try:
+                                await websocket.close()
+                                logger.info("[END_CALL] Telephony WebSocket closed successfully to trigger carrier hangup.")
+                            except Exception as ws_err:
+                                logger.debug(f"[END_CALL] WebSocket close: {ws_err}")
                     except asyncio.CancelledError:
                         logger.info("[LLM_GENERATION] Cancelled due to barge-in.")
                     except Exception as e:

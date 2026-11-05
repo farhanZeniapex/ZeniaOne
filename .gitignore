@@ -92,3 +92,6 @@ cloudflared.exe
 # Next.js Build & Environments
 .next/
 **/.next/
+
+temporary_files/
+zenaipex/temporary/

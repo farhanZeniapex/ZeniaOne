@@ -90,15 +90,23 @@ async def clone_voice(
         f.write(file_bytes)
         
     try:
-        # Prepare a clean, stable reference before sending it to the clone
-        # provider. Raw room noise is learned by a voice clone and cannot be
-        # removed later from already-created voices.
+        # Prepare a clean, broadcast-standard reference before sending it to Sarvam.
+        # Sarvam requirements:
+        # - Recommended Duration: 10–15 seconds (max 15s)
+        # - Format: WAV, 16-bit PCM, 24kHz mono
+        # - Speech starting without excessive leading silence
+        # - Natural harmonics preserved (no blind FFT denoiser `afftdn`, which ruins speech formants)
+        
+        # Primary filter chain:
+        # 1. silenceremove: start_periods=1:start_duration=0.08:start_threshold=-32dB (drops initial quiet lag)
+        # 2. atrim: duration=15 (caps to Sarvam's recommended max)
+        # 3. highpass=f=75: cuts sub-bass rumble / mic thumps
+        # 4. lowpass=f=12000: cuts ultrasonic hiss
+        # 5. loudnorm=I=-16:TP=-1.5:LRA=11: normalizes to broadcast speech level
         audio_filter = (
-            "silenceremove=start_periods=1:start_silence=0.15:start_threshold=-45dB,"
-            "atrim=duration=25,"
-            "highpass=f=70,lowpass=f=12000,"
-            "afftdn=nr=10:nf=-45,"
-            "acompressor=threshold=-18dB:ratio=2.5:attack=8:release=100:makeup=1,"
+            "silenceremove=start_periods=1:start_duration=0.08:start_threshold=-32dB,"
+            "atrim=duration=15,"
+            "highpass=f=75,lowpass=f=12000,"
             "loudnorm=I=-16:TP=-1.5:LRA=11"
         )
         ffmpeg_cmd = [
@@ -106,12 +114,40 @@ async def clone_voice(
             "-af", audio_filter,
             "-ar", "24000", "-ac", "1", "-c:a", "pcm_s16le", output_tmp
         ]
-        subprocess.run(ffmpeg_cmd, capture_output=True, text=True, check=True)
+        res = subprocess.run(ffmpeg_cmd, capture_output=True, text=True)
+        
+        # Verify output exists and is long enough (> 4 seconds: 4s * 24000 samples * 2 bytes = 192000 bytes)
+        min_bytes = 192000
+        output_ok = res.returncode == 0 and os.path.exists(output_tmp) and os.path.getsize(output_tmp) >= min_bytes
+        
+        if not output_ok:
+            # If silenceremove was too aggressive (e.g. user had a quiet microphone), run gentle fallback without silenceremove
+            audio_filter_fallback = (
+                "atrim=duration=15,"
+                "highpass=f=75,lowpass=f=12000,"
+                "loudnorm=I=-16:TP=-1.5:LRA=11"
+            )
+            ffmpeg_fallback_cmd = [
+                "ffmpeg", "-y", "-i", input_tmp,
+                "-af", audio_filter_fallback,
+                "-ar", "24000", "-ac", "1", "-c:a", "pcm_s16le", output_tmp
+            ]
+            subprocess.run(ffmpeg_fallback_cmd, capture_output=True, text=True, check=True)
+            
         with open(output_tmp, "rb") as f:
             wav_bytes = f.read()
+            
+        # Check if the final audio is still under 4 seconds (< 192000 bytes)
+        if len(wav_bytes) < 192000:
+            duration_sec = round(len(wav_bytes) / 48000, 1)
+            raise HTTPException(
+                status_code=422,
+                detail=f"Speech duration is too short ({duration_sec}s). Sarvam AI requires at least 10–15 seconds of continuous clear speech. Please record for at least 10–15 seconds."
+            )
+
         file_name = "upload.wav"
         file_type = "audio/wav"
-        logger.info(f"Successfully processed audio for voice clone: {file_name}")
+        logger.info(f"Successfully processed audio for voice clone: {file_name} ({len(wav_bytes)} bytes, ~{round(len(wav_bytes)/48000, 1)}s)")
     except HTTPException:
         # Provider validation and invalid-clone errors must reach the UI.  Do
         # not convert them into a fallback preview, because that would make a
@@ -169,13 +205,19 @@ async def clone_voice(
                     # A provider validation error must remain an error. Persisting a
                     # mock ID makes the UI look as if a clone exists even though a
                     # caller would hear a built-in fallback voice instead.
-                    if "VALIDATION_FAILED" in err_text or "too short" in err_text:
-                        raise HTTPException(
-                            status_code=422,
-                            detail="Voice sample was rejected by the provider. Record 15–30 seconds of clear speech and try again.",
-                        )
-                    else:
-                        raise HTTPException(status_code=response.status, detail=f"Voice cloning failed: {err_text}")
+                    detail_msg = "Voice sample was rejected by Sarvam AI. Record 15-30 seconds of clear continuous speech and try again."
+                    try:
+                        import json as _json
+                        err_json = _json.loads(err_text)
+                        reasons = err_json.get("error", {}).get("failure_reasons", [])
+                        if reasons:
+                            detail_msg = "Sarvam AI: " + " ".join(reasons)
+                        elif err_json.get("error", {}).get("message"):
+                            detail_msg = f"Sarvam AI: {err_json['error']['message']}"
+                    except Exception:
+                        pass
+                    status_code = 422 if ("VALIDATION_FAILED" in err_text or "too short" in err_text) else response.status
+                    raise HTTPException(status_code=status_code, detail=detail_msg)
                 else:
                     result = await response.json()
                     voice_id = result.get("voice_id") or result.get("id")
@@ -595,6 +637,11 @@ async def update_custom_voice(
         updates = {}
         if "name" in payload and payload["name"] is not None:
             updates["name"] = str(payload["name"])
+        if "gender" in payload and payload["gender"] is not None:
+            gender = str(payload["gender"]).strip().capitalize()
+            if gender not in ("Male", "Female"):
+                raise HTTPException(status_code=400, detail="Gender must be Male or Female")
+            updates["gender"] = gender
         if "is_pinned" in payload and payload["is_pinned"] is not None:
             val = str(payload["is_pinned"]).lower()
             updates["is_pinned"] = val in ("true", "1")

@@ -5,7 +5,7 @@ A Channel is a phone number or messaging endpoint associated with one Agent.
 When Twilio receives a call to a phone number, we resolve:
   phone_number → Channel → Agent → KnowledgeBase + system_prompt
 """
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -13,6 +13,7 @@ from enum import Enum
 
 class ChannelType(str, Enum):
     TWILIO_VOICE = "twilio_voice"
+    EXOTEL_VOICE = "exotel_voice"
     WHATSAPP = "whatsapp"       # Future
     WEB_CHAT = "web_chat"       # Future
     SMS = "sms"                 # Future
@@ -21,7 +22,7 @@ class ChannelType(str, Enum):
 class ChannelCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=100,
                       description="Friendly name, e.g. 'Main Inbound Number'")
-    type: ChannelType = ChannelType.TWILIO_VOICE
+    type: str = ChannelType.TWILIO_VOICE.value
     agent_id: str = Field(..., description="MongoDB _id of the Agent to use on this channel")
 
     # Twilio voice channel config
@@ -40,6 +41,14 @@ class ChannelCreate(BaseModel):
 
     # Extra config (channel-type-specific)
     config: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("type")
+    @classmethod
+    def validate_type(cls, value: str) -> str:
+        allowed = {item.value for item in ChannelType}
+        if value not in allowed:
+            raise ValueError(f"Channel type must be one of: {', '.join(sorted(allowed))}")
+        return value
 
 
 class ChannelUpdate(BaseModel):

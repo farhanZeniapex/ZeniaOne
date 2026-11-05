@@ -138,15 +138,18 @@ def apply_audio_tuning(raw_audio_bytes: bytes, spd: float = 1.0, vol: float = 1.
         logger.error(f"[AUDIO_TUNING_FAILED] {filter_err}")
     return raw_audio_bytes
 
-def sarvam_to_exotel_pcm(pcm_bytes: bytes, input_rate: int = 24000) -> bytes:
+def sarvam_to_exotel_pcm(pcm_bytes: bytes, input_rate: int = 24000, volume: float = 1.0) -> bytes:
     """
-    Downsample from Sarvam 24kHz PCM to Exotel 8kHz PCM (16-bit, Mono).
+    Downsample from Sarvam 24kHz PCM to Exotel 8kHz PCM (16-bit, Mono) with dynamic volume scaling.
     """
     if not pcm_bytes:
         return b""
     try:
         # audioop.ratecv expects positional arguments
         resampled_pcm, _ = audioop.ratecv(pcm_bytes, 2, 1, input_rate, 8000, None)
+        if abs(volume - 1.0) > 0.05:
+            safe_vol = max(0.2, min(3.0, volume))
+            resampled_pcm = audioop.mul(resampled_pcm, 2, safe_vol)
         return resampled_pcm
     except Exception as e:
         logger.error(f"sarvam_to_exotel_pcm error: {e}")

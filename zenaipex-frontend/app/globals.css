@@ -664,3 +664,13 @@
     animation: none !important;
   }
 }
+
+
+/* Suppress Next.js development error toast & issue badge overlay in development */
+nextjs-portal,
+[data-nextjs-toast],
+[data-nextjs-dialog-overlay] {
+  display: none !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}

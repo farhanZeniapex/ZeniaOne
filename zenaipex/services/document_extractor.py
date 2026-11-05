@@ -83,11 +83,74 @@ def extract_txt_text(file_path: str) -> Optional[str]:
         logger.error(f"Failed to extract text from {file_path}: {e}")
         return None
 
+def _has_meaningful_text(text: Optional[str]) -> bool:
+    """Check if extracted text has genuine readable content beyond page markers and whitespace."""
+    if not text:
+        return False
+    clean = re.sub(r'---PAGE\s+\d+---', '', text)
+    clean = re.sub(r'[\s\-_=*~•|#]+', '', clean)
+    return len(clean) >= 50
+
+def _extract_pdf_with_gemini(file_path: str) -> Optional[str]:
+    """Use Gemini Multimodal File API for fast, ultra-accurate OCR on scanned/image PDFs."""
+    import os
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        try:
+            from dotenv import load_dotenv
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            load_dotenv(os.path.join(base_dir, ".env"))
+            api_key = os.environ.get("GEMINI_API_KEY")
+        except Exception:
+            pass
+    if not api_key:
+        logger.warning("Gemini OCR skipped: GEMINI_API_KEY is not set.")
+        return None
+
+    try:
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=api_key)
+        logger.info(f"Uploading scanned PDF {file_path} to Gemini File API for OCR...")
+        uploaded = client.files.upload(file=file_path)
+        try:
+            prompt = (
+                "You are an expert OCR and document digitization engine. "
+                "Extract all readable text, modules, tables, procedures, and descriptions "
+                "from this entire document into comprehensive Markdown with ---PAGE X--- markers. "
+                "Be thorough, preserve all headings, tables, numbers, and bullet points, and do not omit any content."
+            )
+            for model_name in ["gemini-3.5-flash-lite", "gemini-3.8-flash"]:
+                try:
+                    logger.info(f"Extracting OCR text with {model_name}...")
+                    response = client.models.generate_content(
+                        model=model_name,
+                        contents=[uploaded, prompt],
+                        config=types.GenerateContentConfig(
+                            max_output_tokens=65536
+                        )
+                    )
+                    if response and response.text:
+                        logger.info(f"Gemini OCR successfully extracted {len(response.text)} chars using {model_name}.")
+                        return response.text
+                except Exception as model_err:
+                    logger.warning(f"Gemini model {model_name} OCR failed: {model_err}")
+                    continue
+            return None
+        finally:
+            try:
+                client.files.delete(name=uploaded.name)
+            except Exception as del_err:
+                logger.debug(f"Failed to delete uploaded temp file {uploaded.name}: {del_err}")
+    except Exception as e:
+        logger.warning(f"Gemini OCR failed for {file_path}: {e}")
+        return None
+
 def extract_pdf_text(file_path: str) -> Optional[str]:
     """
     Extract readable text from a PDF file.
     Prefers PyMuPDF (fitz) for superior layout and character accuracy,
-    falling back to PyPDF2 if PyMuPDF is unavailable.
+    falling back to PyPDF2, pypdfium2, and Gemini AI OCR for scanned/image PDFs.
     """
     # Attempt 1: PyMuPDF (fitz)
     try:
@@ -104,8 +167,7 @@ def extract_pdf_text(file_path: str) -> Optional[str]:
             
         doc.close()
         final_text = normalize_extracted_text("\n\n".join(text_parts))
-        
-        if final_text and len(final_text) >= 50:
+        if _has_meaningful_text(final_text):
             return final_text
     except ImportError:
         pass
@@ -127,33 +189,55 @@ def extract_pdf_text(file_path: str) -> Optional[str]:
                 text_parts.append(page.extract_text() or "")
                 
         final_text = normalize_extracted_text("\n\n".join(text_parts))
-        if not final_text or len(final_text) < 50:
-            # Optional OCR path. It is intentionally lazy-loaded so normal PDFs
-            # do not pay the OCR startup cost. If the host has no OCR runtime,
-            # the UI receives a clear needs-OCR state instead of bad chunks.
-            try:
-                import pymupdf  # type: ignore
-                import pytesseract  # type: ignore
-                from PIL import Image  # type: ignore
-                ocr_parts = []
-                pdf = pymupdf.open(file_path)
-                for page in pdf:
-                    pix = page.get_pixmap(matrix=pymupdf.Matrix(1.5, 1.5), alpha=False)
-                    image = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                    ocr_parts.append(pytesseract.image_to_string(image, config="--psm 6"))
-                pdf.close()
-                ocr_text = normalize_extracted_text("\n\n".join(ocr_parts))
-                if len(ocr_text) >= 50:
-                    return ocr_text
-            except Exception as ocr_error:
-                logger.info("OCR fallback unavailable or failed for %s: %s", file_path, type(ocr_error).__name__)
-            raise NeedsOCRError("Could not extract sufficient selectable text from this PDF. OCR is required for image-only/scanned PDFs.")
-        return final_text
-    except NeedsOCRError:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to extract PDF text from {file_path}: {e}")
-        raise ValueError(f"PDF text could not be read: {str(e)}")
+        if _has_meaningful_text(final_text):
+            return final_text
+    except Exception as pypdf_err:
+        logger.warning(f"PyPDF2 extraction failed on {file_path}: {pypdf_err}.")
+
+    # Attempt 3: pypdfium2 fallback
+    try:
+        import pypdfium2 as pdfium
+        pdf = pdfium.PdfDocument(file_path)
+        if len(pdf) > 0:
+            parts = []
+            for i, page in enumerate(pdf):
+                tp = page.get_textpage()
+                t = tp.get_text_range() or ""
+                parts.append(f"\n\n---PAGE {i+1}---\n\n")
+                parts.append(t)
+            final_text = normalize_extracted_text("\n\n".join(parts))
+            if _has_meaningful_text(final_text):
+                return final_text
+    except Exception as pdfium_err:
+        logger.debug(f"pypdfium2 textpage extraction skipped on {file_path}: {pdfium_err}")
+
+    # Attempt 4: Cloud AI OCR via Gemini Document API
+    try:
+        gemini_ocr_text = _extract_pdf_with_gemini(file_path)
+        if gemini_ocr_text and _has_meaningful_text(gemini_ocr_text):
+            return normalize_extracted_text(gemini_ocr_text)
+    except Exception as ocr_err:
+        logger.warning(f"Gemini OCR attempt failed on {file_path}: {ocr_err}")
+
+    # Attempt 5: Local Tesseract OCR (if available)
+    try:
+        import pytesseract  # type: ignore
+        from PIL import Image  # type: ignore
+        import pypdfium2 as pdfium
+        pdf = pdfium.PdfDocument(file_path)
+        ocr_parts = []
+        for i, page in enumerate(pdf):
+            img = page.render(scale=1.5).to_pil()
+            ocr_parts.append(f"\n\n---PAGE {i+1}---\n\n")
+            ocr_parts.append(pytesseract.image_to_string(img, config="--psm 6"))
+        local_ocr_text = normalize_extracted_text("\n\n".join(ocr_parts))
+        if _has_meaningful_text(local_ocr_text):
+            return local_ocr_text
+    except Exception as tesseract_err:
+        logger.debug(f"Local tesseract OCR unavailable: {tesseract_err}")
+
+    # No selectable text and OCR unavailable
+    raise NeedsOCRError("Could not extract sufficient selectable text from this PDF. OCR is required for image-only/scanned PDFs.")
 
 def extract_docx_text(file_path: str) -> Optional[str]:
     """Extract paragraphs and tables from a DOCX file using python-docx."""

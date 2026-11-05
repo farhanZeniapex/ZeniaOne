@@ -1761,7 +1761,7 @@ async def voice_stream(
 
     async def _receive_gemini_transcripts():
         """Normalize Gemini Live STT events for the existing browser voice UI."""
-        nonlocal gemini_transcriber, is_processing, processing_task, latest_transcript
+        nonlocal gemini_transcriber, is_processing, processing_task, latest_transcript, current_ai_text
 
         def looks_like_user_barge_in(text: str) -> bool:
             """Detect a real interruption from Gemini interim STT, not speaker echo."""
@@ -1789,6 +1789,7 @@ async def voice_stream(
                 return overlap < 0.35
             return False
 
+        interim_vad_timer: Optional[asyncio.Task] = None
         try:
             while gemini_transcriber:
                 event = json.loads(await gemini_transcriber.recv())
@@ -1806,22 +1807,44 @@ async def voice_stream(
                     "is_final": is_final,
                     "source": "gemini_live_transcribe",
                 })
-                if agent_doc.get("barge_in_enabled", True) and not is_final and is_processing and looks_like_user_barge_in(transcript):
+                if agent.get("barge_in_enabled", True) and not is_final and is_processing and looks_like_user_barge_in(transcript):
                     logger.info("[VOICE_GEMINI_BARGE_IN] interim_user_transcript=%r", transcript)
                     if processing_task and not processing_task.done():
                         processing_task.cancel()
                     is_processing = False
                     latest_transcript = transcript
                     await websocket.send_json({"type": "interrupted"})
+
+                if interim_vad_timer and not interim_vad_timer.done():
+                    interim_vad_timer.cancel()
+
                 if is_final:
                     await on_transcript_ready(transcript)
+                else:
+                    async def _silence_trigger(t_text: str):
+                        try:
+                            await asyncio.sleep(0.9)
+                            if not is_processing and gemini_transcriber:
+                                logger.info("[VOICE_GEMINI_VAD_SILENCE_TRIGGER] Triggering turn from interim transcript: %r", t_text)
+                                await on_transcript_ready(t_text)
+                        except asyncio.CancelledError:
+                            pass
+                    interim_vad_timer = asyncio.create_task(_silence_trigger(transcript))
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             logger.warning(
                 "[VOICE_GEMINI_STT] receive_failed=%s; session will use browser transcript fallback",
                 type(exc).__name__,
+                exc_info=True,
             )
+            try:
+                await websocket.send_json({
+                    "type": "voice_input_mode",
+                    "mode": "browser",
+                })
+            except Exception:
+                pass
 
     async def _process_speech_task():
         nonlocal latest_transcript, is_processing, conversation_id, session_history, pipeline_started, current_ai_text
@@ -2033,6 +2056,34 @@ async def voice_stream(
             import regex as re_ext
             tts_text = re_ext.sub(r'[^\p{L}\p{M}\p{N}\s\.,\?!;:\-\'"।]', '', tts_text).strip()
             
+            # Dynamically refresh voice speed, volume, and persona from DB on every voice chat turn
+            try:
+                from core.database import col_agents, col_custom_voices
+                from bson import ObjectId
+                fresh_agent = await col_agents().find_one(
+                    {"_id": ObjectId(agent_id)},
+                    {"voice_speed": 1, "voice_volume": 1, "tts_voice": 1, "default_language": 1}
+                )
+                if fresh_agent:
+                    if fresh_agent.get("voice_speed") is not None:
+                        agent_speed = float(fresh_agent["voice_speed"])
+                    if fresh_agent.get("voice_volume") is not None:
+                        agent_volume = float(fresh_agent["voice_volume"])
+                    raw_spk = fresh_agent.get("tts_voice")
+                    if raw_spk:
+                        from modules.sarvam_tts import resolve_speaker
+                        speaker = await resolve_speaker(raw_spk)
+                        if ObjectId.is_valid(raw_spk):
+                            cv = await col_custom_voices().find_one({"_id": ObjectId(raw_spk)}, {"speed": 1, "volume": 1})
+                            if cv:
+                                if cv.get("speed") is not None:
+                                    agent_speed = float(cv["speed"])
+                                if cv.get("volume") is not None:
+                                    agent_volume = float(cv["volume"])
+                logger.info(f"[VOICE_CHAT_LIVE_SYNC] Fresh turn params: speaker={speaker} speed={agent_speed} volume={agent_volume}")
+            except Exception as sync_err:
+                logger.debug(f"[VOICE_CHAT_LIVE_SYNC_ERR] {sync_err}")
+
             # 2. TTS with Instant Neural Fallback (No 4-second delay)
             from modules.sarvam_tts import realtime_tts_stream, fallback_neural_tts, is_sarvam_available
             from services.provider_routing import stage_providers
@@ -2057,6 +2108,7 @@ async def voice_stream(
                             language=lang,
                             speaker=speaker,
                             pace=agent_speed,
+                            volume=agent_volume,
                         ):
                             if first_chunk:
                                 logger.info(f"[VOICE_TTS_FIRST_CHUNK] latency={time.perf_counter() - ai_t:.2f}s")
@@ -2290,6 +2342,8 @@ async def voice_stream(
             processing_task.cancel()
         if gemini_receive_task and not gemini_receive_task.done():
             gemini_receive_task.cancel()
+        if "interim_vad_timer" in locals() and interim_vad_timer and not interim_vad_timer.done():
+            interim_vad_timer.cancel()
         if gemini_transcriber:
             try:
                 await gemini_transcriber.close()

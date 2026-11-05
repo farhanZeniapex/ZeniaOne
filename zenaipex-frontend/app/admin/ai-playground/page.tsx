@@ -30,7 +30,20 @@ import {
 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { VoiceModeDock } from "@/components/ai-bot/voice-mode-overlay";
+import dynamic from "next/dynamic";
+
+const VoiceModeDock = dynamic(
+  () => import("@/components/ai-bot/voice-mode-overlay").then((m) => m.VoiceModeDock),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="p-6 flex flex-col items-center justify-center text-slate-500 gap-2">
+        <Loader2 className="h-5 w-5 animate-spin text-emerald-600" />
+        <span className="text-xs font-semibold">Starting Voice Mode…</span>
+      </div>
+    ),
+  }
+);
 
 interface Company {
   id: string;

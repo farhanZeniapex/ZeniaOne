@@ -443,18 +443,40 @@ PERSONA_TO_EDGE_VOICE = {
 }
 
 async def resolve_speaker(speaker: str) -> str:
-    """Resolve MongoDB ObjectId to actual Sarvam voice_id if applicable."""
-    if not speaker or len(speaker) != 24:
-        return speaker
+    """Resolve speaker identifier (name, MongoDB ObjectId, or voice_id) to actual Sarvam speaker ID."""
+    if not speaker:
+        return "ritu"
+    clean = str(speaker).strip()
+    if clean.startswith("svc-"):
+        return clean
     try:
         from core.database import col_custom_voices
         from bson import ObjectId
-        cv = await col_custom_voices().find_one({"_id": ObjectId(speaker)})
-        if cv and "voice_id" in cv:
+        import re
+
+        # 1. Check if 24-character hexadecimal ObjectId
+        if len(clean) == 24 and all(c in "0123456789abcdefABCDEF" for c in clean):
+            try:
+                cv = await col_custom_voices().find_one({"_id": ObjectId(clean)})
+                if cv and cv.get("voice_id"):
+                    return cv["voice_id"]
+            except Exception:
+                pass
+
+        # 2. Check if voice_id directly matches
+        cv = await col_custom_voices().find_one({"voice_id": clean})
+        if cv and cv.get("voice_id"):
+            return cv["voice_id"]
+
+        # 3. Check by custom voice name (case-insensitive exact match)
+        cv = await col_custom_voices().find_one({
+            "name": {"$regex": f"^{re.escape(clean)}$", "$options": "i"}
+        })
+        if cv and cv.get("voice_id"):
             return cv["voice_id"]
     except Exception:
         pass
-    return speaker
+    return clean.lower()
 
 
 _clone_client_session = None
@@ -474,6 +496,7 @@ async def cloned_voice_tts_stream(
     language: str = "hi-IN",
     sample_rate: int = 8000,
     pace: float = 1.0,
+    volume: float = 1.0,
 ):
     """Yield raw LINEAR16 audio from Sarvam's cloned-voice HTTP stream.
 
@@ -510,9 +533,23 @@ async def cloned_voice_tts_stream(
         if response.status != 200:
             body = (await response.text())[:500]
             raise RuntimeError(f"Sarvam clone stream failed ({response.status}): {body}")
+        header_stripped = False
         async for chunk in response.content.iter_chunked(4096):
             if chunk:
-                yield bytes(chunk)
+                data = bytes(chunk)
+                if not header_stripped:
+                    # Strip 44-byte RIFF WAV header if present in initial chunk to avoid click/pop in PCM telephony
+                    if data.startswith(b"RIFF") and len(data) >= 44:
+                        data = data[44:]
+                    header_stripped = True
+                if data:
+                    if abs(volume - 1.0) > 0.05:
+                        try:
+                            import audioop
+                            data = audioop.mul(data, 2, max(0.2, min(3.0, volume)))
+                        except Exception:
+                            pass
+                    yield data
 
 async def fallback_neural_tts(text: str, speaker: str = "ritu", speed: float = 1.0, volume: float = 1.0) -> bytes:
     """Fallback neural synthesis for each persona using high-fidelity edge_tts, or Sarvam Cloned voice, applying speed and volume."""
@@ -641,6 +678,7 @@ async def realtime_tts_stream(
     language: str = "en-IN",
     speaker: str = "ritu",
     pace: float = 1.0,
+    volume: float = 1.0,
 ):
     """Synthesize speech - yields raw audio chunks (linear16 24kHz) with connection pooling."""
     import logging
@@ -660,6 +698,8 @@ async def realtime_tts_stream(
         }
         if pace != 1.0:
             clone_kwargs["pace"] = pace
+        if volume != 1.0:
+            clone_kwargs["volume"] = volume
         async for chunk in cloned_voice_tts_stream(**clone_kwargs):
             yield chunk
         return
@@ -690,6 +730,12 @@ async def realtime_tts_stream(
             await tts.flush()
             
             async for chunk in tts.receive_stream():
+                if abs(volume - 1.0) > 0.05 and chunk:
+                    try:
+                        import audioop
+                        chunk = audioop.mul(chunk, 2, max(0.2, min(3.0, volume)))
+                    except Exception:
+                        pass
                 yield chunk
                 chunks_yielded += 1
                 
@@ -784,9 +830,11 @@ async def stream_fallback_neural_tts(text: str, speaker: str = "hi-IN-SwaraNeura
             try:
                 import edge_tts
                 edge_voice = speaker if not speaker.startswith("svc-") else "hi-IN-MadhurNeural"
-                rate_pct = int((speed - 1.0) * 100) if abs(speed - 1.0) > 0.02 else 20
+                rate_pct = int(round((speed - 1.0) * 100))
                 rate_str = f"{'+' if rate_pct >= 0 else ''}{rate_pct}%"
-                communicate = edge_tts.Communicate(text, edge_voice, rate=rate_str)
+                vol_pct = int(round((volume - 1.0) * 100))
+                vol_str = f"{'+' if vol_pct >= 0 else ''}{vol_pct}%"
+                communicate = edge_tts.Communicate(text, edge_voice, rate=rate_str, volume=vol_str)
                 async for chunk in communicate.stream():
                     if chunk["type"] == "audio" and process.stdin is not None:
                         def _write(data):

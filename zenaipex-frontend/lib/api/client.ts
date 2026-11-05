@@ -104,7 +104,7 @@ function clearSessionCache(): void {
 
 async function fetchApiUncached<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   let token: string | null = null;
-  
+
   if (typeof window !== "undefined") {
     token = localStorage.getItem("zenaipex_token");
   }
@@ -177,7 +177,7 @@ async function fetchApiUncached<T = any>(endpoint: string, options: RequestInit 
       localStorage.removeItem("zenaipex_token");
       window.location.assign("/login");
     }
-    
+
     // If account is suspended
     if (response.status === 403 && typeof window !== "undefined") {
       const detail = data?.detail;
@@ -186,7 +186,7 @@ async function fetchApiUncached<T = any>(endpoint: string, options: RequestInit 
         window.location.assign("/suspended");
       }
     }
-    
+
     let errorMessage = "An error occurred";
     if (data && typeof data === 'object') {
       if (Array.isArray(data.detail)) {
@@ -219,7 +219,7 @@ async function fetchApiUncached<T = any>(endpoint: string, options: RequestInit 
 
 export async function fetchApi<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const method = String(options.method || "GET").toUpperCase();
-  const canCache = method === "GET" && options.cache !== "no-store" && typeof window !== "undefined";
+  const canCache = method === "GET" && options.cache !== "no-store" && typeof window !== "undefined" && canPersistGet(endpoint);
 
   if (!canCache) {
     if (method !== "GET" && method !== "HEAD" && method !== "OPTIONS") {

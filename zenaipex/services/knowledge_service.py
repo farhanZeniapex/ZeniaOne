@@ -293,6 +293,10 @@ async def _process_document_task(company_id: str, kb_id: str, doc_id: str, stora
         chunker = SemanticChunker(max_chunk_size=1500)
         chunk_dicts = chunker.chunk(content)
         chunks = [c["text"] for c in chunk_dicts]
+
+        if not chunks:
+            from services.document_extractor import NeedsOCRError
+            raise NeedsOCRError("No readable content could be extracted from this document. It may be an image-only scan or require OCR.")
         
         # Validation Pass
         validator = CoverageValidator(content, chunk_dicts)

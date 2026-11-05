@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef } from "react";
-import { Mic, Upload, Play, X, Sliders, CheckCircle2, Loader2, StopCircle } from "lucide-react";
+import { Mic, Upload, Play, X, Sliders, CheckCircle2, Loader2, StopCircle, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +28,9 @@ export function VoiceCloningStudio({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [testText, setTestText] = useState("");
   const [clonedVoiceId, setClonedVoiceId] = useState<string | null>(null);
+  const [promptLang, setPromptLang] = useState<"hi" | "en">("hi");
+  const [recordWarning, setRecordWarning] = useState<string | null>(null);
+  const [smartError, setSmartError] = useState<{ title?: string; message: string; type?: "error" | "warning" } | null>(null);
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -76,7 +79,11 @@ export function VoiceCloningStudio({
           const file = new File([audioBlob], `recorded_voice.${ext}`, { type: mimeType });
           setAudioFile(file);
         } else {
-          alert("Recording was too short or empty. Please try again.");
+          setSmartError({
+            title: "Empty Recording",
+            message: "Recording was too short or empty. Please record 10–15 seconds of continuous speech.",
+            type: "warning"
+          });
           setAudioFile(null);
         }
       };
@@ -118,22 +125,44 @@ export function VoiceCloningStudio({
       };
       updateAudioData();
 
-      mediaRecorderRef.current.start();
+      mediaRecorderRef.current.start(250);
       setIsRecording(true);
       setRecordingTime(0);
+      setRecordWarning(null);
       
       timerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
+        setRecordingTime(prev => {
+          if (prev >= 14) {
+            // Reached Sarvam recommended max (15 seconds)
+            setTimeout(() => {
+              if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+                mediaRecorderRef.current.stop();
+                mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
+                setIsRecording(false);
+              }
+            }, 500);
+            return 15;
+          }
+          return prev + 1;
+        });
       }, 1000);
       
     } catch (err) {
-      console.error("Error accessing microphone", err);
-      alert("Could not access microphone.");
+      setSmartError({
+        title: "Microphone Access Blocked",
+        message: "Could not access your microphone. Please enable microphone permissions in your browser.",
+        type: "error"
+      });
     }
   };
 
   const handleStopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
+      if (recordingTime < 8) {
+        setRecordWarning("Recording is under 8s. Sarvam AI requires 10 to 15 seconds of speech for high accuracy.");
+      } else {
+        setRecordWarning(null);
+      }
       mediaRecorderRef.current.stop();
       mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
       setIsRecording(false);
@@ -161,6 +190,7 @@ export function VoiceCloningStudio({
     if (!voiceName.trim() || !audioFile) return;
 
     setIsSubmitting(true);
+    setSmartError(null);
     try {
       const formData = new FormData();
       formData.append("name", voiceName);
@@ -179,17 +209,36 @@ export function VoiceCloningStudio({
         }
       });
 
-      if (!res.ok) throw new Error("Failed to clone voice");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        const detailMsg = errData?.detail || "Voice sample was rejected by the provider. Please try again with clear speech.";
+        setSmartError({
+          title: "Voice Provider Notice",
+          message: detailMsg,
+          type: "error"
+        });
+        return;
+      }
       
       const data = await res.json();
-      setClonedVoiceId(data.voice.voice_id);
-      
-      if (onVoiceCreated) {
-        onVoiceCreated(data.voice);
+      if (data?.voice?.voice_id) {
+        setClonedVoiceId(data.voice.voice_id);
+        if (onVoiceCreated) {
+          onVoiceCreated(data.voice);
+        }
+      } else {
+        setSmartError({
+          title: "Voice Creation Issue",
+          message: "Voice was created but no ID was returned. Please refresh and check your voice list.",
+          type: "warning"
+        });
       }
-    } catch (err) {
-      console.error(err);
-      alert("Error cloning voice. Please try again.");
+    } catch (err: any) {
+      setSmartError({
+        title: "Connection Notice",
+        message: err?.message || "Could not reach the server to clone voice. Please verify network connection.",
+        type: "error"
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -231,7 +280,7 @@ export function VoiceCloningStudio({
                     value={gender}
                     onChange={setGender}
                     searchable={false}
-                    options={[{ value: "Female", label: "Female", badge: "Voice" }, { value: "Male", label: "Male", badge: "Voice" }]}
+                    options={[{ value: "Female", label: "Female" }, { value: "Male", label: "Male" }]}
                     className="[&>button]:h-10 [&>button]:rounded-md [&>button]:border-[#E5E5E3] [&>button]:bg-[#FAF9F7]"
                   />
                 </div>
@@ -277,7 +326,7 @@ export function VoiceCloningStudio({
                       id="audio-upload-input"
                       type="file" 
                       accept="audio/*"
-                      onChange={(e) => setAudioFile(e.target.files?.[0] || null)}
+                      onChange={(e) => { setAudioFile(e.target.files?.[0] || null); setSmartError(null); }}
                       className="hidden"
                     />
                     {audioFile && (
@@ -318,7 +367,42 @@ export function VoiceCloningStudio({
                 )}
               </div>
 
-              <div className="mt-8 flex flex-col gap-3">
+              {/* Smart Error / Notice Banner */}
+              {smartError && (
+                <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-rose-50 via-red-50 to-amber-50 border border-rose-200 shadow-sm animate-in fade-in slide-in-from-top-2 duration-300 relative text-left">
+                  <div className="flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-xl bg-rose-100 flex items-center justify-center shrink-0 mt-0.5 text-rose-600">
+                      <AlertCircle className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 pr-6">
+                      <h4 className="text-xs font-bold text-rose-900 tracking-wide uppercase mb-1">
+                        {smartError.title || "Voice Sample Notice"}
+                      </h4>
+                      <p className="text-xs text-rose-800 leading-relaxed font-medium">
+                        {smartError.message}
+                      </p>
+                      {(smartError.message.includes("short") || smartError.message.includes("rejected") || smartError.message.includes("Sarvam") || smartError.message.includes("noise")) && (
+                        <div className="mt-2.5 text-[11px] text-rose-800/90 bg-white/80 p-2.5 rounded-xl border border-rose-200/60 flex flex-col gap-1 shadow-xs">
+                          <span className="font-bold text-rose-900">💡 Quick Guide for 100% Success:</span>
+                          <span>• Speak continuously for 10–15 seconds without stopping early.</span>
+                          <span>• Record in a quiet room with minimal background noise.</span>
+                          <span>• Start speaking within 0.5s of hitting record.</span>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSmartError(null)}
+                      className="absolute top-3 right-3 text-rose-400 hover:text-rose-700 p-1 rounded-full hover:bg-rose-100/60 transition-colors"
+                      title="Dismiss"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-6 flex flex-col gap-3">
                 <Button 
                   onClick={handleSubmit} 
                   disabled={!voiceName || !audioFile || isSubmitting}
@@ -384,8 +468,11 @@ export function VoiceCloningStudio({
                           });
                         }
                       } catch(e) {
-                        console.error(e);
-                        alert("Error testing voice.");
+                        setSmartError({
+                          title: "Audio Test Notice",
+                          message: "Could not preview the voice test audio. Please try again.",
+                          type: "warning"
+                        });
                       }
                     }}
                     className="bg-[#3E5448] hover:bg-[#2C3B32] text-white shrink-0"
@@ -410,14 +497,61 @@ export function VoiceCloningStudio({
               <X className="h-5 w-5" />
             </button>
 
-            <h3 className="text-xl font-bold mb-1 tracking-wide text-slate-900">Record your Voice</h3>
-            <div className="text-emerald-700 font-mono text-sm mb-8 tracking-widest bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
-              {String(Math.floor(recordingTime / 60)).padStart(2, '0')}:{String(recordingTime % 60).padStart(2, '0')}
+            <h3 className="text-xl font-bold mb-1 tracking-wide text-slate-900">Record your Voice for AI Clone</h3>
+            
+            {/* Duration status pill */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className={`font-mono text-sm px-4 py-1.5 rounded-full border transition-all flex items-center gap-2 ${
+                recordingTime >= 10 && recordingTime <= 15
+                  ? 'bg-emerald-100 border-emerald-300 text-emerald-800 font-bold shadow-sm'
+                  : recordingTime > 0
+                  ? 'bg-amber-50 border-amber-300 text-amber-800'
+                  : 'bg-slate-50 border-slate-200 text-slate-600'
+              }`}>
+                <span className={`inline-block w-2.5 h-2.5 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-slate-400'}`}></span>
+                <span>{String(Math.floor(recordingTime / 60)).padStart(2, '0')}:{String(recordingTime % 60).padStart(2, '0')} / 00:15s</span>
+              </div>
+              <span className="text-xs font-semibold text-slate-500">
+                {recordingTime >= 10 
+                  ? "✨ Optimal length reached! (10-15s)" 
+                  : isRecording 
+                  ? "🎙️ Keep speaking (at least 10s needed)" 
+                  : "Target: 10–15 seconds"}
+              </span>
             </div>
 
-            <p className="text-xl font-medium text-center max-w-md leading-relaxed text-slate-600 mb-12">
-              "Hi, this is a test recording to create my custom AI voice clone. I am speaking clearly in a quiet room so the AI can capture my exact tone and emotion."
-            </p>
+            {/* Language switch tabs for sample script */}
+            <div className="flex gap-2 p-1 bg-slate-100 rounded-xl mb-4 text-xs font-bold">
+              <button 
+                type="button"
+                onClick={() => setPromptLang("hi")}
+                className={`px-3 py-1.5 rounded-lg transition-all ${promptLang === "hi" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"}`}
+              >
+                🇮🇳 Hindi / Hinglish
+              </button>
+              <button 
+                type="button"
+                onClick={() => setPromptLang("en")}
+                className={`px-3 py-1.5 rounded-lg transition-all ${promptLang === "en" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500 hover:text-slate-900"}`}
+              >
+                🌐 English
+              </button>
+            </div>
+
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 mb-8 max-w-lg text-center shadow-inner">
+              <p className="text-base font-medium leading-relaxed text-slate-800">
+                {promptLang === "hi" 
+                  ? "“नमस्ते, यह मेरी आवाज़ की रिकॉर्डिंग है जिसे मैं अपने AI वॉइस असिस्टेंट के लिए बना रहा हूँ। मैं एक शांत कमरे में बिना रुके साफ़-साफ़ बोल रहा हूँ ताकि मेरी आवाज़ बिलकुल सटीक और साफ़ क्लोन हो सके।”"
+                  : "“Hello, this is a test recording to create my custom AI voice clone. I am speaking clearly and naturally in a quiet room so that the AI can accurately capture my unique tone, rhythm, and emotion.”"
+                }
+              </p>
+            </div>
+
+            {recordWarning && (
+              <div className="mb-4 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-4 py-2 rounded-xl text-center max-w-md">
+                ⚠️ {recordWarning}
+              </div>
+            )}
 
             {/* Real Waveform / Heartbeat */}
             <div ref={waveformRef} className="flex items-center justify-center h-24 w-full max-w-md gap-1 mb-12">

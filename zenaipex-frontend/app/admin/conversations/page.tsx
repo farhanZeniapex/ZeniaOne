@@ -610,14 +610,15 @@ export default function AdminConversationsPage() {
       setLoadError(null);
     }
     try {
-      const qs = viewMode === "all"
+      const baseQs = viewMode === "all"
         ? ""
         : viewMode === "archived"
-          ? "?is_archived=true"
-          : "?is_archived=false";
+          ? "is_archived=true&"
+          : "is_archived=false&";
+      const qs = `?${baseQs}_t=${Date.now()}`;
       const [dataRes, compsRes] = await Promise.allSettled([
         fetchApi<any>(`/admin/conversations${qs}`),
-        fetchApi<any>(`/admin/companies`),
+        fetchApi<any>(`/admin/companies?_t=${Date.now()}`),
       ]);
 
       if (dataRes.status === "fulfilled" && dataRes.value?.conversations) {
@@ -658,7 +659,7 @@ export default function AdminConversationsPage() {
       if (document.visibilityState === "visible") {
         loadConvs(true);
       }
-    }, 10000);
+    }, 3500);
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
         loadConvs(true);

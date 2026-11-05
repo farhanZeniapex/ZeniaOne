@@ -75,7 +75,13 @@ async def get_current_user(
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
     """Load full user document from DB. Verifies user exists."""
-    user = await col_users().find_one({"_id": ObjectId(user_id)})
+    user = None
+    if ObjectId.is_valid(user_id):
+        user = await col_users().find_one({"_id": ObjectId(user_id)})
+    if not user:
+        user = await col_users().find_one({"email": user_id})
+    if not user:
+        user = await col_users().find_one({"_id": user_id})
     if not user:
         raise NotAuthenticatedError("User not found")
         
